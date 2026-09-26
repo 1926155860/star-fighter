@@ -53,6 +53,7 @@
       background: rgba(3, 5, 21, 0.88);
       z-index: 10;
       backdrop-filter: blur(4px);
+      overflow-y: auto;
     }
     .overlay.active { display: flex; }
     .panel-title {
@@ -99,28 +100,38 @@
     /* 装备卡片 */
     .loadout-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+      width: min(92vw, 520px);
     }
     .weapon-card {
-      width: 108px;
-      padding: 12px 8px;
+      width: 100%;
+      min-width: 0;
+      padding: 8px 3px;
       text-align: center;
       cursor: pointer;
       border: 1px solid #2a3f66;
       border-radius: 8px;
       background: rgba(20, 40, 80, 0.3);
       transition: all 0.18s;
+      box-sizing: border-box;
     }
     .weapon-card:hover { border-color: #4ee0ff; transform: translateY(-2px); }
     .weapon-card.selected {
       border-color: #ffd166;
       box-shadow: 0 0 16px rgba(255, 209, 102, 0.35);
     }
-    .weapon-card .icon { font-size: 30px; display: block; margin-bottom: 8px; }
-    .weapon-card .name { font-size: 14px; color: #e8f6ff; letter-spacing: 2px; }
-    .weapon-card .desc { font-size: 11px; color: #8aa0c8; margin-top: 6px; line-height: 1.5; }
+    .weapon-card .icon { font-size: 22px; display: block; margin-bottom: 4px; line-height: 1.1; }
+    .weapon-card .name { font-size: 12px; color: #e8f6ff; letter-spacing: 1px; white-space: nowrap; }
+    .weapon-card .desc { font-size: 9.5px; color: #8aa0c8; margin-top: 4px; line-height: 1.35; }
+    /* 手机窄屏进一步压缩装备卡片 */
+    @media (max-width: 480px) {
+      .weapon-card .icon { font-size: 18px; }
+      .weapon-card .name { font-size: 11px; }
+      .weapon-card .desc { font-size: 9px; }
+      .loadout-grid { gap: 6px; }
+    }
 
     /* 难度网格 */
     .difficulty-grid {
@@ -379,7 +390,7 @@
     .daily-card .dc-title { font-size: 15px; color: #ffd166; letter-spacing: 1px; margin-bottom: 6px; }
     .daily-card .dc-info { font-size: 13px; color: #cfe6ff; line-height: 1.7; }
     .daily-card .dc-best { font-size: 14px; color: #7df0ff; margin-top: 6px; }
-    .loadout-label { font-size: 13px; color: #8aa0c8; letter-spacing: 2px; text-align: center; margin: 10px 0 8px; }
+    .loadout-label { font-size: 12px; color: #8aa0c8; letter-spacing: 1px; text-align: center; margin: 6px 0 6px; }
     .ship-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
     .ship-card {
       width: 118px; padding: 12px 8px; border: 1px solid #4ee0ff; border-radius: 10px; text-align: center;
@@ -421,13 +432,15 @@
       overflow-y: auto;
     }
     #game-panel .weapon-card {
-      width: 96px;
+      width: 100%;
+      padding: 8px 3px;
     }
     #game-weapon-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
       margin-bottom: 18px;
+      width: min(92vw, 520px);
     }    .game-panel-btns {
       display: flex;
       gap: 14px;
