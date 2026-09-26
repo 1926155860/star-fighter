@@ -906,6 +906,7 @@
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
     maxEnemies: 50,          // P7：地图上最多 50 个敌对单位；溢出分裂转化为不可抵消弹幕
+    maxEnemyBullets: 300,    // P7c2：敌弹总量上限（不可抵消弹幕无法被抵消，饱和时丢最旧弹防卡顿）
 
     // 特殊敌人（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客 + P4 火焰兵/雷电兵/自爆兵）
     specialWeights: { normal: 36, healer: 7, defender: 7, chaser: 6, armored: 4, spreader: 4, devourer: 6, charger: 7, tank: 5, assassin: 6, flamer: 6, stormer: 5, suicider: 5 },
@@ -1431,15 +1432,12 @@
       state.codexEvents.push(child.special === 'normal' ? 'sphere:' + child.type : child.special);
       state.enemies.push(child);
     }
-    // P7：溢出分裂全部转化为不可抵消弹幕（数量与分裂数量一致，向四周散射）
+    // P7：溢出分裂全部转化为不可抵消弹幕（数量与分裂数量一致，向四周散射；受敌弹总量上限约束）
     for (var oi = 0; oi < overflow; oi++) {
       var oAng = (oi / overflow) * Math.PI * 2 + Math.random() * 0.6;
-      state.enemyBullets.push({
-        id: newId(state),
+      pushEnemyBullet(state, {
         x: cx - cfg.enemyBulletWidth / 2,
         y: cy - cfg.enemyBulletHeight / 2,
-        width: cfg.enemyBulletWidth,
-        height: cfg.enemyBulletHeight,
         vx: Math.cos(oAng) * 220,
         vy: Math.sin(oAng) * 220,
         noCancel: true, special: true
@@ -1880,17 +1878,25 @@
 
   function pushEnemyBullet(state, o) {
     var cfg = state.config;
-    state.enemyBullets.push({
+    // P7c2：敌弹总量上限——不可抵消弹幕只能等出界回收，数量饱和时丢最旧弹防卡顿
+    if (state.enemyBullets.length >= cfg.maxEnemyBullets) {
+      state.enemyBullets.splice(0, 1);
+    }
+    var b = {
       id: newId(state),
       x: o.x,
       y: o.y,
-      width: cfg.enemyBulletWidth,
-      height: cfg.enemyBulletHeight,
+      width: o.width || cfg.enemyBulletWidth,
+      height: o.height || cfg.enemyBulletHeight,
       vx: o.vx,
       vy: o.vy,
-      noCancel: !!o.noCancel,  // P7：不可抵消弹幕（Boss 弹幕 / 自爆 / 分裂溢出）
+      noCancel: !!o.noCancel,  // 不可抵消弹幕（Boss 弹幕 / 自爆 / 分裂溢出 / 火焰波 / 克隆红弹）
       special: !!o.special
-    });
+    };
+    if (o.red) b.red = true;
+    if (o.flame) b.flame = true;
+    if (o.damage !== undefined) b.damage = o.damage;
+    state.enemyBullets.push(b);
     return state.enemyBullets[state.enemyBullets.length - 1];
   }
 
@@ -2266,8 +2272,7 @@
         // 3 发红色弹幕呈扇面
         for (var s = -1; s <= 1; s++) {
           var ang = Math.atan2(dy, dx) + s * 0.18;
-          state.enemyBullets.push({
-            id: newId(state),
+          pushEnemyBullet(state, {
             x: px - 4, y: py + 2, width: 8, height: 8,
             vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
             red: true, noCancel: true
@@ -2299,8 +2304,7 @@
     var cy = enemy.y + enemy.height / 2;
     for (var i = 0; i < count; i++) {
       var ang = Math.PI / 2 + (i / count) * Math.PI * 2;
-      state.enemyBullets.push({
-        id: newId(state),
+      pushEnemyBullet(state, {
         x: cx - 5, y: cy - 5, width: 10, height: 10,
         vx: Math.cos(ang) * 200, vy: Math.sin(ang) * 200,
         noCancel: true, special: true
@@ -2319,8 +2323,7 @@
         f.flameTimer = cfg.flamerWave.interval;
         var w = cfg.flamerWave.width;
         var h = cfg.flamerWave.height;
-        state.enemyBullets.push({
-          id: newId(state),
+        pushEnemyBullet(state, {
           x: f.x + f.width / 2 - w / 2,
           y: f.y + f.height / 2,
           width: w, height: h,
