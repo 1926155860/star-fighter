@@ -1414,10 +1414,11 @@
   }
 
   /** 分裂：中球及以上死亡时，在母球位置生成 2~3 个低一级球（子球继承母球特殊能力）
-   *  P7：地图上限 50——若分裂会超过上限，超出的分裂数量转化为不可抵消的弹幕（数量与应分裂数一致） */
+   *  P7：地图上限 50——若分裂会超过上限，超出的分裂数量转化为不可抵消的弹幕（数量与应分裂数一致）
+   *  P7e：最小单位（小球 small，level=0）禁止分裂 */
   function splitEnemy(state, parent) {
     var level = parent.level;
-    if (!level || level <= 0) return;
+    if (level === undefined || level <= 0) return; // 小球为最小单位，不再分裂
     var cfg = state.config;
     var names = ['small', 'medium', 'large', 'xlarge'];
     var childName = names[level - 1];
@@ -1724,21 +1725,34 @@
     return cfg.wingmanDamage + state.damageBonus;
   }
 
-  /** P7：飞机被击中后不掉血——常规受击（敌弹 / 身体碰撞 / Boss 轰炸）全部免疫。
-   *  吞噬者武器的主动碰撞 1:1 扣血属攻击机制，保留在碰撞逻辑中。 */
+  /** P7e：恢复受击扣血——成长升级的"生命上限"需在实际生命判定中生效。
+   *  常规武器扣命，吞噬者扣球形血（归零即死亡）。 */
   function damagePlayer(state) {
     var cfg = state.config;
-    // P5 原逻辑（吞噬者扣球形血 / 常规扣命）在 P7 改为受击不掉血
-    state.combo = 0; // 被击中：连击重置（保留连击惩罚，不掉血）
+    // 吞噬者模式：自身为球形血量（初始 50），扣血而非扣命
+    if (state.weapon === 'devour') {
+      state.devourHp = Math.max(0, state.devourHp - 1);
+      state.invincibleUntil = state.time + cfg.invincibleDuration;
+      state.combo = 0; // 被击中：连击重置
+      if (state.devourHp <= 0) killDevourPlayer(state);
+      return state.devourHp;
+    }
+    state.lives = Math.max(0, state.lives - 1);
     state.invincibleUntil = state.time + cfg.invincibleDuration;
-    return state.weapon === 'devour' ? state.devourHp : state.lives;
+    state.combo = 0; // 被击中：连击重置
+    return state.lives;
   }
 
-  /** P6/P7：Boss 常驻轰炸命中——P7 起飞机被击中不掉血（仅保留预警爆炸视觉与连击重置） */
+  /** P6：Boss 常驻轰炸命中——玩家只剩 1 血（若已 1 血保持不变），附短暂无敌帧 */
   function setPlayerToOneHp(state) {
     var cfg = state.config;
     state.combo = 0;
     state.invincibleUntil = state.time + cfg.invincibleDuration;
+    if (state.weapon === 'devour') {
+      state.devourHp = 1;
+    } else {
+      state.lives = 1;
+    }
     return state;
   }
 
@@ -2464,17 +2478,10 @@
       });
       // 中球及以上被杀：分裂 2~3 个低一级球
       splitEnemy(state, enemy);
-      // P3：Boss 加成 d「增殖」：Boss 在场时所有敌人死亡额外分裂一次（小球也分裂）
+      // P3：Boss 加成 d「增殖」：Boss 在场时中球及以上敌人死亡额外分裂一次
+      // P7e：最小单位小球不参与任何分裂（修复增殖导致小球无限增殖的 bug）
       if (hasBossBuff(state, 'extraSplit') && enemy.level > 0) {
         splitEnemy(state, enemy);
-      } else if (hasBossBuff(state, 'extraSplit') && enemy.level === 0) {
-        // 小球没有更低级，生成 2 个同级小球作为"次分裂"
-        var spx2 = enemy.x + enemy.width / 2;
-        var spy2 = enemy.y + enemy.height / 2;
-        for (var ex = 0; ex < 2; ex++) {
-          var mini = createSphereEnemy(state, 'small', spx2, spy2, enemy.speed || 100, enemy.special);
-          state.enemies.push(mini);
-        }
       }
       return true;
     }
