@@ -356,6 +356,33 @@
     .rank-name { flex: 1; color: #e8f6ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rank-lv { width: 62px; color: #9be8ff; font-size: 12px; text-align: right; }
     .rank-score { width: 76px; color: #fff; font-weight: bold; text-align: right; }
+    .rank-tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+    .rank-tab {
+      flex: 1; max-width: 130px; padding: 8px 0; font-size: 14px; letter-spacing: 1px;
+      border: 1px solid #4ee0ff; border-radius: 8px; color: #7df0ff;
+      background: rgba(10, 30, 62, 0.6); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    .rank-tab.active { border-color: #ffd166; color: #ffd166; background: rgba(70, 45, 8, 0.6); box-shadow: 0 0 12px rgba(255, 209, 102, 0.3); }
+    .achieve-item { display: flex; gap: 10px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid rgba(78,224,255,0.25); border-radius: 8px; background: rgba(10,30,62,0.35); }
+    .achieve-item.locked { opacity: 0.45; }
+    .achieve-ico { font-size: 22px; width: 34px; text-align: center; }
+    .achieve-name { flex: 1; font-size: 14px; color: #e8f6ff; }
+    .achieve-name small { display: block; font-size: 11px; color: #8aa0c8; }
+    .achieve-state { font-size: 12px; color: #ffd166; white-space: nowrap; }
+    .daily-card { border: 1px solid rgba(255,209,102,0.4); border-radius: 10px; background: rgba(70,45,8,0.35); padding: 12px; margin-bottom: 12px; text-align: center; }
+    .daily-card .dc-title { font-size: 15px; color: #ffd166; letter-spacing: 1px; margin-bottom: 6px; }
+    .daily-card .dc-info { font-size: 13px; color: #cfe6ff; line-height: 1.7; }
+    .daily-card .dc-best { font-size: 14px; color: #7df0ff; margin-top: 6px; }
+    .loadout-label { font-size: 13px; color: #8aa0c8; letter-spacing: 2px; text-align: center; margin: 10px 0 8px; }
+    .ship-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
+    .ship-card {
+      width: 118px; padding: 12px 8px; border: 1px solid #4ee0ff; border-radius: 10px; text-align: center;
+      background: rgba(10, 30, 62, 0.6); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    .ship-card.active { border-color: #ffd166; background: rgba(70, 45, 8, 0.5); box-shadow: 0 0 14px rgba(255, 209, 102, 0.35); }
+    .ship-card .ship-ship { font-size: 34px; line-height: 1; margin-bottom: 6px; }
+    .ship-card .ship-name { font-size: 14px; color: #e8f6ff; }
+    .ship-card .ship-stats { font-size: 11px; color: #8aa0c8; line-height: 1.6; margin-top: 4px; }
 
     /* ===== 游戏内设置（手机无键盘时使用） ===== */
     #in-game-btn {
@@ -420,6 +447,10 @@
         </div>
         <button type="button" id="btn-ult" style="display:none;margin-top:6px;padding:8px 26px;font-size:15px;font-weight:700;color:#02121f;background:linear-gradient(135deg,#7df0ff,#4ee0ff);border:1px solid #baf7ff;border-radius:8px;box-shadow:0 0 18px rgba(78,224,255,0.9);cursor:pointer;pointer-events:auto;">大 招</button>
       </div>
+      <div id="weapon-switch" style="position:absolute;right:12px;bottom:14px;text-align:center;pointer-events:auto;">
+        <div id="hud-weapon-cur" style="font-size:12px;color:#9be8ff;text-shadow:0 0 6px rgba(78,224,255,0.6);margin-bottom:4px;"></div>
+        <button type="button" id="btn-swap" style="padding:7px 16px;font-size:13px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.82);border:1px solid #4ee0ff;border-radius:8px;box-shadow:0 0 12px rgba(78,224,255,0.35);cursor:pointer;display:none;">⇄ 切换武器</button>
+      </div>
     </div>
 
     <div id="menu" class="overlay active menu-overlay">
@@ -435,10 +466,13 @@
       <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
-    <!-- 装备选择 -->
+    <!-- 装备选择（主武器 + 副武器） -->
     <div id="loadout" class="overlay">
       <div class="panel-title">选 择 装 备</div>
+      <div class="loadout-label">主武器</div>
       <div class="loadout-grid" id="loadout-grid"></div>
+      <div class="loadout-label">副武器 · 游戏内随时切换</div>
+      <div class="loadout-grid" id="loadout-grid-sub"></div>
       <button class="btn small" id="btn-loadout-back">返 回</button>
     </div>
 
@@ -484,18 +518,39 @@
         <label>成长升级</label>
         <button type="button" class="btn toggle-btn" id="btn-upgrade-open">星币强化</button>
       </div>
+      <div class="setting-row music-row">
+        <label>战机皮肤</label>
+        <button type="button" class="btn toggle-btn" id="btn-ship-open">选择机型</button>
+      </div>
       <div class="hint">弹道最多 5 条 · 攻速最多减 90% · 伤害最多 +3<br>Boss 形象：电脑上可复制图片后按 Ctrl+V 粘贴；手机/电脑都可点「上传图片」选择本地图片更换</div>
       <button class="btn small" id="btn-settings-back">返 回</button>
     </div>
 
-    <!-- 排行榜 -->
+    <!-- 战机皮肤 -->
+    <div id="ship" class="overlay">
+      <div class="panel-title">战 机 皮 肤</div>
+      <div class="ship-grid" id="ship-grid"></div>
+      <div class="hint">不同机型拥有不同速度 / 火力 / 生命系数，选择后立即生效</div>
+      <button class="btn small" id="btn-ship-back">返 回</button>
+    </div>
+
+    <!-- 排行榜 / 成就 / 每日挑战 -->
     <div id="rank" class="overlay">
-      <div class="panel-title">🏆 排 行 榜</div>
-      <div class="rank-name-row">
-        <input type="text" id="rank-name-input" maxlength="12" placeholder="输入你的玩家名称" />
-        <button type="button" class="btn small" id="btn-rank-save">保存</button>
+      <div class="panel-title">🏆 荣 誉 大 厅</div>
+      <div class="rank-tabs" id="rank-tabs">
+        <button type="button" class="rank-tab active" data-tab="board">🏆 排行</button>
+        <button type="button" class="rank-tab" data-tab="achieve">🎖 成就</button>
+        <button type="button" class="rank-tab" data-tab="daily">📅 每日</button>
       </div>
-      <div class="rank-list" id="rank-list"></div>
+      <div id="rank-body">
+        <div class="rank-name-row">
+          <input type="text" id="rank-name-input" maxlength="12" placeholder="输入你的玩家名称" />
+          <button type="button" class="btn small" id="btn-rank-save">保存</button>
+        </div>
+        <div class="rank-list" id="rank-list"></div>
+      </div>
+      <div id="achieve-body" style="display:none;min-height:120px;"></div>
+      <div id="daily-body" style="display:none;min-height:120px;"></div>
       <button class="btn small" id="btn-rank-back">返 回</button>
     </div>
 
@@ -611,9 +666,24 @@
 
     // 初始设置（每局开始生效）
     initialWeapon: 'gun',
+    initialSecondaryWeapon: null, // 副武器（null = 无双武器）
+    initialShip: 'star',          // 初始战机皮肤
     initialMultishot: 1,     // 1~5 条
     initialFireSpeed: 1,     // 1.0 ~ 0.1
     initialDamage: 0,        // 0 ~ 3
+
+    // 战机皮肤（不同机型不同属性系数）
+    ships: {
+      star:    { label: '星舰', speed: 1.0,  fire: 1.0, hp: 1.0,  color: '#3ec8ff' },
+      viper:   { label: '毒蛇', speed: 1.25, fire: 0.85, hp: 0.8,  color: '#5dff8b' },
+      titan:   { label: '泰坦', speed: 0.8,  fire: 1.15, hp: 1.25, color: '#ffd166' },
+      phantom: { label: '幻影', speed: 1.1,  fire: 1.0,  hp: 0.9,  color: '#c98bff' }
+    },
+
+    // 多样 Boss（弹幕模式按波次轮换）
+    bossModes: ['fan', 'spiral', 'ring', 'aimed'],
+    bossNames: { fan: '恶魔·炮手', spiral: '恶魔·旋翼', ring: '恶魔·领主', aimed: '恶魔·猎手' },
+    bossModeHpFactor: { fan: 1, spiral: 1.1, ring: 1.25, aimed: 1.05 },
 
     // 难度
     difficulty: 1,           // 1 ~ 10
@@ -687,6 +757,7 @@
   /** 创建初始游戏状态 */
   function createGame(config) {
     var cfg = merge({}, DEFAULT_CONFIG, config || {});
+    var shipCfg = cfg.ships[cfg.initialShip] || cfg.ships.star;
     var state = {
       config: cfg,
       status: 'ready',
@@ -694,8 +765,10 @@
       time: 0,
       level: 1,
       difficulty: cfg.difficulty,
-      lives: cfg.lives,
+      lives: Math.max(1, Math.round(cfg.lives * shipCfg.hp)),
       weapon: cfg.initialWeapon || 'gun',
+      secondaryWeapon: cfg.initialSecondaryWeapon || null, // 副武器（实时双武器）
+      ship: (cfg.ships[cfg.initialShip] ? cfg.initialShip : 'star'), // 战机皮肤
       multishotLevel: clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1),
       fireSpeedFactor: clamp(cfg.initialFireSpeed || 1, cfg.fireSpeedMin, 1),
       damageBonus: clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax),
@@ -980,7 +1053,7 @@
   function getLaserDps(state) {
     var cfg = state.config;
     var wcfg = cfg.weapons.laser;
-    return wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser');
+    return (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser')) * getShipFireFactor(state);
   }
 
   /** 子弹尺寸系数（道具加成，每级 +25%） */
@@ -1027,7 +1100,7 @@
       // 弹道+1 → 光刃数量+1；"增加激光"道具 → 光刃长度增加
       var bladeW = Math.max(4, wcfg.bulletWidth);
       var bladeH = Math.max(8, wcfg.bulletHeight + state.laserWidthBonus * wcfg.bladeLengthStep);
-      var dmg = wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'saber');
+      var dmg = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state)));
       var existing = 0;
       for (var eix = 0; eix < state.bullets.length; eix++) {
         if (state.bullets[eix].type === 'saberblade') existing++;
@@ -1052,7 +1125,7 @@
       return true;
     }
 
-    var damage = wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon);
+    var damage = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state)));
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
@@ -1093,7 +1166,7 @@
     var sizeMul = getBulletSize(state);
     var bw = Math.min(wcfg.bulletWidth + wcfg.chargeSizeMax * charge, wcfg.bulletWidth + wcfg.chargeSizeMax) * sizeMul;
     var bh = Math.min(wcfg.bulletHeight + wcfg.chargeSizeMax * charge, wcfg.bulletHeight + wcfg.chargeSizeMax) * sizeMul;
-    var dmg = wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge;
+    var dmg = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state)));
     var speed = wcfg.bulletSpeed + 260 * charge;
     // 按初始弹道数量平行发射多颗蓄力弹（弹丸宽，间隔按弹丸尺寸自适应避免重叠）
     var count = getBulletCount(state);
@@ -1138,9 +1211,37 @@
 
   function getPlayerSpeed(state) {
     var cfg = state.config;
+    var shipCfg = cfg.ships[state.ship] || cfg.ships.star;
     return state.time < state.speedBoostUntil
-      ? cfg.playerSpeed * cfg.speedBoostMultiplier
-      : cfg.playerSpeed;
+      ? cfg.playerSpeed * cfg.speedBoostMultiplier * shipCfg.speed
+      : cfg.playerSpeed * shipCfg.speed;
+  }
+
+  /** 当前战机火力系数（皮肤加成） */
+  function getShipFireFactor(state) {
+    var cfg = state.config;
+    var shipCfg = cfg.ships[state.ship] || cfg.ships.star;
+    return shipCfg.fire;
+  }
+
+  /** 设置副武器（实时双武器） */
+  function setSecondary(state, weapon) {
+    if (!weapon || !state.config.weapons[weapon] || weapon === state.weapon) {
+      state.secondaryWeapon = null;
+      return false;
+    }
+    state.secondaryWeapon = weapon;
+    return true;
+  }
+
+  /** 实时切换主/副武器（Q 键/按钮） */
+  function switchWeapon(state) {
+    if (!state.secondaryWeapon) return state.weapon;
+    var tmp = state.weapon;
+    state.weapon = state.secondaryWeapon;
+    state.secondaryWeapon = tmp;
+    state.charge = 0; // 切换清空蓄力
+    return state.weapon;
   }
 
   function hasShield(state) {
@@ -1263,11 +1364,22 @@
 
   // ==================== BOSS ====================
 
-  function spawnBoss(state) {
+  /** 当前波次对应的 Boss 弹幕模式（轮换） */
+  function getBossTypeForWave(state) {
     var cfg = state.config;
+    var bossWaveIndex = Math.floor(state.wave / cfg.waveBossEvery) - 1;
+    if (bossWaveIndex < 0) bossWaveIndex = 0;
+    var modes = cfg.bossModes;
+    return modes[bossWaveIndex % modes.length];
+  }
+
+  function spawnBoss(state, mode) {
+    var cfg = state.config;
+    mode = mode || getBossTypeForWave(state);
+    var hpFactor = cfg.bossModeHpFactor[mode] || 1;
     var hp = Math.round(
       (cfg.bossBaseHp + (state.level - 1) * cfg.bossHpPerLevel) *
-      (1 + (state.difficulty - 1) * cfg.bossHpDifficultyStep)
+      (1 + (state.difficulty - 1) * cfg.bossHpDifficultyStep) * hpFactor
     );
     state.boss = {
       id: newId(state),
@@ -1279,6 +1391,10 @@
       maxHp: hp,
       speed: cfg.bossSpeed,
       nextFire: cfg.bossFireInterval,
+      mode: mode,
+      name: cfg.bossNames[mode] || '恶魔',
+      spiralAngle: Math.random() * Math.PI * 2, // 螺旋弹幕起始角
+      fireSub: 0, // 部分模式连发计数器
       invuln: 2   // 进场保护：短暂无敌，让玩家看清 Boss 形象
     };
     return state.boss;
@@ -1290,6 +1406,61 @@
     if (!boss) return false;
     var cx = boss.x + boss.width / 2;
     var y = boss.y + boss.height;
+    var mode = boss.mode || 'fan';
+
+    if (mode === 'spiral') {
+      // 螺旋弹幕：两束反向旋转
+      boss.spiralAngle += 0.42;
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      for (var si = 0; si < 2; si++) {
+        var sAng = boss.spiralAngle + (si === 0 ? 0 : Math.PI);
+        pushEnemyBullet(state, {
+          x: cx - cfg.enemyBulletWidth / 2,
+          y: y,
+          vx: Math.sin(sAng) * cfg.bossBulletSpeed * 0.85,
+          vy: Math.cos(sAng) * cfg.bossBulletSpeed * 0.85
+        });
+      }
+      return true;
+    }
+
+    if (mode === 'ring') {
+      // 环形爆发：全向 10 弹
+      var n = 10;
+      var baseAng = Math.atan2(cfg.height - y, cx - cx); // 朝下
+      for (var ri = 0; ri < n; ri++) {
+        var rAng = baseAng + (ri / n) * Math.PI * 2;
+        pushEnemyBullet(state, {
+          x: cx - cfg.enemyBulletWidth / 2,
+          y: y,
+          vx: Math.sin(rAng) * cfg.bossBulletSpeed * 0.72,
+          vy: Math.cos(rAng) * cfg.bossBulletSpeed * 0.72
+        });
+      }
+      return true;
+    }
+
+    if (mode === 'aimed') {
+      // 瞄准弹：朝玩家方向 3 连发
+      var pcx = state.player ? state.player.x + state.player.width / 2 : cx;
+      var pcy = state.player ? state.player.y + state.player.height / 2 : cfg.height;
+      var base = Math.atan2(pcy - y, pcx - cx);
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      var burst = 1 + Math.floor(boss.fireSub / 2); // 每两次触发 1/2 连发
+      if (burst > 3) { boss.fireSub = 0; burst = 1; }
+      for (var ai = 0; ai < burst; ai++) {
+        var aAng = base + (ai - (burst - 1) / 2) * 0.16;
+        pushEnemyBullet(state, {
+          x: cx - cfg.enemyBulletWidth / 2,
+          y: y,
+          vx: Math.sin(aAng) * cfg.bossBulletSpeed * 0.95,
+          vy: Math.cos(aAng) * cfg.bossBulletSpeed * 0.95
+        });
+      }
+      return true;
+    }
+
+    // fan 扇形（默认）
     var count = cfg.bossBulletCount;
     for (var i = 0; i < count; i++) {
       var angle = -cfg.bossBulletSpread / 2 + (count === 1 ? 0 : (cfg.bossBulletSpread * i) / (count - 1));
@@ -1644,7 +1815,7 @@
           var scx = b.x + b.width / 2;
           var scy = b.y + b.height / 2;
           var sradius = Math.max(b.width, b.height) * 0.9;
-          var sdps = swcfg.meleeDps + state.damageBonus * state.config.laserDpsPerDamage + getWeaponLevelDamage(state, 'saber');
+          var sdps = (swcfg.meleeDps + state.damageBonus * state.config.laserDpsPerDamage + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state);
           for (var si = state.enemies.length - 1; si >= 0; si--) {
             var se = state.enemies[si];
             var secx = se.x + se.width / 2;
@@ -1902,6 +2073,10 @@
     applyPowerup: applyPowerup,
     fireBullet: fireBullet,
     setWeapon: setWeapon,
+    setSecondary: setSecondary,
+    switchWeapon: switchWeapon,
+    getShipFireFactor: getShipFireFactor,
+    getBossTypeForWave: getBossTypeForWave,
     getWeaponConfig: getWeaponConfig,
     getBulletCount: getBulletCount,
     getFireCooldown: getFireCooldown,
@@ -1969,6 +2144,8 @@
 
   var settings = {
     weapon: 'gun',
+    secondaryWeapon: 'laser', // 副武器（实时双武器切换）
+    ship: 'star',             // 战机皮肤
     difficulty: 1,
     multishot: 1,
     fireSpeed: 1,     // 冷却系数：1.0 ~ 0.1
@@ -1987,6 +2164,7 @@
     difficulty: document.getElementById('difficulty'),
     settings: document.getElementById('settings'),
     upgrade: document.getElementById('upgrade'),
+    ship: document.getElementById('ship'),
     rank: document.getElementById('rank')
   };
 
@@ -2040,7 +2218,10 @@
 
   function renderWeaponGrid() {
     var grid = document.getElementById('loadout-grid');
+    var sub = document.getElementById('loadout-grid-sub');
+    if (!grid) return;
     grid.innerHTML = '';
+    if (sub) sub.innerHTML = '';
     WEAPONS.forEach(function (w) {
       var card = document.createElement('div');
       card.className = 'weapon-card' + (settings.weapon === w.id ? ' selected' : '');
@@ -2049,10 +2230,33 @@
         '<div class="name">' + w.name + '</div>' +
         '<div class="desc">' + w.desc.replace(/\n/g, '<br>') + '</div>';
       card.addEventListener('click', function () {
+        if (settings.secondaryWeapon === w.id) {
+          // 主副不重复：自动把副武器换成原主武器之外的一把
+          settings.secondaryWeapon = (w.id === 'laser') ? 'gun' : 'laser';
+        }
         settings.weapon = w.id;
         renderWeaponGrid();
       });
       grid.appendChild(card);
+    });
+    if (!sub) return;
+    WEAPONS.forEach(function (w) {
+      var card = document.createElement('div');
+      card.className = 'weapon-card' + (settings.secondaryWeapon === w.id ? ' selected' : '');
+      card.innerHTML =
+        '<span class="icon">' + w.icon + '</span>' +
+        '<div class="name">' + w.name + '</div>' +
+        '<div class="desc">' + w.desc.replace(/\n/g, '<br>') + '</div>';
+      card.addEventListener('click', function () {
+        if (w.id === settings.weapon) {
+          // 与主武器相同则不设副武器（避免重复）
+          showToast('副武器不能与主武器相同');
+          return;
+        }
+        settings.secondaryWeapon = w.id;
+        renderWeaponGrid();
+      });
+      sub.appendChild(card);
     });
   }
 
@@ -2075,6 +2279,40 @@
 
   function fireSpeedToFactor(pct) {
     return pct / 100;
+  }
+
+  // ==================== 战机皮肤 ====================
+
+  var SHIPS = [
+    { id: 'star', icon: '🛸', name: '星舰', stats: '速 1.0 · 火 1.0 · 命 1.0' },
+    { id: 'viper', icon: '🐍', name: '毒蛇', stats: '速 1.25 · 火 0.85 · 命 0.8' },
+    { id: 'titan', icon: '🛡', name: '泰坦', stats: '速 0.8 · 火 1.15 · 命 1.25' },
+    { id: 'phantom', icon: '👻', name: '幻影', stats: '速 1.1 · 火 1.0 · 命 0.9' }
+  ];
+
+  function renderShipGrid() {
+    var grid = document.getElementById('ship-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    SHIPS.forEach(function (sh) {
+      var card = document.createElement('div');
+      card.className = 'ship-card' + (settings.ship === sh.id ? ' active' : '');
+      card.innerHTML =
+        '<div class="ship-ship">' + sh.icon + '</div>' +
+        '<div class="ship-name">' + sh.name + '</div>' +
+        '<div class="ship-stats">' + sh.stats + '</div>';
+      card.addEventListener('click', function () {
+        settings.ship = sh.id;
+        renderShipGrid();
+        audio.powerup();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function openShipPanel() {
+    renderShipGrid();
+    showPanel('ship');
   }
 
   function updateSettingLabels() {
@@ -2172,6 +2410,12 @@
   if (btnUpgradeMenu) btnUpgradeMenu.addEventListener('click', openUpgradePanel);
   var btnUpgradeBack = document.getElementById('btn-upgrade-back');
   if (btnUpgradeBack) btnUpgradeBack.addEventListener('click', function () { showPanel('settings'); });
+
+  // 战机皮肤面板事件
+  var btnShipOpen = document.getElementById('btn-ship-open');
+  if (btnShipOpen) btnShipOpen.addEventListener('click', openShipPanel);
+  var btnShipBack = document.getElementById('btn-ship-back');
+  if (btnShipBack) btnShipBack.addEventListener('click', function () { showPanel('settings'); });
 
   // ===== 界面按钮事件 =====
 
@@ -2308,14 +2552,19 @@
 
   function startGame() {
     recordScoreToRank._settled = false; // 新局重新结算星币
+    dailyActive = false;
+    resetTracking();
     var p = getProfile();
+    var shipCfg = GameCore.DEFAULT_CONFIG.ships[settings.ship] || GameCore.DEFAULT_CONFIG.ships.star;
     state = GameCore.createGame({
       initialWeapon: settings.weapon,
+      initialSecondaryWeapon: settings.secondaryWeapon === settings.weapon ? null : settings.secondaryWeapon,
+      initialShip: settings.ship,
       initialMultishot: Math.min(5, settings.multishot + (p.upgrades.multishot || 0)),
       initialFireSpeed: settings.fireSpeed,
       initialDamage: settings.damage + (p.upgrades.damage || 0),
       difficulty: settings.difficulty,
-      lives: GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)
+      lives: Math.max(1, Math.round((GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)) * shipCfg.hp))
     });
     GameCore.start(state);
     hidePanels();
@@ -2531,6 +2780,22 @@
 
   /** 把当前局成绩记入排行榜：已命名直接入榜返回 true；未命名暂存（pendingRankScore）返回 false。同时结算本局星币（★10 分 = 1 星币） */
   function recordScoreToRank() {
+    // 每日挑战：不入普通排行榜，只记录当日最佳
+    if (dailyActive) {
+      dailyActive = false;
+      if (!recordScoreToRank._settled) {
+        recordScoreToRank._settled = true;
+        addStars(Math.floor(state.score / 10));
+      }
+      var today = dailyDateStr();
+      var d = loadDaily();
+      var prevBest = d && d.date === today ? d.best : 0;
+      if (state.score > prevBest) {
+        saveDaily({ date: today, best: state.score });
+        showToast('🎉 打破今日最佳！');
+      }
+      return true;
+    }
     // 局外成长星币结算（只结算一次）
     if (!recordScoreToRank._settled) {
       recordScoreToRank._settled = true;
@@ -2600,6 +2865,206 @@
     });
   }
 
+  // ==================== 成就系统 ====================
+
+  var ACHIEVE_KEY = 'sf_achievements';
+  var ACHIEVEMENTS = [
+    { id: 'first_kill', icon: '🎯', name: '初露锋芒', desc: '击杀第 1 个敌人' },
+    { id: 'wave5', icon: '🌊', name: '渐入佳境', desc: '到达第 5 波' },
+    { id: 'boss1', icon: '👹', name: '屠魔者', desc: '击杀第 1 个 Boss' },
+    { id: 'no_hit', icon: '🛡', name: '无伤先锋', desc: '第 1 波全程无伤通过' },
+    { id: 'score10000', icon: '💯', name: '万分战神', desc: '单局得分达到 10000' },
+    { id: 'combo50', icon: '🔥', name: '连击大师', desc: '连击达到 50 层' },
+    { id: 'ult5', icon: '⚡', name: '能量掌控', desc: '累计释放 5 次能量大招' },
+    { id: 'wave20', icon: '🌌', name: '无尽勇者', desc: '到达第 20 波（无尽深处）' }
+  ];
+
+  function loadAchievements() {
+    try {
+      var raw = localStorage.getItem(ACHIEVE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  }
+
+  function saveAchievements(a) {
+    try { localStorage.setItem(ACHIEVE_KEY, JSON.stringify(a)); } catch (err) {}
+  }
+
+  // 本局追踪数据（main.js 层，不进 game-core）
+  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0 };
+  function resetTracking() {
+    track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0 };
+  }
+
+  function checkAchievements() {
+    if (state.status !== 'playing' && state.status !== 'gameover') return;
+    var ach = loadAchievements();
+    var any = false;
+    var cond = {
+      first_kill: track.totalKills >= 1,
+      wave5: state.wave >= 5,
+      boss1: track.bossKills >= 1,
+      no_hit: state.wave >= 2 && !track.damagedInWave,
+      score10000: state.score >= 10000,
+      combo50: state.combo >= 50,
+      ult5: track.ultCount >= 5,
+      wave20: state.wave >= 20
+    };
+    ACHIEVEMENTS.forEach(function (a) {
+      if (!ach[a.id] && cond[a.id]) {
+        ach[a.id] = Date.now();
+        any = true;
+        showToast('🎖 成就解锁：' + a.name);
+        audio.powerup();
+        setTimeout(function () { audio.powerup(); }, 150);
+      }
+    });
+    if (any) saveAchievements(ach);
+  }
+
+  function renderAchieveBody() {
+    var body = document.getElementById('achieve-body');
+    if (!body) return;
+    var ach = loadAchievements();
+    var unlocked = 0;
+    body.innerHTML = '';
+    ACHIEVEMENTS.forEach(function (a) {
+      if (ach[a.id]) unlocked++;
+      var item = document.createElement('div');
+      item.className = 'achieve-item' + (ach[a.id] ? '' : ' locked');
+      item.innerHTML =
+        '<span class="achieve-ico">' + a.icon + '</span>' +
+        '<span class="achieve-name">' + a.name + '<small>' + a.desc + '</small></span>' +
+        '<span class="achieve-state">' + (ach[a.id] ? '✓ 已解锁' : '🔒 未解锁') + '</span>';
+      body.appendChild(item);
+    });
+    var head = document.createElement('div');
+    head.style.cssText = 'text-align:center;color:#ffd166;font-size:14px;margin-bottom:10px;letter-spacing:1px;';
+    head.textContent = '已解锁 ' + unlocked + ' / ' + ACHIEVEMENTS.length;
+    body.insertBefore(head, body.firstChild);
+  }
+
+  // ==================== 每日挑战（固定种子固定配置） ====================
+
+  var DAILY_KEY = 'sf_daily';
+  var dailyActive = false;
+
+  function dailyDateStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function dailySeed() {
+    var s = dailyDateStr();
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+
+  function getDailyConfig() {
+    var seed = dailySeed();
+    var wkeys = Object.keys(GameCore.DEFAULT_CONFIG.weapons);
+    var w1 = wkeys[seed % wkeys.length];
+    var w2 = wkeys[(seed >> 3) % wkeys.length];
+    if (w2 === w1) w2 = wkeys[(seed >> 5) % wkeys.length];
+    var skeys = Object.keys(GameCore.DEFAULT_CONFIG.ships);
+    return {
+      difficulty: 8,
+      weapon: w1,
+      secondary: w2,
+      ship: skeys[seed % skeys.length],
+      multishot: 1 + (seed % 5),
+      fireSpeed: 1 - ((seed >> 4) % 6) * 0.1, // 0.5 ~ 1.0
+      damage: seed % 4
+    };
+  }
+
+  function loadDaily() {
+    try {
+      var raw = localStorage.getItem(DAILY_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return { date: '', best: 0 };
+  }
+
+  function saveDaily(d) {
+    try { localStorage.setItem(DAILY_KEY, JSON.stringify(d)); } catch (err) {}
+  }
+
+  function startDailyChallenge() {
+    var cfg = getDailyConfig();
+    dailyActive = true;
+    resetTracking();
+    state = GameCore.createGame({
+      initialWeapon: cfg.weapon,
+      initialSecondaryWeapon: cfg.secondary,
+      initialShip: cfg.ship,
+      initialMultishot: cfg.multishot,
+      initialFireSpeed: cfg.fireSpeed,
+      initialDamage: cfg.damage,
+      difficulty: cfg.difficulty
+    });
+    GameCore.start(state);
+    hidePanels();
+    showInGameBtn(true);
+    showHud(true);
+    clearTimeout(returnToMenuTimer);
+    showToast('📅 每日挑战 · 难度8 · 固定配置');
+  }
+
+  function renderDailyBody() {
+    var body = document.getElementById('daily-body');
+    if (!body) return;
+    var cfg = getDailyConfig();
+    var d = loadDaily();
+    var today = dailyDateStr();
+    var best = d && d.date === today ? d.best : 0;
+    body.innerHTML = '';
+    var card = document.createElement('div');
+    card.className = 'daily-card';
+    card.innerHTML =
+      '<div class="dc-title">📅 今日挑战 · ' + today + '</div>' +
+      '<div class="dc-info">主武器：' + (WEAPON_NAMES[cfg.weapon] || cfg.weapon) +
+      ' · 副武器：' + (WEAPON_NAMES[cfg.secondary] || cfg.secondary) +
+      '<br>战机：' + (GameCore.DEFAULT_CONFIG.ships[cfg.ship] || {}).label +
+      ' · 弹道 ' + cfg.multishot + ' · 攻速 ' + Math.round(cfg.fireSpeed * 100) + '% · 伤害+' + cfg.damage +
+      '<br>难度 8（固定） · 每人每日同一配置，比谁分高！</div>' +
+      '<div class="dc-best">今日最佳：' + best + ' 分</div>';
+    var btn = document.createElement('button');
+    btn.className = 'btn primary';
+    btn.textContent = '开始今日挑战';
+    btn.style.marginTop = '10px';
+    btn.addEventListener('click', function () {
+      audio.unlock();
+      music.start();
+      startDailyChallenge();
+    });
+    card.appendChild(btn);
+    body.appendChild(card);
+  }
+
+  // 排行榜面板 tabs（排行 / 成就 / 每日）
+  var rankTabs = document.getElementById('rank-tabs');
+  if (rankTabs) {
+    rankTabs.addEventListener('click', function (e) {
+      var tab = e.target;
+      if (!tab || !tab.dataset || !tab.dataset.tab) return;
+      var tabs = rankTabs.querySelectorAll('.rank-tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      tab.classList.add('active');
+      var mode = tab.dataset.tab;
+      var board = document.getElementById('rank-body');
+      var achBody = document.getElementById('achieve-body');
+      var dailyBody = document.getElementById('daily-body');
+      if (board) board.style.display = mode === 'board' ? 'block' : 'none';
+      if (achBody) achBody.style.display = mode === 'achieve' ? 'block' : 'none';
+      if (dailyBody) dailyBody.style.display = mode === 'daily' ? 'block' : 'none';
+      if (mode === 'achieve') renderAchieveBody();
+      if (mode === 'daily') renderDailyBody();
+    });
+  }
+
   // 初始化界面
   renderWeaponGrid();
   renderDifficultyGrid();
@@ -2621,7 +3086,7 @@
   var chargeVisible = false;
 
   // 音效事件
-  var soundEvents = { shoot: false, cannon: false, laser: false, saber: false, chargeFire: false, hit: false, bigHit: false, playerHit: false, powerup: false, gameover: false, ult: false, boss: false };
+  var soundEvents = { shoot: false, cannon: false, laser: false, saber: false, chargeFire: false, hit: false, bigHit: false, playerHit: false, powerup: false, combo: false, gameover: false, ult: false, boss: false };
 
   // ==================== Web Audio 音效 ====================
 
@@ -2676,6 +3141,10 @@
         tone('triangle', 520, 0.09, 0.09);
         setTimeout(function () { tone('triangle', 780, 0.14, 0.09); }, 90);
       },
+      // 连击里程碑音效（清脆上扬）
+      combo: function () {
+        tone('triangle', 700 + Math.random() * 500, 0.08, 0.06, 1400, 0.02);
+      },
       gameover: function () { tone('sawtooth', 300, 0.6, 0.12, 70); },
       ult: function () {
         tone('sawtooth', 900, 0.9, 0.12, 120);
@@ -2698,6 +3167,14 @@
     var on = true;
     var volume = 0.6;
     var scale = [220, 262, 330, 392, 440, 523]; // A 小调氛围琶音
+    // 动态音效：随波次提升琶音音高与节奏（1-4 波 → 5-8 波 → 9+ 波）
+    var intensityScales = [
+      [220, 262, 330, 392, 440, 523],
+      [262, 311, 392, 466, 523, 622],
+      [330, 392, 494, 587, 659, 784]
+    ];
+    var arpIntervals = [600, 480, 380];
+    var currentLevel = -1;
 
     function ensureCtx() {
       // 与音效共享同一个 AudioContext
@@ -2709,6 +3186,28 @@
         clearInterval(arpTimer);
         arpTimer = null;
       }
+    }
+
+    function startArp(interval) {
+      stopArp();
+      arpIndex = 0;
+      arpTimer = setInterval(function () {
+        if (!masterGain || !on) return;
+        var a2 = ensureCtx();
+        if (!a2) return;
+        var note = a2.createOscillator();
+        note.type = 'triangle';
+        note.frequency.value = scale[arpIndex % scale.length] * (arpIndex >= scale.length ? 2 : 1);
+        arpIndex++;
+        var ng = a2.createGain();
+        ng.gain.setValueAtTime(0.0001, a2.currentTime);
+        ng.gain.exponentialRampToValueAtTime(0.04, a2.currentTime + 0.05);
+        ng.gain.exponentialRampToValueAtTime(0.0001, a2.currentTime + 0.5);
+        note.connect(ng);
+        ng.connect(masterGain);
+        note.start(a2.currentTime);
+        note.stop(a2.currentTime + 0.55);
+      }, interval);
     }
 
     function start() {
@@ -2736,24 +3235,8 @@
         droneNodes.push(osc);
       }
 
-      // 循环琶音
-      arpTimer = setInterval(function () {
-        if (!masterGain || !on) return;
-        var a2 = ensureCtx();
-        if (!a2) return;
-        var note = a2.createOscillator();
-        note.type = 'triangle';
-        note.frequency.value = scale[arpIndex % scale.length] * (arpIndex >= scale.length ? 2 : 1);
-        arpIndex++;
-        var ng = a2.createGain();
-        ng.gain.setValueAtTime(0.0001, a2.currentTime);
-        ng.gain.exponentialRampToValueAtTime(0.04, a2.currentTime + 0.05);
-        ng.gain.exponentialRampToValueAtTime(0.0001, a2.currentTime + 0.5);
-        note.connect(ng);
-        ng.connect(masterGain);
-        note.start(a2.currentTime);
-        note.stop(a2.currentTime + 0.55);
-      }, 600);
+      // 循环琶音（音高/节奏随波次动态变化）
+      startArp(arpIntervals[0]);
     }
 
     function stop() {
@@ -2776,6 +3259,14 @@
       setOn: function (v) {
         on = v;
         if (masterGain) masterGain.gain.value = on ? volume : 0;
+      },
+      // 动态音效：随波次提升琶音音高与节奏
+      setIntensity: function (wave) {
+        var idx = Math.min(2, Math.floor((wave - 1) / 4));
+        if (idx === currentLevel) return;
+        currentLevel = idx;
+        scale = intensityScales[idx].slice();
+        if (arpTimer !== null) startArp(arpIntervals[idx]);
       }
     };
   })();
@@ -2887,12 +3378,15 @@
     ctx.save();
     ctx.globalAlpha = flashing ? 0.4 : 1;
 
+    // 战机皮肤主色（不同机型不同涂装）
+    var shipColor = (GameCore.DEFAULT_CONFIG.ships[state.ship] || GameCore.DEFAULT_CONFIG.ships.star).color;
+
     // 主引擎光
-    ctx.shadowColor = '#4ee0ff';
+    ctx.shadowColor = shipColor;
     ctx.shadowBlur = 14;
     var flame = 14 + Math.sin(state.time * 20) * 3;
     var gradF = ctx.createLinearGradient(0, y + h, 0, y + h + flame + 8);
-    gradF.addColorStop(0, 'rgba(120, 240, 255, 0.9)');
+    gradF.addColorStop(0, shipColor);
     gradF.addColorStop(1, 'rgba(120, 240, 255, 0)');
     ctx.fillStyle = gradF;
     ctx.beginPath();
@@ -2902,11 +3396,11 @@
     ctx.closePath();
     ctx.fill();
 
-    // 机身（未来科技：流线多段）
+    // 机身（未来科技：流线多段，颜色随皮肤变化）
     var bodyGrad = ctx.createLinearGradient(x, 0, x + w, 0);
-    bodyGrad.addColorStop(0, '#155e8a');
-    bodyGrad.addColorStop(0.5, '#4ee0ff');
-    bodyGrad.addColorStop(1, '#155e8a');
+    bodyGrad.addColorStop(0, shipColor);
+    bodyGrad.addColorStop(0.5, '#eaffff');
+    bodyGrad.addColorStop(1, shipColor);
     ctx.shadowBlur = 18;
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
@@ -3907,6 +4401,14 @@
       ctx.clearRect(0, 0, W, H);
       return;
     }
+    // 打击感：屏幕震动（画面位移）
+    var nowMs = performance.now();
+    var shaking = nowMs < shakeUntil;
+    if (shaking) {
+      ctx.save();
+      var sk = Math.max(0, (shakeUntil - nowMs) / shakeBase);
+      ctx.translate((Math.random() - 0.5) * 2 * shakeMag * sk, (Math.random() - 0.5) * 2 * shakeMag * sk);
+    }
     drawBackground(0.016);
 
     // 激光光束（画在敌机下层）
@@ -3975,6 +4477,15 @@
       ctx.font = '18px "Microsoft YaHei", sans-serif';
       ctx.fillText('按 R 或点击返回菜单', W / 2, H / 2 + 58);
     }
+
+    // 还原屏幕震动位移
+    if (shaking) ctx.restore();
+    // 全屏闪光（大招 / 受伤）
+    if (nowMs < flashUntil) {
+      var fa = Math.max(0, 0.5 * (flashUntil - nowMs) / 180);
+      ctx.fillStyle = 'rgba(' + flashColor + ',' + fa.toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   // ==================== 输入 ====================
@@ -3999,6 +4510,11 @@
       GameCore.togglePause(state);
       audio.powerup();
       if (wasPanelOpen) hideGamePanel();
+    }
+    // 实时双武器切换：Q 键（无需暂停）
+    if (e.code === 'KeyQ' && state.status === 'playing' && !state.paused) {
+      GameCore.switchWeapon(state);
+      audio.powerup();
     }
     // 游戏中数字键切换武器
     if (state.status === 'playing') {
@@ -4100,9 +4616,48 @@
 
   var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮' };
 
+  // ==================== 打击感（顿帧 / 屏幕震动 / 全屏闪光） ====================
+
+  var shakeUntil = 0;   // 震动结束时间戳（ms）
+  var shakeMag = 0;     // 震动幅度
+  var hitStopUntil = 0; // 命中顿帧截止（ms）
+  var flashUntil = 0;   // 全屏闪光截止（ms）
+  var flashColor = '255,255,255';
+  var shakeBase = 0;
+
+  function addShake(mag, durMs) {
+    shakeMag = Math.max(shakeMag, mag);
+    shakeBase = durMs;
+    shakeUntil = performance.now() + durMs;
+  }
+
+  function addHitStop(durMs) {
+    hitStopUntil = performance.now() + durMs;
+  }
+
+  function addFlash(color, durMs) {
+    flashColor = color;
+    flashUntil = performance.now() + durMs;
+  }
+
+  // ==================== 实时双武器切换 ====================
+
+  var btnSwap = document.getElementById('btn-swap');
+  if (btnSwap) {
+    btnSwap.addEventListener('click', function () {
+      audio.unlock();
+      GameCore.switchWeapon(state);
+      audio.powerup();
+    });
+  }
+
   function tryActivateUlt() {
     if (GameCore.activateUlt(state)) {
       soundEvents.ult = true;
+      track.ultCount++;
+      addShake(12, 220);
+      addHitStop(80);
+      addFlash('255,255,255', 170);
       showToast('能量大招！全屏清场');
       return true;
     }
@@ -4124,7 +4679,7 @@
     var waveEl = document.getElementById('hud-wave');
     if (waveEl) {
       if (state.boss) {
-        waveEl.textContent = '⚠ BOSS 来袭 ⚠';
+        waveEl.textContent = '⚠ ' + state.boss.name + ' 来袭 ⚠';
       } else if (state.waveState === 'break') {
         waveEl.textContent = '休 息 ' + Math.max(0, state.waveBreakTimer).toFixed(1) + 's';
       } else {
@@ -4135,6 +4690,17 @@
     if (wl) {
       wl.textContent = (WEAPON_NAMES[state.weapon] || state.weapon) + ' LV.' + GameCore.getWeaponLevel(state, state.weapon);
     }
+    // 实时双武器：显示当前主武器与副武器，副武器存在时显示切换按钮
+    var wc = document.getElementById('hud-weapon-cur');
+    if (wc) {
+      if (state.secondaryWeapon) {
+        wc.textContent = '主：' + (WEAPON_NAMES[state.weapon] || state.weapon) + ' · 副：' + (WEAPON_NAMES[state.secondaryWeapon] || state.secondaryWeapon);
+      } else {
+        wc.textContent = (WEAPON_NAMES[state.weapon] || state.weapon);
+      }
+    }
+    var swapBtn = document.getElementById('btn-swap');
+    if (swapBtn) swapBtn.style.display = state.secondaryWeapon ? 'block' : 'none';
     var comboEl = document.getElementById('hud-combo');
     if (comboEl) {
       if (state.combo >= 2) {
@@ -4160,6 +4726,14 @@
   function loop(now) {
     var dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
+
+    // 命中顿帧：短暂停止游戏逻辑（画面继续渲染），增强打击感
+    if (now < hitStopUntil) {
+      updateParticles(dt);
+      draw();
+      rafId = requestAnimationFrame(loop);
+      return;
+    }
 
     if (state.status === 'playing' && !state.paused) {
       var speed = GameCore.getPlayerSpeed(state) * dt;
@@ -4192,8 +4766,34 @@
       var livesBefore = state.lives;
       var statusBefore = state.status;
       var bossBefore = state.boss;
+      var waveBefore = state.wave;
+      var comboBefore = state.combo;
 
       GameCore.update(state, dt);
+
+      // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
+      if (waveBefore !== state.wave) {
+        track.damagedInWave = false;
+        music.setIntensity(state.wave);
+      }
+      if (state.lives < livesBefore) {
+        track.damagedInWave = true;
+        addShake(9, 180);
+        addFlash('255,60,90', 120);
+      }
+      // 连击里程碑音效（每 5 层一次上扬提示）
+      if (state.combo > comboBefore && state.combo >= 5 && state.combo % 5 === 0) {
+        soundEvents.combo = true;
+      }
+      // 本局追踪：击杀数 / Boss 击杀数
+      var destroyed = enemyBefore - state.enemies.length;
+      track.totalKills += destroyed;
+      if (bossBefore && !state.boss) {
+        track.bossKills++;
+        addShake(11, 220);
+        addHitStop(70);
+      }
+      checkAchievements();
 
       // 蓄力炮满蓄力自动发射：播放音效并消费标志
       if (state.chargeAutoFired) {
@@ -4209,11 +4809,18 @@
         // 蓄力炮蓄力中不播放音效（释放时播柔和音效）
         else if (state.weapon !== 'charge') soundEvents.shoot = true;
       }
-      var destroyed = enemyBefore - state.enemies.length;
-      if (destroyed > 0 && livesBefore === state.lives) {
+      var destroyed2 = enemyBefore - state.enemies.length;
+      if (destroyed2 > 0 && livesBefore === state.lives) {
         var hasLarge = state.explosions.some(function (ex) { return ex.kind === 'large' || ex.kind === 'boss'; });
         soundEvents.bigHit = hasLarge || soundEvents.bigHit;
         soundEvents.hit = !hasLarge || soundEvents.hit;
+        // 打击感：大/Boss 爆炸重震 + 短顿帧，普通击杀轻震
+        if (hasLarge) {
+          addShake(6, 130);
+          addHitStop(40);
+        } else {
+          addShake(2, 70);
+        }
       }
       if (state.lives < livesBefore) soundEvents.playerHit = true;
       if (state.powerups.length < powerupBefore) soundEvents.powerup = true;
@@ -4248,7 +4855,8 @@
       if (soundEvents.hit) { audio.hit(); soundEvents.hit = false; }
       if (soundEvents.bigHit) { audio.bigHit(); soundEvents.bigHit = false; }
       if (soundEvents.playerHit) { audio.playerHit(); soundEvents.playerHit = false; }
-      if (soundEvents.powerup) { audio.powerup(); soundEvents.powerup = false; }
+      if (soundEvents.powerup) { audio.powerup(); soundEvents.powerup = false; addShake(2, 60); }
+      if (soundEvents.combo) { audio.combo(); soundEvents.combo = false; }
       if (soundEvents.gameover) { audio.gameover(); soundEvents.gameover = false; }
       if (soundEvents.ult) { audio.ult(); soundEvents.ult = false; }
       if (soundEvents.boss) { audio.boss(); soundEvents.boss = false; }
