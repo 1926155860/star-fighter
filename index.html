@@ -898,8 +898,12 @@
       return true;
     }
     if (state.weapon === 'charge') {
-      // 蓄力累积（满蓄力后保持）
+      // 蓄力累积（满蓄力后自动攻击）
       state.charge = Math.min(1, state.charge + (dt || 0.016) / cfg.weapons.charge.chargeTime);
+      if (state.charge >= 1) {
+        chargeRelease(state);
+        state.chargeAutoFired = true; // 供前端播放音效
+      }
       return true;
     }
     if (state.time < state.nextFireTime) return false;
@@ -1386,7 +1390,7 @@
     b.vx *= wcfg.bounceSpeedBoost || 1.06;
   }
 
-  /** 追踪弹：每帧朝最近的敌人转向 */
+  /** 追踪弹：每帧朝最近的敌人/Boss 转向 */
   function updateHoming(state, b, dt) {
     var wcfg = state.config.weapons.homing;
     var target = null;
@@ -1399,6 +1403,13 @@
       var ecy = e.y + e.height / 2;
       var d = (ecx - bcx) * (ecx - bcx) + (ecy - bcy) * (ecy - bcy);
       if (d < best) { best = d; target = e; }
+    }
+    // BOSS 也作为追踪目标（优先于普通敌人）
+    if (state.boss) {
+      var bcx2 = state.boss.x + state.boss.width / 2;
+      var bcy2 = state.boss.y + state.boss.height / 2;
+      var d2 = (bcx2 - bcx) * (bcx2 - bcx) + (bcy2 - bcy) * (bcy2 - bcy);
+      if (d2 < best) { best = d2; target = state.boss; }
     }
     var curAng = Math.atan2(b.vy, b.vx);
     if (target) {
@@ -1509,20 +1520,39 @@
       var hit = false;
       for (var ei2 = state.enemies.length - 1; ei2 >= 0; ei2--) {
         if (rectsOverlap(bullet, state.enemies[ei2])) {
-          hurtEnemy(state, state.enemies[ei2], bullet.damage);
+          var tgt = state.enemies[ei2];
+          // 蓄力弹穿透：同一目标只造成一次伤害，能量球继续向前
+          if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[tgt.id]) continue;
+          hurtEnemy(state, tgt, bullet.damage);
           hit = true;
           // 回旋镖命中敌人后：随机向周围弹射
           if (bullet.type === 'boomerang') {
             scatterBoomerang(bullet, state.config.weapons.boomerang);
+            break;
+          }
+          // 蓄力弹：记录已伤害目标并继续穿透
+          if (bullet.type === 'chargebolt') {
+            bullet.pierced = bullet.pierced || {};
+            bullet.pierced[tgt.id] = true;
+            continue;
           }
           break;
         }
       }
       if (!hit && state.boss && rectsOverlap(bullet, state.boss)) {
-        hurtBoss(state, bullet.damage);
-        hit = true;
+        // 蓄力弹对 Boss 同样穿透（同一 Boss 只结算一次伤害）
+        if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[state.boss.id]) {
+          hit = true;
+        } else {
+          hurtBoss(state, bullet.damage);
+          hit = true;
+          if (bullet.type === 'chargebolt') {
+            bullet.pierced = bullet.pierced || {};
+            bullet.pierced[state.boss.id] = true;
+          }
+        }
       }
-      // 弹幕抵消：玩家子弹命中敌机子弹 → 敌弹消失；普通子弹自身也消失，回旋镖保留
+      // 弹幕抵消：玩家子弹命中敌机子弹 → 敌弹消失；普通子弹自身也消失，回旋镖/蓄力弹保留
       if (!hit) {
         for (var cbi = state.enemyBullets.length - 1; cbi >= 0; cbi--) {
           if (rectsOverlap(bullet, state.enemyBullets[cbi])) {
@@ -1533,8 +1563,8 @@
         }
       }
       if (hit) {
-        // 回旋镖命中不消失（持续弹跳）
-        if (bullet.type !== 'boomerang') {
+        // 回旋镖与蓄力弹命中不消失（回旋镖持续弹跳；蓄力弹穿透继续向前）
+        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt') {
           state.bullets.splice(bi, 1);
         }
       }
@@ -1719,6 +1749,7 @@
     getLaserWidth: getLaserWidth,
     damagePlayer: damagePlayer,
     hurtEnemy: hurtEnemy,
+    updateHoming: updateHoming,
     spawnBoss: spawnBoss,
     bossFire: bossFire,
     getBossHpRatio: getBossHpRatio,
@@ -2105,15 +2136,26 @@
   }
   var btnGameMenu = document.getElementById('btn-game-menu');
   if (btnGameMenu) {
-    btnGameMenu.addEventListener('click', function () { backToMenu(); });
+    btnGameMenu.addEventListener('click', function () {
+      // 返回初始界面也视为本局结束：当前成绩直接记入排行榜（未命名则暂存，设置玩家名时自动记录）
+      if (state.status === 'playing') {
+        if (recordScoreToRank()) {
+          showToast('本局成绩已记录');
+        } else {
+          showToast('成绩待记录：请到排行榜设置玩家名');
+        }
+      }
+      backToMenu();
+    });
   }
 
   // ==================== 分数排行榜（云端共享） ====================
 
   var RANK_KEY = 'sf_scores';
   var NAME_KEY = 'sf_name';
-  // 云端共享记分板（Pantry 免费 JSON 存储；basket 内容为 {list:[{name,score,level,time}]}）
-  var CLOUD_RANK_URL = 'https://getpantry.cloud/apiv1/pantry/e4d90d5d-91c4-4375-a80f-1c83653abb2f/basket/leaderboard';
+  // 云端共享记分板（npoint 免费 JSON 存储；basket 内容为数组 [{name,score,level,time}]）
+  // 注意：必须用 text/plain 提交（不带 Content-Type），否则 npoint 对浏览器 preflight 返回 500
+  var CLOUD_RANK_URL = 'https://api.npoint.io/3dff28b9ea0bbac7b98b';
   var pendingRankScore = null; // 死亡时若尚未命名，暂存本次成绩
 
   function loadScores() {
@@ -2143,23 +2185,24 @@
       .sort(function (a, b) { return b.score - a.score; });
   }
 
-  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（失败静默，本地不受影响） */
+  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（text/plain 避免 preflight；失败静默，本地不受影响） */
   function pushRankToCloud() {
     if (typeof fetch !== 'function') return;
     fetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
         var local = loadScores();
-        var cloudList = (cloud && Array.isArray(cloud.list)) ? cloud.list : [];
-        var merged = mergeRank(local.concat(cloudList));
+        var merged = mergeRank((Array.isArray(cloud) ? local.concat(cloud) : local));
         saveScores(merged);
         return fetch(CLOUD_RANK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ list: merged })
+          body: JSON.stringify(merged)
         });
       })
-      .catch(function () {});
+      .catch(function () {
+        // 本地 file:// 打开时浏览器安全限制会拒绝向第三方云写入：提示使用线上版
+        try { showToast('排行榜同步失败：本地版无法上传成绩，请用线上版游玩'); } catch (e) {}
+      });
   }
 
   /** 拉取云端榜单并合并到本地（所有玩家成绩共享），成功后刷新当前面板 */
@@ -2168,9 +2211,8 @@
     fetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
-        var cloudList = (cloud && Array.isArray(cloud.list)) ? cloud.list : [];
-        if (!cloudList.length) return;
-        var merged = mergeRank(loadScores().concat(cloudList));
+        if (!Array.isArray(cloud) || !cloud.length) return;
+        var merged = mergeRank(loadScores().concat(cloud));
         saveScores(merged);
         var panel = document.getElementById('rank');
         if (panel && panel.className.indexOf('active') >= 0) renderRankList();
@@ -2221,6 +2263,17 @@
         '<span class="rank-score">' + s.score + ' 分</span>';
       list.appendChild(row);
     });
+  }
+
+  /** 把当前局成绩记入排行榜：已命名直接入榜返回 true；未命名暂存（pendingRankScore）返回 false */
+  function recordScoreToRank() {
+    var pname = getPlayerName();
+    if (pname) {
+      addScoreEntry(pname, state.score, state.level, Math.floor(state.time));
+      return true;
+    }
+    pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time) };
+    return false;
   }
 
   function initRankPanel(focusInput) {
@@ -3843,6 +3896,12 @@
 
       GameCore.update(state, dt);
 
+      // 蓄力炮满蓄力自动发射：播放音效并消费标志
+      if (state.chargeAutoFired) {
+        soundEvents.chargeFire = true;
+        state.chargeAutoFired = false;
+      }
+
       // ===== 音效事件 =====
       if (fired) {
         if (state.weapon === 'cannon') soundEvents.cannon = true;
@@ -3862,16 +3921,13 @@
       if (statusBefore !== 'gameover' && state.status === 'gameover') {
         soundEvents.gameover = true;
         // 记录成绩：已命名直接入榜并在 2 秒后自动回主菜单；未命名打开排行榜引导命名（暂停自动返回，避免打断输入）
-        var pname = getPlayerName();
-        if (pname) {
-          addScoreEntry(pname, state.score, state.level, Math.floor(state.time));
+        if (recordScoreToRank()) {
           gameoverReturnScheduled = true;
           returnToMenuTimer = setTimeout(function () {
             gameoverReturnScheduled = false;
             backToMenu();
           }, 2000);
         } else {
-          pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time) };
           clearTimeout(returnToMenuTimer);
           returnToMenuTimer = null;
           gameoverReturnScheduled = false;
