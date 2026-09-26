@@ -554,9 +554,8 @@
         <button class="btn menu-corner" id="btn-settings">⚙ 设置</button>
         <button class="btn side" id="btn-loadout">选择装备</button>
         <button class="btn primary start" id="btn-start">开始游戏</button>
-        <button class="btn side" id="btn-difficulty">选择难度</button>
-        <button class="btn side" id="btn-level">关卡模式</button>
         <button class="btn side" id="btn-upgrade-menu">武器成长</button>
+        <button class="btn side" id="btn-level">关卡模式</button>
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
       <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
@@ -605,6 +604,11 @@
         <label>初始伤害加成</label>
         <input type="range" id="set-damage" min="0" max="3" step="1" value="0" />
         <span class="value" id="val-damage">+0</span>
+      </div>
+      <div class="setting-row">
+        <label>难度（1~10）</label>
+        <input type="range" id="set-difficulty" min="1" max="10" step="1" value="10" />
+        <span class="value" id="val-difficulty">10</span>
       </div>
       <div class="setting-row music-row">
         <label>背景音乐</label>
@@ -806,9 +810,11 @@
     devourerBossAbsorbPct: 0.2, // 吸收 Boss 血量比例
 
     // P3：Boss 加成（随机获得，数量随波次增长：1~10 波 1 种、10~20 波 2 种、20~30 波 3 种…）
-    bossBuffPool: ['physResist80', 'magicResist80', 'resist50', 'extraSplit', 'resistBuff50', 'gather', 'speedUp50', 'bombardment', 'lockProtect', 'lifeDrain', 'singleShot'],
+    // P6：bombardment（轨道轰炸）与 lockProtect（护卫屏障）改为 Boss 常驻能力，从随机池移除
+    bossBuffPool: ['physResist80', 'magicResist80', 'resist50', 'extraSplit', 'resistBuff50', 'gather', 'speedUp50', 'lifeDrain', 'singleShot'],
+    bossPermanentBuffs: ['bombardment', 'lockProtect'], // P6：所有 Boss 常驻能力
     bossBombInterval: 3.2,   // 轨道轰炸周期
-    bossBombWarnTime: 0.7,   // 轰炸预警时长
+    bossBombWarnTime: 1.0,   // 轰炸预警时长（P6：1 秒后引爆，深红预警）
     bossBombRadius: 90,      // 轰炸半径
 
     // P3：强化频率（第 10 波后每 500 分选择一次强化）
@@ -1012,6 +1018,7 @@
       devourActing: false,          // 吞噬者是否按住攻击键（前端置位，用于释放继承技能）
       devourSkillTimer: 0,          // 吞噬者技能周期计时
       ultNextWave: 1,               // P5：大招每 3 波仅可一次——下次可释放大招的波次
+      chainBonus: 0,                // P6：雷电专属强化——连锁次数 +1（波间强化必刷，上限 10）
       weaponDamage: {},             // P5：各武器累计伤害（右侧伤害面板数据源）
       codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
     };
@@ -1666,10 +1673,9 @@
     return true;
   }
 
-  /** P2：僚机当前伤害；P5：蜂巢武器僚机不受攻击力/弹道加成（固定基础伤害） */
+  /** P2：僚机当前伤害；P6：蜂巢武器僚机受攻击力加成（仍不受弹道影响） */
   function getWingmanDamage(state) {
     var cfg = state.config;
-    if (state.weapon === 'hswarm') return cfg.wingmanDamage;
     return cfg.wingmanDamage + state.damageBonus;
   }
 
@@ -1687,6 +1693,19 @@
     state.invincibleUntil = state.time + cfg.invincibleDuration;
     state.combo = 0; // 被击中：连击重置
     return state.lives;
+  }
+
+  /** P6：Boss 常驻轰炸命中——玩家只剩 1 血（若已 1 血保持不变），附短暂无敌帧 */
+  function setPlayerToOneHp(state) {
+    var cfg = state.config;
+    state.combo = 0;
+    state.invincibleUntil = state.time + cfg.invincibleDuration;
+    if (state.weapon === 'devour') {
+      state.devourHp = 1;
+    } else {
+      state.lives = 1;
+    }
+    return state;
   }
 
   /** P5：吞噬者血量归零 → 游戏结束 */
@@ -1912,6 +1931,10 @@
           state.wingman = Math.min(cfg.wingmanMax, state.wingman + 1);
         }
         break;
+      case 'chain':
+        // P6：雷电专属强化——连锁次数 +1（上限 10）
+        state.chainBonus = Math.min(10, state.chainBonus + 1);
+        break;
       default: break;
     }
     return state;
@@ -1952,8 +1975,13 @@
       fireSub: 0, // 部分模式连发计数器
       invuln: 2,   // 进场保护：短暂无敌，让玩家看清 Boss 形象
       buffs: pickBossBuffs(state), // P3：随机 Boss 加成（数量随波次）
-      bombTimer: cfg.bossBombInterval // P3：轨道轰炸计时
+      bombTimer: cfg.bossBombInterval // P3/P6：轨道轰炸计时（常驻能力）
     };
+    // P6：Boss 常驻能力（轨道轰炸 + 护卫屏障），与随机加成去重合并
+    var permanent = cfg.bossPermanentBuffs || [];
+    for (var pbi = 0; pbi < permanent.length; pbi++) {
+      if (state.boss.buffs.indexOf(permanent[pbi]) === -1) state.boss.buffs.push(permanent[pbi]);
+    }
     // P4：Boss 图鉴事件（按加成组合记录形态）
     state.codexEvents.push('boss:' + (state.boss.buffs.slice().sort().join(',')));
     return state.boss;
@@ -2507,17 +2535,20 @@
     }
   }
 
-  /** P3：雷电连锁攻击：命中敌人后向附近敌人弹跳（最多 chainCount 次，伤害递减，魔法） */
+  /** P3：雷电连锁攻击：命中敌人后向全屏任意敌人弹跳（P6 连锁距离全屏；次数 = 基础 + 专属强化，上限 10 层，伤害递减，魔法） */
   function chainLightning(state, b) {
     var cfg = state.config;
     var wcfg = cfg.weapons.lightning;
     var hitIds = {};
     var from = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
     var dmg = b.damage;
-    for (var c = 0; c <= wcfg.chainCount; c++) {
+    var chainTotal = wcfg.chainCount + (state.chainBonus || 0);
+    // P6：全屏连锁——搜索半径覆盖整个战场
+    var fullRadius = Math.max(cfg.width, cfg.height) * 1.5;
+    for (var c = 0; c <= chainTotal; c++) {
       // 找最近未被连锁的敌人
       var best = null;
-      var bestD = wcfg.chainRadius;
+      var bestD = fullRadius;
       for (var i = 0; i < state.enemies.length; i++) {
         var e = state.enemies[i];
         if (hitIds[e.id]) continue;
@@ -2756,11 +2787,11 @@
     // P4：克隆体/自爆兵/火焰兵/雷电兵行为
     updateP4Enemies(state, dt);
 
-    // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）
+    // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）；P6：受攻速增强（蜂巢/其他武器一致）
     if (state.wingman > 0) {
       state.wingmanCooldown -= dt;
       if (state.wingmanCooldown <= 0) {
-        state.wingmanCooldown = cfg.wingmanCooldown;
+        state.wingmanCooldown = cfg.wingmanCooldown * state.fireSpeedFactor;
         var wp = state.player;
         var wcx = wp.x + wp.width / 2;
         var wcy = wp.y + wp.height / 2;
@@ -2974,16 +3005,26 @@
       var enemy2 = state.enemies[k];
       if (rectsOverlap(state.player, enemy2)) {
         // P5：吞噬者——碰撞伤害不可被任何元素修正：敌方扣 1、自身扣 1（带碰撞冷却，防御型无敌/克隆体免疫仍生效）
+        // P6：吞噬者血量大于对方时直接吞噬（不扣自身血，吞噬其初始血量与能力）
         if (state.weapon === 'devour') {
           if (enemy2.collideTimer === undefined) enemy2.collideTimer = 0;
           enemy2.collideTimer -= dt;
           if (enemy2.collideTimer <= 0) {
             enemy2.collideTimer = 0.5;
             if (enemy2.special !== 'clone' && !(enemy2.invulnUntil && enemy2.invulnUntil > state.time)) {
-              hurtEnemy(state, enemy2, 1, 'devour', 'devour');
+              if (state.devourHp > enemy2.hp) {
+                // 血量大于对方：直接吞噬（hurtEnemy 击毁分支已含吞噬与加分）
+                state._killWeapon = 'devour';
+                hurtEnemy(state, enemy2, 999999, 'devour', 'devour');
+              } else {
+                hurtEnemy(state, enemy2, 1, 'devour', 'devour');
+                state.devourHp = Math.max(0, state.devourHp - 1);
+                if (state.devourHp <= 0) killDevourPlayer(state);
+              }
+            } else {
+              state.devourHp = Math.max(0, state.devourHp - 1);
+              if (state.devourHp <= 0) killDevourPlayer(state);
             }
-            state.devourHp = Math.max(0, state.devourHp - 1);
-            if (state.devourHp <= 0) killDevourPlayer(state);
           }
           continue;
         }
@@ -3000,14 +3041,21 @@
     // BOSS 撞玩家
     if (state.boss && rectsOverlap(state.player, state.boss)) {
       // P5：吞噬者——与 Boss 碰撞同样 1:1 固定伤害（Boss 无抗性修正，冷却 0.5s）
+      // P6：吞噬者血量大于 Boss 时直接吞噬 Boss（不扣自身血，吞噬其初始血量与能力）
       if (state.weapon === 'devour') {
         if (state._bossCollideTimer === undefined) state._bossCollideTimer = 0;
         state._bossCollideTimer -= dt;
         if (state._bossCollideTimer <= 0) {
           state._bossCollideTimer = 0.5;
-          hurtBoss(state, 1, 'devour', 'devour');
-          state.devourHp = Math.max(0, state.devourHp - 1);
-          if (state.devourHp <= 0) killDevourPlayer(state);
+          if (state.boss.invuln <= 0 && state.devourHp > state.boss.hp) {
+            // 血量大于 Boss：直接吞噬（hurtBoss 击毁分支已含吞噬与加分）
+            state._killWeapon = 'devour';
+            hurtBoss(state, 999999, 'devour', 'devour');
+          } else {
+            hurtBoss(state, 1, 'devour', 'devour');
+            state.devourHp = Math.max(0, state.devourHp - 1);
+            if (state.devourHp <= 0) killDevourPlayer(state);
+          }
         }
       } else if (!hasShield(state) && !isInvincible(state)) {
         damagePlayer(state);
@@ -3057,34 +3105,32 @@
       bossFire(state);
       boss.nextFire = cfg.bossFireInterval;
     }
-    // P3：Boss 加成 h「轨道轰炸」：周期性范围攻击（先淡红预警，再命中）
-    if (hasBossBuff(state, 'bombardment')) {
-      if (state.bossBombPending) {
-        var pending = state.bossBombPending;
-        if (state.time >= pending.hitAt) {
-          // 命中：对区域内玩家造成伤害（护盾/无敌可挡）
-          var pb = pending;
-          if (!hasShield(state) && !isInvincible(state) && rectsOverlap(state.player, pb)) {
-            damagePlayer(state);
-          }
-          state.explosions.push({ x: pb.x + pb.width / 2, y: pb.y + pb.height / 2, kind: 'bomb' });
-          state.bossBombPending = null;
-          boss.bombTimer = cfg.bossBombInterval;
+    // P6：Boss 常驻「轨道轰炸」：周期性范围攻击（先深红预警，1 秒后引爆，命中使玩家只剩 1 血）
+    if (state.bossBombPending) {
+      var pending = state.bossBombPending;
+      if (state.time >= pending.hitAt) {
+        // 命中：对区域内玩家造成"一击致命"伤害（护盾/无敌可挡）
+        var pb = pending;
+        if (!hasShield(state) && !isInvincible(state) && rectsOverlap(state.player, pb)) {
+          setPlayerToOneHp(state);
         }
-      } else {
-        boss.bombTimer -= dt;
-        if (boss.bombTimer <= 0) {
-          // 生成新预警区域
-          var bw = cfg.bossBombRadius * 2;
-          state.bossBombPending = {
-            x: Math.random() * (cfg.width - bw),
-            y: 60 + Math.random() * (cfg.height * 0.5 - bw),
-            width: bw,
-            height: bw,
-            warnUntil: state.time + cfg.bossBombWarnTime,
-            hitAt: state.time + cfg.bossBombWarnTime
-          };
-        }
+        state.explosions.push({ x: pb.x + pb.width / 2, y: pb.y + pb.height / 2, kind: 'bomb' });
+        state.bossBombPending = null;
+        state.boss.bombTimer = cfg.bossBombInterval;
+      }
+    } else {
+      state.boss.bombTimer -= dt;
+      if (state.boss.bombTimer <= 0) {
+        // 生成新预警区域
+        var bw = cfg.bossBombRadius * 2;
+        state.bossBombPending = {
+          x: Math.random() * (cfg.width - bw),
+          y: 60 + Math.random() * (cfg.height * 0.5 - bw),
+          width: bw,
+          height: bw,
+          warnUntil: state.time + cfg.bossBombWarnTime,
+          hitAt: state.time + cfg.bossBombWarnTime
+        };
       }
     }
   }
@@ -3125,6 +3171,7 @@
     state.nextBuffScore = 0;
     state.buffOffered = false;
     state.bossBombPending = null;
+    state.chainBonus = 0; // P6：雷电专属强化每局重置
     state.maxLives = Math.max(1, Math.round(cfg.maxLives * (cfg.ships[state.ship] || cfg.ships.star).hp));
     // 应用初始设置
     state.weapon = cfg.initialWeapon || 'gun';
@@ -3254,7 +3301,7 @@
     weapon: 'gun',
     secondaryWeapon: 'laser', // 副武器（实时双武器切换）
     ship: 'star',             // 战机皮肤
-    difficulty: 1,
+    difficulty: 10,           // P6：初始开局难度直接为 10（可在设置中调整 1~10）
     multishot: 1,
     fireSpeed: 1,     // 冷却系数：1.0 ~ 0.1
     damage: 0,
@@ -3305,12 +3352,10 @@
     var s = document.getElementById('btn-settings');
     var lo = document.getElementById('btn-loadout');
     var st = document.getElementById('btn-start');
-    var df = document.getElementById('btn-difficulty');
     var up = document.getElementById('btn-upgrade-menu');
     var fs = Math.max(11, Math.round(16 * k));
     s.style.fontSize = fs + 'px';
     lo.style.fontSize = Math.round(fs * 0.95) + 'px';
-    df.style.fontSize = Math.round(fs * 0.95) + 'px';
     if (up) up.style.fontSize = Math.round(fs * 0.95) + 'px';
     st.style.fontSize = Math.round(fs * 1.3) + 'px';
   }
@@ -3471,6 +3516,10 @@
     document.getElementById('val-multishot').textContent = settings.multishot;
     document.getElementById('val-firespeed').textContent = Math.round(settings.fireSpeed * 100) + '%';
     document.getElementById('val-damage').textContent = '+' + settings.damage;
+    var diffSlider = document.getElementById('set-difficulty');
+    if (diffSlider) diffSlider.value = settings.difficulty;
+    var diffLabel = document.getElementById('val-difficulty');
+    if (diffLabel) diffLabel.textContent = settings.difficulty;
     var musicBtn = document.getElementById('btn-music-toggle');
     if (musicBtn) musicBtn.textContent = settings.musicOn ? '开' : '关';
     var volSlider = document.getElementById('set-musicvol');
@@ -3519,9 +3568,9 @@
     if (!list) return;
     list.innerHTML = '';
     var items = [
-      { id: 'hp', name: '生命上限 +1', desc: '开局生命 +1（当前 ' + p.upgrades.hp + ' 级）', cost: UPGRADE_COSTS.hp },
-      { id: 'multishot', name: '初始弹道 +1', desc: '开局弹道 +1（总上限 5，当前 ' + p.upgrades.multishot + ' 级）', cost: UPGRADE_COSTS.multishot },
-      { id: 'damage', name: '初始攻击 +1', desc: '开局伤害加成 +1（当前 ' + p.upgrades.damage + ' 级）', cost: UPGRADE_COSTS.damage }
+      { id: 'hp', name: '生命上限 +1', desc: '开局生命 +1（最高 5 级，当前 ' + p.upgrades.hp + ' 级）', cost: UPGRADE_COSTS.hp, max: 5 },
+      { id: 'multishot', name: '初始弹道 +1', desc: '开局弹道 +1（总上限 5，当前 ' + p.upgrades.multishot + ' 级）', cost: UPGRADE_COSTS.multishot, max: 5 },
+      { id: 'damage', name: '初始攻击 +1', desc: '开局伤害加成 +1（最高 5 级，当前 ' + p.upgrades.damage + ' 级）', cost: UPGRADE_COSTS.damage, max: 5 }
     ];
     items.forEach(function (it) {
       var row = document.createElement('div');
@@ -3531,6 +3580,7 @@
       btn.className = 'btn small';
       var canBuy = p.stars >= it.cost;
       if (it.id === 'multishot' && p.upgrades.multishot + settings.multishot >= 5) { canBuy = false; btn.textContent = '弹道已满'; }
+      if (it.max && p.upgrades[it.id] >= it.max) { canBuy = false; btn.textContent = '已达上限'; }
       if (canBuy) btn.textContent = '升级 ★' + it.cost;
       else { btn.textContent = btn.textContent || ('★' + it.cost + ' 不足'); btn.style.opacity = '0.5'; }
       btn.disabled = !canBuy;
@@ -3538,6 +3588,7 @@
         var pp = getProfile();
         if (pp.stars < it.cost) { showToast('星币不足'); return; }
         if (it.id === 'multishot' && pp.upgrades.multishot + settings.multishot >= 5) { showToast('弹道已达上限 5'); return; }
+        if (it.max && pp.upgrades[it.id] >= it.max) { showToast(it.name + ' 已达上限 ' + it.max); return; }
         pp.stars -= it.cost;
         pp.upgrades[it.id] = (pp.upgrades[it.id] || 0) + 1;
         saveProfile(pp);
@@ -3577,10 +3628,8 @@
     startGame();
   });
   document.getElementById('btn-loadout').addEventListener('click', function () { showPanel('loadout'); });
-  document.getElementById('btn-difficulty').addEventListener('click', function () { showPanel('difficulty'); });
   document.getElementById('btn-settings').addEventListener('click', function () { showPanel('settings'); });
   document.getElementById('btn-loadout-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
-  document.getElementById('btn-difficulty-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
   document.getElementById('btn-settings-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
 
   // ===== P3：关卡模式（目标波次通关） =====
@@ -3622,6 +3671,7 @@
   var setMultishot = document.getElementById('set-multishot');
   var setFireSpeed = document.getElementById('set-firespeed');
   var setDamage = document.getElementById('set-damage');
+  var setDifficulty = document.getElementById('set-difficulty');
 
   setMultishot.addEventListener('input', function () {
     settings.multishot = parseInt(setMultishot.value, 10);
@@ -3635,6 +3685,13 @@
     settings.damage = parseInt(setDamage.value, 10);
     updateSettingLabels();
   });
+  // P6：难度移入设置面板（1~10，只增敌人血量不加速）
+  if (setDifficulty) {
+    setDifficulty.addEventListener('input', function () {
+      settings.difficulty = parseInt(setDifficulty.value, 10);
+      updateSettingLabels();
+    });
+  }
 
   // 音乐模块
   var setMusicVol = document.getElementById('set-musicvol');
@@ -5795,13 +5852,13 @@
         bx += 104;
       }
     }
-    // P3：Boss 轨道轰炸淡红预警区
+    // P6：Boss 常驻轨道轰炸——深红预警区（1 秒后引爆，命中剩 1 血）
     if (state.bossBombPending && state.time < state.bossBombPending.warnUntil) {
       var pb = state.bossBombPending;
-      var alpha = 0.25 + 0.2 * Math.sin(state.time * 20);
-      ctx.fillStyle = 'rgba(255, 80, 90, ' + alpha.toFixed(3) + ')';
-      ctx.strokeStyle = 'rgba(255, 80, 90, 0.9)';
-      ctx.lineWidth = 2;
+      var alpha = 0.3 + 0.25 * Math.sin(state.time * 20);
+      ctx.fillStyle = 'rgba(200, 18, 38, ' + alpha.toFixed(3) + ')';
+      ctx.strokeStyle = 'rgba(255, 40, 60, 0.95)';
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.rect(pb.x, pb.y, pb.width, pb.height);
       ctx.fill();
@@ -6801,7 +6858,9 @@
     { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
     { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
     { type: 'life', icon: '❤', label: '生命 +1', desc: '上限内恢复一条命', maxed: function () { return state.lives >= state.config.maxLives; } },
-    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.weapon === 'hswarm' ? state.wingman >= state.config.weapons.hswarm.wingmanMax : state.wingman >= state.config.wingmanMax; } }
+    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.weapon === 'hswarm' ? state.wingman >= state.config.weapons.hswarm.wingmanMax : state.wingman >= state.config.wingmanMax; } },
+    // P6：雷电专属强化——连锁次数 +1（仅雷电武器可选，上限 10）
+    { type: 'chain', icon: '⚡', label: '连锁 +1', desc: '雷电连锁次数 +1（上限 10）', lightningOnly: true, maxed: function () { return (state.chainBonus || 0) >= 10; } }
   ];
 
   var buffPanel = document.getElementById('buff-panel');
@@ -6816,13 +6875,33 @@
     if (state.wave >= 10 && state.wave % 5 !== 0) return;
     state.buffOffered = true;
     GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
-    var pool = BUFF_POOL.filter(function (b) { return !b.maxed || !b.maxed(); });
-    // 洗牌取前 3
+    var pool = BUFF_POOL.filter(function (b) {
+      if (b.maxed && b.maxed()) return false;
+      // P6：雷电专属强化仅雷电武器可选；其它武器不刷出
+      if (b.lightningOnly && state.weapon !== 'lightning') return false;
+      return true;
+    });
+    // P6 必刷项：蜂巢波间强化必定刷出僚机；雷电必定刷出专属「连锁+1」
+    var forced = null;
+    if (state.weapon === 'hswarm') {
+      for (var fi = 0; fi < pool.length; fi++) {
+        if (pool[fi].type === 'wingman') { forced = pool.splice(fi, 1)[0]; break; }
+      }
+    } else if (state.weapon === 'lightning') {
+      for (var fi2 = 0; fi2 < pool.length; fi2++) {
+        if (pool[fi2].type === 'chain') { forced = pool.splice(fi2, 1)[0]; break; }
+      }
+    }
+    // 洗牌取前 3（含必刷项）
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
     var picks = pool.slice(0, 3);
+    if (forced) {
+      if (picks.length >= 3) picks.pop(); // 保留 3 项
+      picks.push(forced);
+    }
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
     picks.forEach(function (b) {
