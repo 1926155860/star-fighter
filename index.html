@@ -276,6 +276,50 @@
     .menu-title {
       display: none;
     }
+
+    /* ===== 游戏内设置（手机无键盘时使用） ===== */
+    #in-game-btn {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 25;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 1px solid #4ee0ff;
+      background: rgba(8, 20, 45, 0.82);
+      color: #7df0ff;
+      font-size: 21px;
+      line-height: 44px;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 0 14px rgba(78, 224, 255, 0.35), inset 0 0 10px rgba(78, 224, 255, 0.15);
+      display: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #in-game-btn:hover, #in-game-btn:active {
+      background: rgba(20, 55, 105, 0.9);
+      border-color: #9ef2ff;
+    }
+    #game-panel {
+      z-index: 30;
+      background: rgba(3, 5, 21, 0.93);
+      overflow-y: auto;
+    }
+    #game-panel .weapon-card {
+      width: 96px;
+    }
+    #game-weapon-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 18px;
+    }    .game-panel-btns {
+      display: flex;
+      gap: 14px;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -334,13 +378,26 @@
       </div>
       <div class="setting-row boss-row">
         <label>Boss 形象</label>
-        <button type="button" class="btn toggle-btn" id="btn-boss-paste">粘贴更换</button>
+        <button type="button" class="btn toggle-btn" id="btn-boss-upload">上传图片</button>
         <button type="button" class="btn toggle-btn" id="btn-boss-reset">恢复默认</button>
       </div>
-      <div class="hint">弹道最多 5 条 · 攻速最多减 90% · 伤害最多 +3<br>Boss 形象：复制任意图片后，在游戏页面内按 Ctrl+V 粘贴即可更换</div>
+      <input type="file" id="boss-file" accept="image/*" style="display:none" />
+      <div class="hint">弹道最多 5 条 · 攻速最多减 90% · 伤害最多 +3<br>Boss 形象：电脑上可复制图片后按 Ctrl+V 粘贴；手机/电脑都可点「上传图片」选择本地图片更换</div>
       <button class="btn small" id="btn-settings-back">返 回</button>
     </div>
+
+    <!-- 游戏内设置（暂停）：手机无键盘时点击左上角 ⚙ 打开 -->
+    <div id="game-panel" class="overlay">
+      <div class="panel-title">设 置 · 已 暂 停</div>
+      <div class="game-panel-label" style="font-size:13px;color:#8aa0c8;margin-bottom:10px;letter-spacing:1px;">切换武器（立即生效）</div>
+      <div class="game-weapon-grid" id="game-weapon-grid"></div>      <div class="game-panel-btns">
+        <button class="btn primary" id="btn-game-resume">继续游戏</button>
+        <button class="btn danger" id="btn-game-menu">返回初始界面</button>
+      </div>
+    </div>
   </div>
+
+  <button type="button" id="in-game-btn" title="设置">⚙</button>
 
   <script>/**
  * game-core.js — 星际战机核心游戏逻辑（纯函数，不依赖 DOM，可在 Node 中测试）
@@ -1731,10 +1788,27 @@
     try { localStorage.setItem('bossImage', src); } catch (err) {}
   }
 
-  var btnBossPaste = document.getElementById('btn-boss-paste');
-  if (btnBossPaste) {
-    btnBossPaste.addEventListener('click', function () {
-      showToast('请先复制一张图片，再在游戏页面内按 Ctrl+V 粘贴即可更换 Boss 形象');
+  var btnBossUpload = document.getElementById('btn-boss-upload');
+  var bossFile = document.getElementById('boss-file');
+  if (btnBossUpload && bossFile) {
+    btnBossUpload.addEventListener('click', function () {
+      bossFile.click();
+    });
+    // 手机/电脑均可直接选择本地图片文件更换 Boss 形象
+    bossFile.addEventListener('change', function () {
+      var file = bossFile.files && bossFile.files[0];
+      if (!file) return;
+      if (file.type && file.type.indexOf('image') !== 0) {
+        showToast('请选择图片文件');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        setBossImage(ev.target.result);
+        showToast('Boss 形象已更新！');
+      };
+      reader.readAsDataURL(file);
+      bossFile.value = '';
     });
   }
   var btnBossReset = document.getElementById('btn-boss-reset');
@@ -1777,6 +1851,85 @@
     });
     GameCore.start(state);
     hidePanels();
+    showInGameBtn(true);
+    clearTimeout(returnToMenuTimer);
+  }
+
+  // ==================== 游戏内设置（手机无键盘：左上角 ⚙ 暂停换武器/返回） ====================
+
+  var inGameBtn = document.getElementById('in-game-btn');
+  var gamePanel = document.getElementById('game-panel');
+  var returnToMenuTimer = null;
+  var gameoverReturnScheduled = false;
+
+  function showInGameBtn(visible) {
+    if (inGameBtn) inGameBtn.style.display = visible ? 'block' : 'none';
+    if (!visible) hideGamePanel();
+  }
+
+  function hideGamePanel() {
+    if (!gamePanel) return;
+    gamePanel.classList.remove('active');
+    if (state.paused) GameCore.togglePause(state);
+  }
+
+  function openGamePanel() {
+    if (!gamePanel) return;
+    if (state.status !== 'playing') return;
+    if (!state.paused) GameCore.togglePause(state);
+    renderGameWeapons();
+    gamePanel.classList.add('active');
+  }
+
+  function backToMenu() {
+    clearTimeout(returnToMenuTimer);
+    returnToMenuTimer = null;
+    gameoverReturnScheduled = false;
+    showInGameBtn(false);
+    showPanel('menu');
+    updateMenuConfig();
+    state = GameCore.createGame();
+  }
+
+  function renderGameWeapons() {
+    var grid = document.getElementById('game-weapon-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    WEAPONS.forEach(function (w) {
+      var card = document.createElement('div');
+      card.className = 'weapon-card' + (state.weapon === w.id ? ' selected' : '');
+      card.innerHTML =
+        '<span class="icon">' + w.icon + '</span>' +
+        '<div class="name">' + w.name + '</div>';
+      card.addEventListener('click', function () {
+        // 切换武器时释放残留蓄力
+        if (state.weapon === 'charge' && w.id !== 'charge') {
+          if (GameCore.chargeRelease(state)) soundEvents.chargeFire = true;
+        }
+        GameCore.setWeapon(state, w.id);
+        renderGameWeapons();
+        audio.powerup();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  if (inGameBtn) {
+    inGameBtn.addEventListener('click', function () {
+      audio.unlock();
+      openGamePanel();
+    });
+  }
+  var btnGameResume = document.getElementById('btn-game-resume');
+  if (btnGameResume) {
+    btnGameResume.addEventListener('click', function () {
+      hideGamePanel();
+      audio.powerup();
+    });
+  }
+  var btnGameMenu = document.getElementById('btn-game-menu');
+  if (btnGameMenu) {
+    btnGameMenu.addEventListener('click', function () { backToMenu(); });
   }
 
   // 初始化界面
@@ -3155,14 +3308,8 @@
   document.addEventListener('keydown', function (e) {
     keys[e.code] = true;
     if (e.code === 'KeyR') {
-      if (state.status === 'gameover') {
-        showPanel('menu');
-        updateMenuConfig();
-        state = GameCore.createGame();
-      } else if (state.status === 'playing') {
-        state = GameCore.createGame();
-        showPanel('menu');
-        updateMenuConfig();
+      if (state.status === 'gameover' || state.status === 'playing') {
+        backToMenu();
       }
     }
     if (e.code === 'Space') {
@@ -3174,8 +3321,10 @@
     }
     // 暂停：P 或 Esc
     if ((e.code === 'KeyP' || e.code === 'Escape') && state.status === 'playing') {
+      var wasPanelOpen = gamePanel && gamePanel.classList.contains('active');
       GameCore.togglePause(state);
       audio.powerup();
+      if (wasPanelOpen) hideGamePanel();
     }
     // 游戏中数字键切换武器
     if (state.status === 'playing') {
@@ -3322,7 +3471,17 @@
       }
       if (state.lives < livesBefore) soundEvents.playerHit = true;
       if (state.powerups.length < powerupBefore) soundEvents.powerup = true;
-      if (statusBefore !== 'gameover' && state.status === 'gameover') soundEvents.gameover = true;
+      if (statusBefore !== 'gameover' && state.status === 'gameover') {
+        soundEvents.gameover = true;
+        // 死亡后自动返回初始界面（短暂显示结算后自动回主菜单，手机无键盘也能继续）
+        if (!gameoverReturnScheduled) {
+          gameoverReturnScheduled = true;
+          returnToMenuTimer = setTimeout(function () {
+            gameoverReturnScheduled = false;
+            backToMenu();
+          }, 2000);
+        }
+      }
       if (!bossBefore && state.boss) soundEvents.boss = true;
 
       for (var x = 0; x < state.explosions.length; x++) {
