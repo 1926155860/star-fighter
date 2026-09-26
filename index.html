@@ -332,6 +332,71 @@
       border-color: #ffe28a;
       box-shadow: 0 0 18px rgba(255, 209, 102, 0.6);
     }
+    /* ===== 图鉴（初始界面右上角排行榜旁） ===== */
+    #btn-codex {
+      position: fixed;
+      top: 14px;
+      right: 108px;
+      z-index: 26;
+      padding: 9px 16px;
+      font-size: 14px;
+      letter-spacing: 1px;
+      border: 1px solid #c98bff;
+      color: #d9b3ff;
+      background: rgba(45, 25, 80, 0.72);
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(201, 139, 255, 0.35), inset 0 0 10px rgba(201, 139, 255, 0.12);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #btn-codex:hover, #btn-codex:active {
+      background: rgba(60, 35, 105, 0.85);
+      border-color: #e0b3ff;
+      box-shadow: 0 0 18px rgba(201, 139, 255, 0.6);
+    }
+    /* 图鉴黑色卡片网格 */
+    .codex-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      width: min(92vw, 720px);
+      max-height: 56vh;
+      overflow-y: auto;
+      margin-bottom: 14px;
+      padding: 2px;
+    }
+    .codex-card {
+      background: #0b0b0f;
+      border: 1px solid #22222a;
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      color: #55555e;
+      min-height: 96px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .codex-card.unlocked {
+      border-color: #c98bff;
+      box-shadow: 0 0 12px rgba(201, 139, 255, 0.22), inset 0 0 18px rgba(201, 139, 255, 0.06);
+      color: #e8d9ff;
+    }
+    .codex-card .codex-ico { font-size: 26px; line-height: 1.1; }
+    .codex-card .codex-name { font-size: 13px; letter-spacing: 1px; font-weight: 600; }
+    .codex-card.unlocked .codex-name { color: #ffffff; }
+    .codex-card .codex-cat { font-size: 10px; color: #77707f; }
+    .codex-card.unlocked .codex-cat { color: #b99ae0; }
+    .codex-card .codex-desc { font-size: 9.5px; line-height: 1.4; color: #6b6b78; }
+    .codex-card.unlocked .codex-desc { color: #9fa0b0; }
+    @media (max-width: 480px) {
+      #btn-codex { right: 96px; padding: 8px 10px; font-size: 12px; }
+      .codex-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+    }
     .rank-name-row {
       display: flex;
       align-items: center;
@@ -492,6 +557,7 @@
         <button class="btn side" id="btn-upgrade-menu">武器成长</button>
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
+      <button type="button" class="btn" id="btn-codex">📖 图鉴</button>
       <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
@@ -569,6 +635,14 @@
       <div class="ship-grid" id="ship-grid"></div>
       <div class="hint">不同机型拥有不同速度 / 火力 / 生命系数，选择后立即生效</div>
       <button class="btn small" id="btn-ship-back">返 回</button>
+    </div>
+
+    <!-- 图鉴（P4：黑色卡片，遇到才解锁） -->
+    <div id="codex" class="overlay">
+      <div class="panel-title">📖 敌 人 图 鉴</div>
+      <div class="diff-label">遭遇过的敌人会点亮对应卡片（Boss 形态按加成组合单独记录）</div>
+      <div id="codex-body"></div>
+      <button class="btn small" id="btn-codex-back">返 回</button>
     </div>
 
     <!-- 排行榜 / 成就 / 每日挑战 -->
@@ -673,12 +747,13 @@
       homing: { cooldown: 0.34, damage: 1, bulletSpeed: 320, bulletWidth: 8, bulletHeight: 16, turnRate: 420, label: '追踪弹' },
       charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' },
       flamethrower: { cooldown: 0.02, damage: 1, bulletSpeed: 0, bulletWidth: 46, bulletHeight: 96, dps: 64, flameRange: 220, flameWidth: 100, label: '火焰喷射' },
-      lightning: { cooldown: 0.5, damage: 4, bulletSpeed: 620, bulletWidth: 10, bulletHeight: 22, chainCount: 3, chainRadius: 210, chainFalloff: 0.5, label: '雷电' }
+      lightning: { cooldown: 0.5, damage: 4, bulletSpeed: 620, bulletWidth: 10, bulletHeight: 22, chainCount: 3, chainRadius: 210, chainFalloff: 0.5, label: '雷电' },
+      hacker: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 2, wingmanCost: 0.5, devourPct: 0.3, label: '黑客' }
     },
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
       gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys',
-      laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
+      laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic', hacker: 'magic'
     },
     bulletSpread: 14,
 
@@ -786,8 +861,8 @@
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
 
-    // 特殊敌人（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客）
-    specialWeights: { normal: 40, healer: 8, defender: 8, chaser: 7, armored: 5, spreader: 4, devourer: 7, charger: 8, tank: 6, assassin: 7 },
+    // 特殊敌人（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客 + P4 火焰兵/雷电兵/自爆兵）
+    specialWeights: { normal: 36, healer: 7, defender: 7, chaser: 6, armored: 4, spreader: 4, devourer: 6, charger: 7, tank: 5, assassin: 6, flamer: 6, stormer: 5, suicider: 5 },
     healInterval: 1.2,        // 治疗型：每 1.2 秒对范围内敌人治疗一次
     healRadius: 150,          // 治疗半径
     healAmount: 2,            // 每次治疗回复血量
@@ -798,6 +873,14 @@
     spreaderBullets: 6,       // 弹幕散射型：死亡时向四周散射子弹数
     enemyDriftMin: 25,        // 普通敌人水平漂移速度下限（碰到左右界面反弹）
     enemyDriftMax: 70,        // 普通敌人水平漂移速度上限
+
+    // P4：新敌人参数
+    cloneEnemyChance: 0.01,   // 克隆体出现概率 1%（一局只出现一次）
+    cloneLifetime: 15,        // 克隆体存在 15 秒后消失
+    suiciderInvulnTime: 2,    // 自爆兵：出现后 2 秒无敌
+    suiciderBurstBullets: 8,  // 自爆兵死亡后转化弹幕基数
+    flamerWave: { width: 60, height: 160, speed: 300, damage: 2, interval: 2.4 }, // 火焰兵冲击波
+    stormerStrike: { radius: 60, warnTime: 0.7, interval: 2.8, damage: 2 },        // 雷电兵范围雷电
 
     // 敌机子弹
     enemyBulletSpeed: 240,
@@ -906,7 +989,11 @@
       nextFireTime: 0,
       nextEnemyFireTime: cfg.enemyFireInterval,
       nextPowerupTime: cfg.powerupSpawnInterval,
-      lastId: 0
+      lastId: 0,
+      // P4：黑客武器 / 克隆体 / 新敌人状态
+      cloneSpawned: false,          // 克隆体一局只出现一次
+      hackerHp: cfg.weapons.hacker.hp, // 黑客模式自身血量（初始 50）
+      codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
     };
     return state;
   }
@@ -1023,6 +1110,17 @@
           state.bullets.push({ id: newId(state), type: 'lightningbolt', x: p.x + p.width / 2 + (Math.random() * 600 - 300), y: p.y - 40, width: 10, height: 22, vx: 0, vy: -400, damage: Math.max(1, wdmg * 4), life: 0, dmgType: 'magic' });
         }
         break;
+      case 'hacker': // 吞噬风暴：立即吞噬全场敌人（血量与能力），清空弹幕
+        for (var hki = state.enemies.length - 1; hki >= 0; hki--) {
+          var he = state.enemies[hki];
+          if (he.special === 'clone') continue;
+          state._killWeapon = 'hacker';
+          hurtEnemy(state, he, 999999, 'magic');
+          hackerDevour(state, he);
+          state.score += (he.score || 0);
+        }
+        for (var hbi = state.enemyBullets.length - 1; hbi >= 0; hbi--) state.enemyBullets.splice(hbi, 1);
+        break;
     }
     // 除光刃外：对 Boss 造成比例伤害（光刃大招已内置）
     if (state.boss && w !== 'saber') {
@@ -1096,11 +1194,11 @@
     return names[0];
   }
 
-  /** 随机分配敌人特殊能力（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客/普通） */
+  /** 随机分配敌人特殊能力（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客/火焰兵/雷电兵/自爆兵/普通） */
   function pickEnemySpecial(state) {
     var cfg = state.config;
     var w = cfg.specialWeights;
-    var order = ['healer', 'defender', 'chaser', 'armored', 'spreader', 'devourer', 'charger', 'tank', 'assassin'];
+    var order = ['healer', 'defender', 'chaser', 'armored', 'spreader', 'devourer', 'charger', 'tank', 'assassin', 'flamer', 'stormer', 'suicider'];
     var r = Math.random() * 100;
     var acc = w.normal;
     for (var i = 0; i < order.length; i++) {
@@ -1172,6 +1270,21 @@
       enemy.chargeState = 'idle';
       enemy.chargeTimer = 0.6 + Math.random() * cfg.chargerChargeInterval;
     }
+    // P4：自爆兵——出现后 2 秒无敌并记录受击次数
+    if (enemy.special === 'suicider') {
+      enemy.hitCount = 0;
+      enemy.invulnUntil = state.time + cfg.suiciderInvulnTime;
+      enemy.suiciderArmed = false; // 无敌期结束后允许被击杀
+    }
+    // P4：火焰兵——周期性发射火焰冲击波
+    if (enemy.special === 'flamer') {
+      enemy.flameTimer = 0.8 + Math.random() * cfg.flamerWave.interval;
+    }
+    // P4：雷电兵——周期性在小范围释放雷电
+    if (enemy.special === 'stormer') {
+      enemy.strikeTimer = 0.6 + Math.random() * cfg.stormerStrike.interval;
+      enemy.strikePending = null; // {x,y,radius,warnUntil,hitAt}
+    }
     if (parentSpeed !== undefined) {
       // 分裂球：向随机方向弹射（偏下）
       var ang = Math.random() * Math.PI * 2;
@@ -1185,10 +1298,39 @@
 
   function spawnEnemy(state) {
     var cfg = state.config;
+    // P4：克隆体——1% 概率、一局只出现一次、与玩家飞机一模一样
+    if (!state.cloneSpawned && Math.random() < cfg.cloneEnemyChance) {
+      state.cloneSpawned = true;
+      var clone = {
+        id: newId(state),
+        type: 'clone',
+        level: 0,
+        x: Math.random() * (cfg.width - 40),
+        y: -40,
+        width: cfg.playerWidth,
+        height: cfg.playerHeight,
+        radius: cfg.playerWidth / 2,
+        vx: (Math.random() < 0.5 ? -1 : 1) * 60,
+        vy: 120,
+        speed: 120,
+        hp: 999999,
+        maxHp: 999999,
+        score: 0,
+        special: 'clone',
+        invulnUntil: 0,
+        cloneUntil: state.time + cfg.cloneLifetime,
+        cloneFireTimer: 0.8
+      };
+      state.enemies.push(clone);
+      state.codexEvents.push('clone');
+      return clone;
+    }
     var type = pickEnemyType(state);
     var enemy = createSphereEnemy(state, type, Math.random() * cfg.width, -30);
     enemy.x = clamp(enemy.x, 0, cfg.width - enemy.width);
     enemy.y = -enemy.height;
+    // P4：图鉴解锁事件（普通球按等级记录，特殊敌人按能力记录）
+    state.codexEvents.push(enemy.special === 'normal' ? 'sphere:' + enemy.type : enemy.special);
     state.enemies.push(enemy);
     return enemy;
   }
@@ -1204,6 +1346,7 @@
     var cy = parent.y + parent.height / 2;
     for (var i = 0; i < n; i++) {
       var child = createSphereEnemy(state, childName, cx, cy, parent.speed || 100, parent.special);
+      state.codexEvents.push(child.special === 'normal' ? 'sphere:' + child.type : child.special);
       state.enemies.push(child);
     }
   }
@@ -1218,6 +1361,10 @@
   function setWeapon(state, weapon) {
     if (state.config.weapons[weapon]) {
       state.weapon = weapon;
+      // P4：黑客武器——开局自带两个僚机
+      if (weapon === 'hacker' && state.wingman < state.config.weapons.hacker.wingmanStart) {
+        state.wingman = state.config.weapons.hacker.wingmanStart;
+      }
       return true;
     }
     return false;
@@ -1269,6 +1416,15 @@
       // P3：火焰喷射（持续伤害，魔法）：激活持续喷火场，按住持续喷
       state.flameActive = true;
       state.flameTimer = 0.2;
+      return true;
+    }
+    if (state.weapon === 'hacker') {
+      // P4：黑客武器——不发射子弹，攻击由僚机承担（每次开火消耗自身血量）
+      if (state.wingman > 0) {
+        state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost);
+        if (state.hackerHp <= 0) killHackerPlayer(state);
+      }
+      state.nextFireTime = state.time + 0.2;
       return true;
     }
     if (state.weapon === 'charge') {
@@ -1467,10 +1623,36 @@
 
   function damagePlayer(state) {
     var cfg = state.config;
+    // P4：黑客模式——自身为球形血量（初始 50），扣血而非扣命
+    if (state.weapon === 'hacker') {
+      state.hackerHp = Math.max(0, state.hackerHp - 1);
+      state.invincibleUntil = state.time + cfg.invincibleDuration;
+      state.combo = 0; // 被击中：连击重置
+      if (state.hackerHp <= 0) killHackerPlayer(state);
+      return state.hackerHp;
+    }
     state.lives = Math.max(0, state.lives - 1);
     state.invincibleUntil = state.time + cfg.invincibleDuration;
     state.combo = 0; // 被击中：连击重置
     return state.lives;
+  }
+
+  /** P4：黑客模式血量归零 → 游戏结束 */
+  function killHackerPlayer(state) {
+    state.hackerHp = 0;
+    state.lives = 0;
+    state.status = 'gameover';
+  }
+
+  /** P4：黑客吞噬——击杀敌人后恢复自身血量（按敌人最大血量比例），概率继承其能力 */
+  function hackerDevour(state, enemy) {
+    var cfg = state.config;
+    var gain = Math.max(1, Math.round(enemy.maxHp * cfg.weapons.hacker.devourPct));
+    state.hackerHp = Math.min(999, state.hackerHp + gain);
+    // 概率继承被吞噬敌人的特殊能力（本局内强化僚机吞噬效果，记录在 state 上供前端展示）
+    if (enemy.special !== 'normal' && enemy.special !== 'boss' && Math.random() < 0.25) {
+      state.hackerDevoured = enemy.special;
+    }
   }
 
   // ==================== 敌机射击 ====================
@@ -1478,7 +1660,15 @@
   function enemyFire(state) {
     var cfg = state.config;
     if (state.enemies.length === 0) return false;
-    var idx = Math.floor(Math.random() * state.enemies.length);
+    // P4：克隆体/火焰兵/雷电兵有专属攻击，不参与普通开火
+    var candidates = [];
+    for (var ei = 0; ei < state.enemies.length; ei++) {
+      var sp = state.enemies[ei].special;
+      if (sp === 'clone' || sp === 'flamer' || sp === 'stormer') continue;
+      candidates.push(ei);
+    }
+    if (candidates.length === 0) return false;
+    var idx = candidates[Math.floor(Math.random() * candidates.length)];
     var enemy = state.enemies[idx];
     pushEnemyBullet(state, {
       x: enemy.x + enemy.width / 2 - cfg.enemyBulletWidth / 2,
@@ -1571,8 +1761,12 @@
         }
         break;
       case 'wingman':
-        // P2：僚机护卫 +1（上限 wingmanMax）
-        state.wingman = Math.min(cfg.wingmanMax, state.wingman + 1);
+        // P2：僚机护卫 +1；P4：黑客武器下僚机数量无上限，否则上限 wingmanMax
+        if (state.weapon === 'hacker') {
+          state.wingman += 1;
+        } else {
+          state.wingman = Math.min(cfg.wingmanMax, state.wingman + 1);
+        }
         break;
       default: break;
     }
@@ -1616,6 +1810,8 @@
       buffs: pickBossBuffs(state), // P3：随机 Boss 加成（数量随波次）
       bombTimer: cfg.bossBombInterval // P3：轨道轰炸计时
     };
+    // P4：Boss 图鉴事件（按加成组合记录形态）
+    state.codexEvents.push('boss:' + (state.boss.buffs.slice().sort().join(',')));
     return state.boss;
   }
 
@@ -1758,6 +1954,151 @@
     }
   }
 
+  // ==================== P4：新敌人行为 ====================
+
+  /** 克隆体：15 秒后消失；无法被攻击；用玩家武器开火（红色弹幕） */
+  function updateClone(state, dt) {
+    var cfg = state.config;
+    for (var i = state.enemies.length - 1; i >= 0; i--) {
+      var c = state.enemies[i];
+      if (c.special !== 'clone') continue;
+      // 时间到自动消失
+      if (state.time >= c.cloneUntil) {
+        state.explosions.push({ x: c.x + c.width / 2, y: c.y + c.height / 2, kind: 'pop' });
+        state.enemies.splice(i, 1);
+        continue;
+      }
+      // 缓慢下落 + 左右漂移
+      c.y += c.vy * dt;
+      c.x += c.vx * dt;
+      if (c.x < 0 || c.x + c.width > cfg.width) c.vx *= -1;
+      // 红色攻击：复刻玩家当前武器弹道（简化：红色子弹/扇形激光）
+      c.cloneFireTimer -= dt;
+      if (c.cloneFireTimer <= 0) {
+        c.cloneFireTimer = 0.5;
+        var p = state.player;
+        var px = c.x + c.width / 2;
+        var py = c.y + c.height / 2;
+        var dx = p.x + p.width / 2 - px;
+        var dy = p.y + p.height / 2 - py;
+        var d = Math.sqrt(dx * dx + dy * dy) || 1;
+        var spd = 260;
+        // 3 发红色弹幕呈扇面
+        for (var s = -1; s <= 1; s++) {
+          var ang = Math.atan2(dy, dx) + s * 0.18;
+          state.enemyBullets.push({
+            id: newId(state),
+            x: px - 4, y: py + 2, width: 8, height: 8,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            red: true, noCancel: true
+          });
+        }
+      }
+    }
+  }
+
+  /** 自爆兵：无敌期结束后记录受击数；死亡转化为不可抵消的特殊弹幕 */
+  function updateSuiciders(state, dt) {
+    var cfg = state.config;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var s = state.enemies[i];
+      if (s.special !== 'suicider') continue;
+      // 无敌期结束 → 可被攻击
+      if (!s.suiciderArmed && s.invulnUntil && s.invulnUntil <= state.time) {
+        s.suiciderArmed = true;
+        s.invulnUntil = 0;
+      }
+    }
+  }
+
+  /** 自爆兵死亡结算：按记录受击数转化弹幕（基数 + 受击数，最多 20 发） */
+  function suiciderBurst(state, enemy) {
+    var cfg = state.config;
+    var count = Math.min(20, cfg.suiciderBurstBullets + (enemy.hitCount || 0) * 2);
+    var cx = enemy.x + enemy.width / 2;
+    var cy = enemy.y + enemy.height / 2;
+    for (var i = 0; i < count; i++) {
+      var ang = Math.PI / 2 + (i / count) * Math.PI * 2;
+      state.enemyBullets.push({
+        id: newId(state),
+        x: cx - 5, y: cy - 5, width: 10, height: 10,
+        vx: Math.cos(ang) * 200, vy: Math.sin(ang) * 200,
+        noCancel: true, special: true
+      });
+    }
+  }
+
+  /** 火焰兵：周期性发射火焰冲击波（宽大、不可抵消） */
+  function updateFlamers(state, dt) {
+    var cfg = state.config;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var f = state.enemies[i];
+      if (f.special !== 'flamer' || f.hp <= 0) continue;
+      f.flameTimer -= dt;
+      if (f.flameTimer <= 0) {
+        f.flameTimer = cfg.flamerWave.interval;
+        var w = cfg.flamerWave.width;
+        var h = cfg.flamerWave.height;
+        state.enemyBullets.push({
+          id: newId(state),
+          x: f.x + f.width / 2 - w / 2,
+          y: f.y + f.height / 2,
+          width: w, height: h,
+          vx: 0, vy: cfg.flamerWave.speed,
+          noCancel: true, flame: true, damage: cfg.flamerWave.damage
+        });
+      }
+    }
+  }
+
+  /** 雷电兵：周期性在小范围区域释放雷电（先红色预警再命中） */
+  function updateStormers(state, dt) {
+    var cfg = state.config;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var st = state.enemies[i];
+      if (st.special !== 'stormer' || st.hp <= 0) continue;
+      if (st.strikePending) {
+        var pend = st.strikePending;
+        if (state.time >= pend.hitAt) {
+          // 命中：区域内玩家受到伤害（护盾/无敌可挡）
+          if (!hasShield(state) && !isInvincible(state)) {
+            var pcx = state.player.x + state.player.width / 2;
+            var pcy = state.player.y + state.player.height / 2;
+            if (Math.abs(pcx - pend.x) <= pend.radius && Math.abs(pcy - pend.y) <= pend.radius) {
+              damagePlayer(state);
+            }
+          }
+          state.explosions.push({ x: pend.x, y: pend.y, kind: 'storm', radius: pend.radius });
+          st.strikePending = null;
+          st.strikeTimer = cfg.stormerStrike.interval;
+        }
+      } else {
+        st.strikeTimer -= dt;
+        if (st.strikeTimer <= 0) {
+          // 生成预警：以玩家当前位置为目标的随机小范围偏移
+          var radius = cfg.stormerStrike.radius;
+          var tx = state.player.x + state.player.width / 2 + (Math.random() * 2 - 1) * radius * 0.8;
+          var ty = state.player.y + state.player.height / 2 + (Math.random() * 2 - 1) * radius * 0.4;
+          st.strikePending = {
+            x: clamp(tx, radius, cfg.width - radius),
+            y: clamp(ty, radius, cfg.height - radius),
+            radius: radius,
+            warnUntil: state.time + cfg.stormerStrike.warnTime,
+            hitAt: state.time + cfg.stormerStrike.warnTime
+          };
+        }
+      }
+    }
+  }
+
+  /** P4：新敌人行为统一入口 */
+  function updateP4Enemies(state, dt) {
+    updateClone(state, dt);
+    updateSuiciders(state, dt);
+    updateFlamers(state, dt);
+    updateStormers(state, dt);
+  }
+
   // ==================== 伤害结算（敌机/BOSS） ====================
 
   /**
@@ -1765,6 +2106,13 @@
    * @param {string} dmgType 'phys' 物理 / 'magic' 魔法（受对应抗性减免）
    */
   function hurtEnemy(state, enemy, damage, dmgType) {
+    // P4：克隆体无法被攻击（免疫一切伤害）
+    if (enemy.special === 'clone') return false;
+    // P4：自爆兵无敌期——记录受击次数（用于死亡后转化弹幕），但不扣血
+    if (enemy.special === 'suicider' && enemy.invulnUntil && enemy.invulnUntil > state.time) {
+      enemy.hitCount = (enemy.hitCount || 0) + 1;
+      return false;
+    }
     if (enemy.invulnUntil && enemy.invulnUntil > state.time) return false; // 防御型：无敌状态免疫伤害
     var cfg = state.config;
     dmgType = dmgType || 'phys';
@@ -1803,6 +2151,14 @@
             dev.special = enemy.special; // 继承被吞敌人的能力
           }
         }
+      }
+      // P4：自爆兵——死亡后按受击次数转化为不可抵消的特殊弹幕
+      if (enemy.special === 'suicider') {
+        suiciderBurst(state, enemy);
+      }
+      // P4：黑客武器——吞噬被自己杀死的敌人血量与能力
+      if (state.weapon === 'hacker') {
+        hackerDevour(state, enemy);
       }
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
@@ -1877,6 +2233,10 @@
           dev2.hp = Math.min(dev2.maxHp * 3, dev2.hp + gain2);
           dev2.maxHp = Math.max(dev2.maxHp, dev2.hp);
         }
+      }
+      // P4：黑客武器吞噬 Boss 血量（含能力继承）
+      if (state.weapon === 'hacker') {
+        hackerDevour(state, { maxHp: boss.maxHp, special: 'boss', type: 'xlarge' });
       }
       // P3：Boss 加成 j「生命诅咒」：Boss 死亡后直接扣除玩家血量上限两点
       if (hasBossBuff(state, 'lifeDrain')) {
@@ -2239,6 +2599,8 @@
     // 特殊敌人逻辑：治疗型（给范围内敌人回血）与防御型（周期性无敌）
     updateHealers(state, dt);
     updateDefenders(state, dt);
+    // P4：克隆体/自爆兵/火焰兵/雷电兵行为
+    updateP4Enemies(state, dt);
 
     // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）
     if (state.wingman > 0) {
@@ -2249,6 +2611,11 @@
         var wcx = wp.x + wp.width / 2;
         var wcy = wp.y + wp.height / 2;
         var wdmg = getWingmanDamage(state);
+        // P4：黑客模式——僚机自动开火同样消耗自身血量
+        if (state.weapon === 'hacker') {
+          state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost * state.wingman);
+          if (state.hackerHp <= 0) { killHackerPlayer(state); }
+        }
         for (var wm = 0; wm < state.wingman; wm++) {
           var wOff = (wm - (state.wingman - 1) / 2) * 30;
           state.bullets.push({
@@ -2409,8 +2776,10 @@
         }
       }
       // 弹幕抵消：玩家子弹命中敌机子弹 → 敌弹消失；普通子弹自身也消失，回旋镖/蓄力弹保留
+      // P4：标记 noCancel 的敌弹（克隆体红弹/自爆弹幕/火焰波）无法被抵消
       if (!hit) {
         for (var cbi = state.enemyBullets.length - 1; cbi >= 0; cbi--) {
+          if (state.enemyBullets[cbi].noCancel) continue;
           if (rectsOverlap(bullet, state.enemyBullets[cbi])) {
             state.enemyBullets.splice(cbi, 1);
             hit = true;
@@ -2728,7 +3097,8 @@
     upgrade: document.getElementById('upgrade'),
     ship: document.getElementById('ship'),
     rank: document.getElementById('rank'),
-    level: document.getElementById('level')
+    level: document.getElementById('level'),
+    codex: document.getElementById('codex')
   };
 
   function showPanel(name) {
@@ -2778,7 +3148,8 @@
     { id: 'homing', icon: '⌖', name: '追踪弹', desc: '自动锁定\n精确打击' },
     { id: 'charge', icon: '◎', name: '蓄力炮', desc: '按住蓄力\n松开爆发' },
     { id: 'flamethrower', icon: '🔥', name: '火焰喷射', desc: '持续灼烧\n烧毁弹幕' },
-    { id: 'lightning', icon: '⚡', name: '雷电', desc: '连锁攻击\n跳跃伤害' }
+    { id: 'lightning', icon: '⚡', name: '雷电', desc: '连锁攻击\n跳跃伤害' },
+    { id: 'hacker', icon: '🕸', name: '黑客', desc: '吞噬敌人\n化身为球' }
   ];
 
   function renderWeaponGrid() {
@@ -3539,7 +3910,8 @@
     { id: 'score10000', icon: '💯', name: '万分战神', desc: '单局得分达到 10000' },
     { id: 'combo50', icon: '🔥', name: '连击大师', desc: '连击达到 50 层' },
     { id: 'ult5', icon: '⚡', name: '能量掌控', desc: '累计释放 5 次能量大招' },
-    { id: 'wave20', icon: '🌌', name: '无尽勇者', desc: '到达第 20 波（无尽深处）' }
+    { id: 'wave20', icon: '🌌', name: '无尽勇者', desc: '到达第 20 波（无尽深处）' },
+    { id: 'clone_seen', icon: '🪞', name: '猜猜我是谁', desc: '遭遇一次克隆体敌人' }
   ];
 
   function loadAchievements() {
@@ -3555,9 +3927,9 @@
   }
 
   // 本局追踪数据（main.js 层，不进 game-core）
-  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0 };
+  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0, cloneSeen: false };
   function resetTracking() {
-    track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0 };
+    track = { totalKills: 0, bossKills: 0, damagedInWave: false, ultCount: 0, cloneSeen: false };
   }
 
   function checkAchievements() {
@@ -3572,7 +3944,8 @@
       score10000: state.score >= 10000,
       combo50: state.combo >= 50,
       ult5: track.ultCount >= 5,
-      wave20: state.wave >= 20
+      wave20: state.wave >= 20,
+      clone_seen: track.cloneSeen
     };
     ACHIEVEMENTS.forEach(function (a) {
       if (!ach[a.id] && cond[a.id]) {
@@ -3606,6 +3979,142 @@
     head.style.cssText = 'text-align:center;color:#ffd166;font-size:14px;margin-bottom:10px;letter-spacing:1px;';
     head.textContent = '已解锁 ' + unlocked + ' / ' + ACHIEVEMENTS.length;
     body.insertBefore(head, body.firstChild);
+  }
+
+  // ==================== 图鉴系统（P4） ====================
+
+  var CODEX_KEY = 'sf_codex';
+  var CODEX = [
+    { id: 'sphere:small', icon: '●', name: '小型球', cat: '基础敌人', desc: '最基础的球形敌人，速度较快，血量低。' },
+    { id: 'sphere:medium', icon: '◐', name: '中型球', cat: '基础敌人', desc: '血量中等，死亡时分裂出 2~3 个小球。' },
+    { id: 'sphere:large', icon: '◑', name: '大型球', cat: '基础敌人', desc: '高血量，死亡时分裂出中型球。' },
+    { id: 'sphere:xlarge', icon: '◎', name: '超大球', cat: '基础敌人', desc: '全场最强的普通球，死亡时分裂出大型球。' },
+    { id: 'healer', icon: '✚', name: '治疗型', cat: '特殊敌人', desc: '连接范围内的友军，每 1.2 秒为其回复血量。' },
+    { id: 'defender', icon: '⛨', name: '防御型', cat: '特殊敌人', desc: '每 3 秒开启一次持续 1 秒的无敌护盾。' },
+    { id: 'chaser', icon: '➤', name: '追踪自爆型', cat: '特殊敌人', desc: '锁定玩家高速追击。' },
+    { id: 'armored', icon: '⛊', name: '重甲型', cat: '特殊敌人', desc: '额外 50% 物理抗性，用魔法伤害更有效。' },
+    { id: 'spreader', icon: '✳', name: '弹幕散射型', cat: '特殊敌人', desc: '死亡时向四周散射一圈子弹。' },
+    { id: 'devourer', icon: '◉', name: '吞噬型', cat: '特殊敌人', desc: '吞噬周围被击杀的敌人，恢复血量并概率继承其能力。' },
+    { id: 'charger', icon: '▣', name: '冲撞型', cat: '特殊敌人', desc: '蓄力后高速冲撞玩家，冲撞前有预警。' },
+    { id: 'tank', icon: '⛊', name: '坦克型', cat: '特殊敌人', desc: '拥有五倍血量与长血条，皮糙肉厚。' },
+    { id: 'assassin', icon: '☠', name: '刺客型', cat: '特殊敌人', desc: '2 秒内未被击杀会瞬移到玩家身边。' },
+    { id: 'flamer', icon: '🔥', name: '火焰兵', cat: '新敌人', desc: '周期性发射火焰冲击波，冲击波无法被子弹抵消。' },
+    { id: 'stormer', icon: '☇', name: '雷电兵', cat: '新敌人', desc: '在小范围区域释放雷电，攻击前有红色警示圈。' },
+    { id: 'suicider', icon: '💥', name: '自爆兵', cat: '新敌人', desc: '出现后 2 秒无敌并记录受击次数，死亡后转化为无法抵消的特殊弹幕。' },
+    { id: 'clone', icon: '🪞', name: '克隆体', cat: '新敌人', desc: '与玩家战机一模一样，拥有玩家武器，红色攻击，15 秒后消失，无法被攻击。' },
+    { id: 'hacker', icon: '🕸', name: '黑客武器', cat: '武器', desc: '化身为球形生命体，吞噬敌人恢复血量，开局自带两个僚机。' }
+  ];
+  var CODEX_IDS = {};
+  CODEX.forEach(function (c) { CODEX_IDS[c.id] = c; });
+
+  function loadCodex() {
+    try {
+      var raw = localStorage.getItem(CODEX_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  }
+  function saveCodex(c) {
+    try { localStorage.setItem(CODEX_KEY, JSON.stringify(c)); } catch (err) {}
+  }
+
+  /** Boss 加成组合图鉴名称 */
+  function bossBuffNames() {
+    return {
+      physResist80: '物抗80%',
+      magicResist80: '魔抗80%',
+      resist50: '双抗50%',
+      extraSplit: '增殖',
+      resistAura50: '光环抗性',
+      gather: '集结',
+      speedUp50: '加速光环',
+      bombardment: '轨道轰炸',
+      lockProtect: '护卫屏障',
+      lifeDrain: '生命诅咒',
+      singleShot: '弹道封锁'
+    };
+  }
+  function bossCodexName(key) {
+    var parts = key.slice(5).split(',');
+    var names = parts.map(function (b) { return bossBuffNames()[b] || b; });
+    return '恶魔·' + names.join('+');
+  }
+
+  /** 遇到新实体 → 解锁图鉴条目 */
+  function codexUnlock(ev) {
+    if (typeof ev !== 'string' || !ev) return;
+    var c = loadCodex();
+    if (ev.indexOf('boss:') === 0) {
+      var bkey = ev;
+      if (!c[bkey]) {
+        c[bkey] = Date.now();
+        saveCodex(c);
+        showToast('📖 图鉴解锁：' + bossCodexName(bkey));
+        audio.powerup();
+      }
+      return;
+    }
+    if (CODEX_IDS[ev] && !c[ev]) {
+      c[ev] = Date.now();
+      saveCodex(c);
+      showToast('📖 图鉴解锁：' + CODEX_IDS[ev].name);
+      audio.powerup();
+    }
+  }
+
+  /** 渲染图鉴面板：黑色卡片，未解锁为全黑锁定，解锁后点亮并显示介绍 */
+  function renderCodexBody() {
+    var body = document.getElementById('codex-body');
+    if (!body) return;
+    var c = loadCodex();
+    var unlocked = 0;
+    body.innerHTML = '';
+    var grid = document.createElement('div');
+    grid.className = 'codex-grid';
+    CODEX.forEach(function (item) {
+      var isUnlocked = !!c[item.id];
+      if (isUnlocked) unlocked++;
+      var card = document.createElement('div');
+      card.className = 'codex-card' + (isUnlocked ? ' unlocked' : '');
+      card.innerHTML =
+        '<div class="codex-ico">' + (isUnlocked ? item.icon : '?') + '</div>' +
+        '<div class="codex-name">' + (isUnlocked ? item.name : '？？？') + '</div>' +
+        '<div class="codex-cat">' + (isUnlocked ? item.cat : '未解锁') + '</div>' +
+        '<div class="codex-desc">' + (isUnlocked ? item.desc : '遭遇对应敌人后解锁') + '</div>';
+      grid.appendChild(card);
+    });
+    // Boss 形态（动态：按已解锁组合展示）
+    var bossKeys = Object.keys(c).filter(function (k) { return k.indexOf('boss:') === 0; });
+    unlocked += bossKeys.length;
+    bossKeys.sort();
+    bossKeys.forEach(function (k) {
+      var card = document.createElement('div');
+      card.className = 'codex-card unlocked boss';
+      card.innerHTML =
+        '<div class="codex-ico">👹</div>' +
+        '<div class="codex-name">' + bossCodexName(k) + '</div>' +
+        '<div class="codex-cat">Boss形态</div>' +
+        '<div class="codex-desc">遭遇具有该加成组合的 Boss 后解锁</div>';
+      grid.appendChild(card);
+    });
+    body.appendChild(grid);
+    var head = document.createElement('div');
+    head.style.cssText = 'text-align:center;color:#ffd166;font-size:14px;margin-bottom:10px;letter-spacing:1px;';
+    head.textContent = '已解锁 ' + unlocked + ' 个条目';
+    body.insertBefore(head, body.firstChild);
+  }
+
+  // 图鉴按钮（主菜单右上角排行榜旁）
+  var btnCodex = document.getElementById('btn-codex');
+  if (btnCodex) {
+    btnCodex.addEventListener('click', function () {
+      renderCodexBody();
+      showPanel('codex');
+    });
+  }
+  var btnCodexBack = document.getElementById('btn-codex-back');
+  if (btnCodexBack) {
+    btnCodexBack.addEventListener('click', function () { showPanel('menu'); });
   }
 
   // ==================== 每日挑战（固定种子固定配置） ====================
@@ -3946,12 +4455,14 @@
       boltLines.push({ x1: fromX, y1: fromY, x2: x, y2: y, life: 0, maxLife: 0.22 });
       return;
     }
-    var count = kind === 'boss' ? 46 : kind === 'large' ? 26 : 12;
+    var count = kind === 'boss' ? 46 : kind === 'large' ? 26 : kind === 'storm' ? 30 : 12;
     var colors = kind === 'boss'
       ? ['#ff6b6b', '#ffd166', '#ff9f43', '#ffffff']
       : kind === 'large'
         ? ['#ff6b6b', '#ff9f43', '#ffd166']
-        : ['#ffd166', '#ff9f43', '#ff6b6b'];
+        : kind === 'storm'
+          ? ['#c9a3ff', '#7d4dff', '#ffffff', '#e0b3ff']
+          : ['#ffd166', '#ff9f43', '#ff6b6b'];
     for (var i = 0; i < count; i++) {
       var ang = Math.random() * Math.PI * 2;
       var sp = (kind === 'boss' ? 260 : 180) * (0.4 + Math.random() * 0.8);
@@ -4072,6 +4583,52 @@
 
   function drawPlayer(x, y, w, h) {
     var flashing = GameCore.isInvincible(state) && Math.floor(state.time * 10) % 2 === 0;
+    // P4：黑客武器——玩家化身为球形，头顶/中心显示自身血量
+    if (state.weapon === 'hacker') {
+      var hcx = x + w / 2;
+      var hcy = y + h / 2;
+      ctx.save();
+      ctx.globalAlpha = flashing ? 0.4 : 1;
+      // 能量球体（黑客色：暗紫+青辉）
+      var hg = ctx.createRadialGradient(hcx - w * 0.2, hcy - h * 0.2, 2, hcx, hcy, Math.max(w, h) * 0.55);
+      hg.addColorStop(0, '#ffffff');
+      hg.addColorStop(0.35, '#c09bff');
+      hg.addColorStop(0.75, '#6a3fd6');
+      hg.addColorStop(1, '#2a1a66');
+      ctx.shadowColor = '#a86bff';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = hg;
+      ctx.beginPath();
+      ctx.arc(hcx, hcy, Math.max(w, h) * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      // 核心亮点
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(hcx - w * 0.12, hcy - h * 0.15, Math.max(w, h) * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      // 血条环
+      var hpr = Math.max(w, h) * 0.42 + 6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(hcx, hcy, hpr, 0, Math.PI * 2);
+      ctx.stroke();
+      var ratio = Math.max(0, Math.min(1, state.hackerHp / (state.config.weapons.hacker.hp * 4)));
+      ctx.strokeStyle = ratio > 0.4 ? '#6dff8b' : '#ff5d5d';
+      ctx.beginPath();
+      ctx.arc(hcx, hcy, hpr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
+      ctx.stroke();
+      // 自身血量数字
+      ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 4;
+      ctx.fillText('❤ ' + Math.ceil(state.hackerHp), hcx, hcy - hpr - 8);
+      ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.globalAlpha = flashing ? 0.4 : 1;
 
@@ -4270,6 +4827,75 @@
     }
   }
 
+  /** P4：克隆体——与玩家飞机一模一样的外形（红色调涂装，象征敌方） */
+  function drawCloneEnemy(e) {
+    var cx = e.x + e.width / 2;
+    var cy = e.y + e.height / 2;
+    var w = e.width;
+    var h = e.height;
+    var col = '#ff3b5e';
+    ctx.save();
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 16;
+    // 引擎光（红色）
+    var flame = 12 + Math.sin(state.time * 18) * 3;
+    var gradF = ctx.createLinearGradient(0, e.y + h, 0, e.y + h + flame + 8);
+    gradF.addColorStop(0, col);
+    gradF.addColorStop(1, 'rgba(255, 80, 80, 0)');
+    ctx.fillStyle = gradF;
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.22, e.y + h);
+    ctx.lineTo(cx + w * 0.22, e.y + h);
+    ctx.lineTo(cx, e.y + h + flame + 8);
+    ctx.closePath();
+    ctx.fill();
+    // 机身：圆润胶囊（与玩家同构，红色涂装）
+    var bodyGrad = ctx.createLinearGradient(e.x, 0, e.x + w, 0);
+    bodyGrad.addColorStop(0, '#ff5e7a');
+    bodyGrad.addColorStop(0.35, col);
+    bodyGrad.addColorStop(0.65, '#ff5e7a');
+    bodyGrad.addColorStop(1, '#ffe8ec');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(cx, e.y);
+    ctx.quadraticCurveTo(e.x + w * 0.52, e.y - h * 0.1, e.x + w * 0.34, e.y + h * 0.12);
+    ctx.lineTo(e.x + w * 0.3, e.y + h * 0.86);
+    ctx.quadraticCurveTo(e.x + w * 0.36, e.y + h, cx, e.y + h);
+    ctx.quadraticCurveTo(e.x + w * 0.64, e.y + h, e.x + w * 0.7, e.y + h * 0.86);
+    ctx.lineTo(e.x + w * 0.66, e.y + h * 0.12);
+    ctx.quadraticCurveTo(e.x + w * 0.48, e.y - h * 0.1, cx, e.y);
+    ctx.closePath();
+    ctx.fill();
+    // 机翼
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(e.x + w * 0.36, e.y + h * 0.4);
+    ctx.quadraticCurveTo(e.x + w * 0.08, e.y + h * 0.42, e.x + w * 0.04, e.y + h * 0.58);
+    ctx.quadraticCurveTo(e.x + w * 0.2, e.y + h * 0.6, e.x + w * 0.4, e.y + h * 0.52);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(e.x + w * 0.64, e.y + h * 0.4);
+    ctx.quadraticCurveTo(e.x + w * 0.92, e.y + h * 0.42, e.x + w * 0.96, e.y + h * 0.58);
+    ctx.quadraticCurveTo(e.x + w * 0.8, e.y + h * 0.6, e.x + w * 0.6, e.y + h * 0.52);
+    ctx.closePath();
+    ctx.fill();
+    // 座舱（暗红）
+    ctx.fillStyle = 'rgba(255, 60, 90, 0.9)';
+    ctx.beginPath();
+    ctx.ellipse(cx, e.y + h * 0.36, w * 0.15, h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 倒计时标记（剩余秒数）
+    var left = Math.max(0, e.cloneUntil - state.time);
+    ctx.font = 'bold 12px Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(left.toFixed(0) + 's', cx, e.y - 6);
+    ctx.restore();
+  }
+
   /** 球形敌人：分级球体 + 中心血量数字（小/中/大/超大四等级）；治疗型绿色+连接线，防御型金色+无敌护盾 */
   function drawEnemy(e) {
     var cx = e.x + e.width / 2;
@@ -4286,7 +4912,16 @@
     if (e.special === 'charger') colors = { small: '#ffa62b', medium: '#ffa62b', large: '#f2961f', xlarge: '#e68a14' };
     if (e.special === 'assassin') colors = { small: '#2ee6d8', medium: '#2ee6d8', large: '#26cfc2', xlarge: '#1fb8ac' };
     if (e.special === 'tank') colors = { small: '#6b7482', medium: '#6b7482', large: '#5b6370', xlarge: '#4b5260' };
+    // P4：新敌人配色——自爆兵=红黑，火焰兵=橙焰，雷电兵=紫电
+    if (e.special === 'suicider') colors = { small: '#ff3b3b', medium: '#ff3b3b', large: '#e63030', xlarge: '#d02828' };
+    if (e.special === 'flamer') colors = { small: '#ff7a2b', medium: '#ff7a2b', large: '#f2691f', xlarge: '#e85e14' };
+    if (e.special === 'stormer') colors = { small: '#a05bff', medium: '#a05bff', large: '#8f4bf0', xlarge: '#7e3ce0' };
     var col = colors[e.type] || '#ff6b6b';
+    // P4：克隆体——与玩家飞机一模一样（红色调涂装）
+    if (e.special === 'clone') {
+      drawCloneEnemy(e);
+      return;
+    }
     // 防御型无敌状态：金色脉冲描边 + 护盾环
     var defending = e.special === 'defender' && e.invulnUntil && e.invulnUntil > state.time;
     ctx.save();
@@ -4419,6 +5054,69 @@
       ctx.fillStyle = '#fff';
       ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
       ctx.fillText('⛊', cx, cy - r - 2);
+    } else if (e.special === 'suicider') {
+      // 自爆兵：红黑球 + 引信闪光；无敌期金色盾环 + 剩余秒数
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      if (e.invulnUntil && e.invulnUntil > state.time) {
+        var spulse = 0.6 + 0.4 * Math.sin(state.time * 20);
+        ctx.globalAlpha = spulse;
+        ctx.strokeStyle = '#ffe9a3';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ffe9a3';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.fillText('⏳', cx, cy - r - 2);
+        var left = Math.max(0, e.invulnUntil - state.time);
+        ctx.fillStyle = '#ffd166';
+        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px Consolas, monospace';
+        ctx.fillText(left.toFixed(1), cx, cy + r + 8);
+      } else {
+        ctx.fillText('💥', cx, cy - r - 2);
+      }
+    } else if (e.special === 'flamer') {
+      // 火焰兵：橙焰球 + 火苗角标
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      if (e.flameTimer !== undefined && e.flameTimer < 0.5) {
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(state.time * 24);
+        ctx.fillText('🔥', cx, cy - r - 2);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillText('🔥', cx, cy - r - 2);
+      }
+    } else if (e.special === 'stormer') {
+      // 雷电兵：紫电球 + 闪电角标；攻击预警时闪烁
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      if (e.strikePending && state.time < e.strikePending.warnUntil) {
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.time * 22);
+        ctx.fillText('☇', cx, cy - r - 2);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillText('☇', cx, cy - r - 2);
+      }
+      // 雷电预警区：淡红圆（攻击前警示）
+      if (e.strikePending && state.time < e.strikePending.warnUntil) {
+        var spr = e.strikePending.radius;
+        var salpha = 0.22 + 0.18 * Math.sin(state.time * 18);
+        ctx.fillStyle = 'rgba(255, 60, 90, ' + salpha.toFixed(3) + ')';
+        ctx.strokeStyle = 'rgba(255, 60, 90, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.strikePending.x, e.strikePending.y, spr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(e.strikePending.x, e.strikePending.y, spr * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     // 敌方血条（坦克/大球更直观）
     if (e.special === 'tank' || e.type === 'large' || e.type === 'xlarge') {
@@ -4573,6 +5271,52 @@
 
   function drawEnemyBullet(eb) {
     ctx.save();
+    // P4：火焰冲击波（火焰兵）——橙色火焰柱
+    if (eb.flame) {
+      ctx.shadowColor = '#ff8c2b';
+      ctx.shadowBlur = 18;
+      var fg = ctx.createLinearGradient(0, eb.y, 0, eb.y + eb.height);
+      fg.addColorStop(0, '#fff3d0');
+      fg.addColorStop(0.25, '#ffb04d');
+      fg.addColorStop(1, '#ff4d1f');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2, eb.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    // P4：特殊弹幕（自爆兵转化）——白色核心红色壳，不可抵消
+    if (eb.special) {
+      ctx.shadowColor = '#ff5252';
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2 + 1, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#ffe9e9';
+      ctx.beginPath();
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    // P4：克隆体红色攻击弹
+    if (eb.red) {
+      ctx.shadowColor = '#ff2b4d';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#ff3b5e';
+      ctx.beginPath();
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.beginPath();
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
     ctx.shadowColor = '#ff6b6b';
     ctx.shadowBlur = 8;
     ctx.fillStyle = '#ff6b6b';
@@ -5631,7 +6375,7 @@
 
   // ==================== 能量大招 / HUD ====================
 
-  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮' };
+  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hacker: '黑客' };
 
   // ==================== 打击感（顿帧 / 屏幕震动 / 全屏闪光） ====================
 
@@ -5703,7 +6447,7 @@
     { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
     { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
     { type: 'life', icon: '❤', label: '生命 +1', desc: '上限内恢复一条命', maxed: function () { return state.lives >= state.config.maxLives; } },
-    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.wingman >= state.config.wingmanMax; } }
+    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.weapon === 'hacker' ? false : state.wingman >= state.config.wingmanMax; } }
   ];
 
   var buffPanel = document.getElementById('buff-panel');
@@ -5725,6 +6469,20 @@
       var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
     var picks = pool.slice(0, 3);
+    // P4：黑客武器——奖励选择必定出现僚机选项（选僚机获得两个）
+    if (state.weapon === 'hacker') {
+      var hasWing = false;
+      for (var wi = 0; wi < picks.length; wi++) {
+        if (picks[wi].type === 'wingman') { hasWing = true; break; }
+      }
+      if (!hasWing) {
+        var wCard = null;
+        for (var wj = 0; wj < pool.length; wj++) {
+          if (pool[wj].type === 'wingman') { wCard = pool[wj]; break; }
+        }
+        if (wCard) picks[0] = wCard;
+      }
+    }
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
     picks.forEach(function (b) {
@@ -5733,7 +6491,13 @@
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
       btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
       btn.addEventListener('click', function () {
-        GameCore.applyPowerup(state, b.type);
+        // P4：黑客选僚机 → 一次获得两个
+        if (b.type === 'wingman' && state.weapon === 'hacker') {
+          GameCore.applyPowerup(state, 'wingman');
+          GameCore.applyPowerup(state, 'wingman');
+        } else {
+          GameCore.applyPowerup(state, b.type);
+        }
         GameCore.togglePause(state);
         buffPanel.style.display = 'none';
         audio.powerup();
@@ -5760,7 +6524,8 @@
       // P3：专属大招横幅（按武器不同文案）
       var ULT_NAMES = {
         gun: '弹幕风暴', cannon: '地毯轰炸', laser: '全屏激光', boomerang: '超级回旋镖',
-        saber: '光刃风暴', homing: '导弹雨', charge: '巨型蓄力炮', flamethrower: '焚天之火', lightning: '雷暴降临'
+        saber: '光刃风暴', homing: '导弹雨', charge: '巨型蓄力炮', flamethrower: '焚天之火', lightning: '雷暴降临',
+        hacker: '吞噬风暴'
       };
       showToast('大招·' + (ULT_NAMES[ret.weapon] || '能量爆发'));
       return true;
@@ -5815,11 +6580,18 @@
     }
     var heartsEl = document.getElementById('hud-hearts');
     if (heartsEl) {
-      var heartStr = '';
-      for (var h = 0; h < state.config.maxLives; h++) {
-        heartStr += h < state.lives ? '♥' : '♡';
+      // P4：黑客模式 HUD 显示球形血量
+      if (state.weapon === 'hacker') {
+        heartsEl.textContent = '🕸 血量 ' + Math.ceil(state.hackerHp);
+        heartsEl.style.color = '#ff7ddb';
+      } else {
+        heartsEl.style.color = '';
+        var heartStr = '';
+        for (var h = 0; h < state.config.maxLives; h++) {
+          heartStr += h < state.lives ? '♥' : '♡';
+        }
+        heartsEl.textContent = heartStr;
       }
-      heartsEl.textContent = heartStr;
     }
     var bar = document.getElementById('ult-bar');
     if (bar) bar.style.width = Math.round(state.energy / state.config.ultMax * 100) + '%';
@@ -5894,6 +6666,17 @@
       var comboBefore = state.combo;
 
       GameCore.update(state, dt);
+
+      // P4：图鉴解锁事件消费（遇到新实体 → 解锁图鉴条目）
+      if (state.codexEvents && state.codexEvents.length) {
+        var evs = state.codexEvents.slice();
+        state.codexEvents.length = 0;
+        for (var evi = 0; evi < evs.length; evi++) {
+          var ev = evs[evi];
+          if (ev === 'clone') track.cloneSeen = true;
+          codexUnlock(ev);
+        }
+      }
 
       // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
       if (waveBefore !== state.wave) {
