@@ -2108,10 +2108,12 @@
     btnGameMenu.addEventListener('click', function () { backToMenu(); });
   }
 
-  // ==================== 分数排行榜 ====================
+  // ==================== 分数排行榜（云端共享） ====================
 
   var RANK_KEY = 'sf_scores';
   var NAME_KEY = 'sf_name';
+  // 云端共享记分板（Pantry 免费 JSON 存储；basket 内容为 {list:[{name,score,level,time}]}）
+  var CLOUD_RANK_URL = 'https://getpantry.cloud/apiv1/pantry/e4d90d5d-91c4-4375-a80f-1c83653abb2f/basket/leaderboard';
   var pendingRankScore = null; // 死亡时若尚未命名，暂存本次成绩
 
   function loadScores() {
@@ -2127,6 +2129,55 @@
     try { localStorage.setItem(RANK_KEY, JSON.stringify(arr.slice(0, 20))); } catch (err) {}
   }
 
+  /** 合并并去重：同名玩家只取最高分，按分数降序 */
+  function mergeRank(list) {
+    var m = {};
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      if (!s || !s.name || typeof s.score !== 'number') continue;
+      if (!m[s.name] || s.score > m[s.name].score) {
+        m[s.name] = { name: s.name, score: s.score, level: s.level || 1, time: s.time || 0 };
+      }
+    }
+    return Object.keys(m).map(function (k) { return m[k]; })
+      .sort(function (a, b) { return b.score - a.score; });
+  }
+
+  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（失败静默，本地不受影响） */
+  function pushRankToCloud() {
+    if (typeof fetch !== 'function') return;
+    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (cloud) {
+        var local = loadScores();
+        var cloudList = (cloud && Array.isArray(cloud.list)) ? cloud.list : [];
+        var merged = mergeRank(local.concat(cloudList));
+        saveScores(merged);
+        return fetch(CLOUD_RANK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ list: merged })
+        });
+      })
+      .catch(function () {});
+  }
+
+  /** 拉取云端榜单并合并到本地（所有玩家成绩共享），成功后刷新当前面板 */
+  function syncRankFromCloud() {
+    if (typeof fetch !== 'function') return;
+    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (cloud) {
+        var cloudList = (cloud && Array.isArray(cloud.list)) ? cloud.list : [];
+        if (!cloudList.length) return;
+        var merged = mergeRank(loadScores().concat(cloudList));
+        saveScores(merged);
+        var panel = document.getElementById('rank');
+        if (panel && panel.className.indexOf('active') >= 0) renderRankList();
+      })
+      .catch(function () {});
+  }
+
   function getPlayerName() {
     try { return (localStorage.getItem(NAME_KEY) || '').trim(); } catch (err) { return ''; }
   }
@@ -2136,18 +2187,10 @@
   }
 
   function addScoreEntry(name, score, level, timeSec) {
-    var arr = loadScores();
-    // 同名玩家只保留最高分：新分更高则替换旧记录，新分不更高则忽略
-    for (var i = 0; i < arr.length; i++) {
-      if (arr[i].name === name) {
-        if (score <= arr[i].score) return;
-        arr.splice(i, 1);
-        break;
-      }
-    }
-    arr.push({ name: name, score: score, level: level, time: timeSec });
-    arr.sort(function (a, b) { return b.score - a.score; });
-    saveScores(arr);
+    var merged = mergeRank(loadScores().concat([{ name: name, score: score, level: level, time: timeSec }]));
+    saveScores(merged);
+    pushRankToCloud();
+    return merged;
   }
 
   function escHtml(s) {
@@ -2160,13 +2203,7 @@
     var list = document.getElementById('rank-list');
     if (!list) return;
     // 同名玩家只取最高分，再按分数降序取前 10
-    var all = loadScores();
-    var bestByName = {};
-    all.forEach(function (s) {
-      if (!bestByName[s.name] || s.score > bestByName[s.name].score) bestByName[s.name] = s;
-    });
-    var arr = Object.keys(bestByName).map(function (k) { return bestByName[k]; })
-      .sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
+    var arr = mergeRank(loadScores()).slice(0, 10);
     var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
@@ -2198,6 +2235,7 @@
   function openRankPanel(focusInput) {
     showPanel('rank');
     initRankPanel(focusInput);
+    syncRankFromCloud(); // 打开时同步云端所有玩家的成绩
   }
 
   var btnRank = document.getElementById('btn-rank');
