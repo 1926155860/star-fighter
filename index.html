@@ -283,6 +283,74 @@
       display: none;
     }
 
+    /* ===== 排行榜（初始界面右上角入口） ===== */
+    #btn-rank {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 26;
+      padding: 9px 16px;
+      font-size: 14px;
+      letter-spacing: 1px;
+      border: 1px solid #ffd166;
+      color: #ffd166;
+      background: rgba(70, 45, 8, 0.72);
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(255, 209, 102, 0.35), inset 0 0 10px rgba(255, 209, 102, 0.12);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #btn-rank:hover, #btn-rank:active {
+      background: rgba(100, 65, 10, 0.85);
+      border-color: #ffe28a;
+      box-shadow: 0 0 18px rgba(255, 209, 102, 0.6);
+    }
+    .rank-name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .rank-name-row input {
+      width: 220px;
+      padding: 9px 14px;
+      font-size: 14px;
+      color: #e8f6ff;
+      background: rgba(15, 35, 70, 0.6);
+      border: 1px solid #2a7ab8;
+      border-radius: 6px;
+      outline: none;
+      letter-spacing: 1px;
+    }
+    .rank-name-row input:focus { border-color: #4ee0ff; box-shadow: 0 0 10px rgba(78, 224, 255, 0.3); }
+    .rank-list {
+      width: 340px;
+      max-height: 56vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    .rank-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      border: 1px solid #1e3a5e;
+      border-radius: 8px;
+      background: rgba(20, 40, 80, 0.3);
+      font-size: 14px;
+    }
+    .rank-row.rank-me {
+      border-color: #ffd166;
+      background: rgba(90, 65, 12, 0.35);
+      box-shadow: 0 0 10px rgba(255, 209, 102, 0.2);
+    }
+    .rank-no { width: 34px; font-weight: bold; color: #ffd166; text-align: center; }
+    .rank-name { flex: 1; color: #e8f6ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-lv { width: 62px; color: #9be8ff; font-size: 12px; text-align: right; }
+    .rank-score { width: 76px; color: #fff; font-weight: bold; text-align: right; }
+
     /* ===== 游戏内设置（手机无键盘时使用） ===== */
     #in-game-btn {
       position: fixed;
@@ -341,6 +409,7 @@
         <button class="btn primary start" id="btn-start">开始游戏</button>
         <button class="btn side" id="btn-difficulty">选择难度</button>
       </div>
+      <button type="button" class="btn" id="btn-rank">🏆 排行</button>
     </div>
 
     <!-- 装备选择 -->
@@ -390,6 +459,17 @@
       <input type="file" id="boss-file" accept="image/*" style="display:none" />
       <div class="hint">弹道最多 5 条 · 攻速最多减 90% · 伤害最多 +3<br>Boss 形象：电脑上可复制图片后按 Ctrl+V 粘贴；手机/电脑都可点「上传图片」选择本地图片更换</div>
       <button class="btn small" id="btn-settings-back">返 回</button>
+    </div>
+
+    <!-- 排行榜 -->
+    <div id="rank" class="overlay">
+      <div class="panel-title">🏆 排 行 榜</div>
+      <div class="rank-name-row">
+        <input type="text" id="rank-name-input" maxlength="12" placeholder="输入你的玩家名称" />
+        <button type="button" class="btn small" id="btn-rank-save">保存</button>
+      </div>
+      <div class="rank-list" id="rank-list"></div>
+      <button class="btn small" id="btn-rank-back">返 回</button>
     </div>
 
     <!-- 游戏内设置（暂停）：手机无键盘时点击左上角 ⚙ 打开 -->
@@ -496,6 +576,16 @@
     enemyHpPerLevels: 3,
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
+
+    // 特殊敌人（治疗型 / 防御型）
+    specialWeights: { normal: 70, healer: 16, defender: 14 }, // 生成时按权重随机分配
+    healInterval: 1.2,        // 治疗型：每 1.2 秒对范围内敌人治疗一次
+    healRadius: 150,          // 治疗半径
+    healAmount: 2,            // 每次治疗回复血量
+    defenderInvulnCycle: 3,   // 防御型：每 3 秒开启一次无敌状态
+    defenderInvulnDuration: 1, // 无敌持续 1 秒
+    enemyDriftMin: 25,        // 普通敌人水平漂移速度下限（碰到左右界面反弹）
+    enemyDriftMax: 70,        // 普通敌人水平漂移速度上限
 
     // 敌机子弹
     enemyBulletSpeed: 240,
@@ -672,13 +762,24 @@
     return names[0];
   }
 
-  /** 创建球形敌人（levelName: small/medium/large/xlarge）。centerX/Y 为球心；parentSpeed 存在表示分裂球（向四周散开） */
-  function createSphereEnemy(state, levelName, centerX, centerY, parentSpeed) {
+  /** 随机分配敌人特殊能力（治疗型/防御型/普通） */
+  function pickEnemySpecial(state) {
+    var cfg = state.config;
+    var r = Math.random() * 100;
+    if (r < cfg.specialWeights.healer) return 'healer';
+    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender) return 'defender';
+    return 'normal';
+  }
+
+  /** 创建球形敌人（levelName: small/medium/large/xlarge）。centerX/Y 为球心；parentSpeed 存在表示分裂球（向四周散开，并继承母球特殊能力） */
+  function createSphereEnemy(state, levelName, centerX, centerY, parentSpeed, parentSpecial) {
     var cfg = state.config;
     var scfg = cfg.enemySpheres[levelName];
     var r = scfg.radius;
     var speedRange = getEnemySpeedRange(state);
     var speed = (speedRange.min + Math.random() * (speedRange.max - speedRange.min)) * scfg.speedFactor;
+    // 普通敌人带随机水平漂移（左右边界反弹的前提）
+    var drift = (Math.random() < 0.5 ? -1 : 1) * (cfg.enemyDriftMin + Math.random() * (cfg.enemyDriftMax - cfg.enemyDriftMin));
     var enemy = {
       id: newId(state),
       type: levelName,
@@ -688,12 +789,17 @@
       width: r * 2,
       height: r * 2,
       radius: r,
-      vx: 0,
+      vx: drift,
       vy: speed,
       speed: speed,
       hp: Math.max(1, Math.round(getEnemyHp(state) * scfg.hpFactor)),
       maxHp: 0,
-      score: scfg.score
+      score: scfg.score,
+      special: parentSpecial !== undefined ? parentSpecial : pickEnemySpecial(state),
+      invulnUntil: 0,          // 防御型：无敌截止时间
+      invulnTimer: cfg.defenderInvulnCycle, // 防御型：无敌周期计时
+      healTimer: cfg.healInterval,          // 治疗型：治疗计时
+      healTarget: null          // 治疗型：当前治疗目标 id（用于画连接线）
     };
     enemy.maxHp = enemy.hp;
     if (parentSpeed !== undefined) {
@@ -717,7 +823,7 @@
     return enemy;
   }
 
-  /** 分裂：中球及以上死亡时，在母球位置生成 2~3 个低一级球 */
+  /** 分裂：中球及以上死亡时，在母球位置生成 2~3 个低一级球（子球继承母球特殊能力） */
   function splitEnemy(state, parent) {
     var level = parent.level;
     if (!level || level <= 0) return;
@@ -727,7 +833,7 @@
     var cx = parent.x + parent.width / 2;
     var cy = parent.y + parent.height / 2;
     for (var i = 0; i < n; i++) {
-      var child = createSphereEnemy(state, childName, cx, cy, parent.speed || 100);
+      var child = createSphereEnemy(state, childName, cx, cy, parent.speed || 100, parent.special);
       state.enemies.push(child);
     }
   }
@@ -1048,10 +1154,58 @@
     return clamp(state.boss.hp / state.boss.maxHp, 0, 1);
   }
 
+  // ==================== 特殊敌人逻辑 ====================
+
+  /** 治疗型敌人：周期性对自身周围最近的敌人回血（不治疗同类），并记录治疗目标用于绘制连接线 */
+  function updateHealers(state, dt) {
+    var cfg = state.config;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var h = state.enemies[i];
+      if (h.special !== 'healer' || h.hp <= 0) continue;
+      h.healTimer -= dt;
+      if (h.healTimer <= 0) {
+        h.healTimer = cfg.healInterval;
+        var cx = h.x + h.width / 2;
+        var cy = h.y + h.height / 2;
+        var best = null;
+        var bestDist = cfg.healRadius;
+        for (var j = 0; j < state.enemies.length; j++) {
+          var t = state.enemies[j];
+          if (t === h || t.special === 'healer') continue;
+          var dx = (t.x + t.width / 2) - cx;
+          var dy = (t.y + t.height / 2) - cy;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          if (d < bestDist) { best = t; bestDist = d; }
+        }
+        if (best) {
+          best.hp += cfg.healAmount;
+          h.healTarget = best.id;
+        } else {
+          h.healTarget = null;
+        }
+      }
+    }
+  }
+
+  /** 防御型敌人：每 defenderInvulnCycle 秒开启一次 defenderInvulnDuration 秒的无敌状态 */
+  function updateDefenders(state, dt) {
+    var cfg = state.config;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var d = state.enemies[i];
+      if (d.special !== 'defender' || d.hp <= 0) continue;
+      d.invulnTimer -= dt;
+      if (d.invulnTimer <= 0) {
+        d.invulnTimer = cfg.defenderInvulnCycle;
+        d.invulnUntil = state.time + cfg.defenderInvulnDuration;
+      }
+    }
+  }
+
   // ==================== 伤害结算（敌机/BOSS） ====================
 
-  /** 对敌机/BOSS 造成伤害；返回是否击毁 */
+  /** 对敌机/BOSS 造成伤害；返回是否击毁（防御型敌人无敌期间免疫） */
   function hurtEnemy(state, enemy, damage) {
+    if (enemy.invulnUntil && enemy.invulnUntil > state.time) return false; // 防御型：无敌状态免疫伤害
     enemy.hp -= damage;
     if (enemy.hp <= 0) {
       var idx = state.enemies.indexOf(enemy);
@@ -1303,14 +1457,20 @@
     }
 
     // 移动敌机（普通球向下；分裂球带 vx/vy 自由散开）
+    // 左右界面反弹；通过下方/上方界面时回卷到另一侧重新出现（敌人不会消失，需击杀清除）
     for (var i = state.enemies.length - 1; i >= 0; i--) {
       var e = state.enemies[i];
       e.x += (e.vx || 0) * dt;
       e.y += (e.vy !== undefined ? e.vy : e.speed) * dt;
-      if (e.y > cfg.height + 60 || e.x < -80 || e.x > cfg.width + 80) {
-        state.enemies.splice(i, 1);
-      }
+      if (e.x < 0) { e.x = 0; e.vx = Math.abs(e.vx || 0); }
+      if (e.x + e.width > cfg.width) { e.x = cfg.width - e.width; e.vx = -Math.abs(e.vx || 0); }
+      if (e.y > cfg.height + 60) { e.y = -e.height - 20; }
+      if (e.y + e.height < -80) { e.y = cfg.height + 40; }
     }
+
+    // 特殊敌人逻辑：治疗型（给范围内敌人回血）与防御型（周期性无敌）
+    updateHealers(state, dt);
+    updateDefenders(state, dt);
 
     // BOSS 逻辑
     updateBoss(state, dt);
@@ -1558,6 +1718,7 @@
     getBulletSize: getBulletSize,
     getLaserWidth: getLaserWidth,
     damagePlayer: damagePlayer,
+    hurtEnemy: hurtEnemy,
     spawnBoss: spawnBoss,
     bossFire: bossFire,
     getBossHpRatio: getBossHpRatio,
@@ -1623,7 +1784,8 @@
     menu: document.getElementById('menu'),
     loadout: document.getElementById('loadout'),
     difficulty: document.getElementById('difficulty'),
-    settings: document.getElementById('settings')
+    settings: document.getElementById('settings'),
+    rank: document.getElementById('rank')
   };
 
   function showPanel(name) {
@@ -1944,6 +2106,129 @@
   var btnGameMenu = document.getElementById('btn-game-menu');
   if (btnGameMenu) {
     btnGameMenu.addEventListener('click', function () { backToMenu(); });
+  }
+
+  // ==================== 分数排行榜 ====================
+
+  var RANK_KEY = 'sf_scores';
+  var NAME_KEY = 'sf_name';
+  var pendingRankScore = null; // 死亡时若尚未命名，暂存本次成绩
+
+  function loadScores() {
+    try {
+      var raw = localStorage.getItem(RANK_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (err) { return []; }
+  }
+
+  function saveScores(arr) {
+    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr.slice(0, 20))); } catch (err) {}
+  }
+
+  function getPlayerName() {
+    try { return (localStorage.getItem(NAME_KEY) || '').trim(); } catch (err) { return ''; }
+  }
+
+  function setPlayerName(n) {
+    try { localStorage.setItem(NAME_KEY, n); } catch (err) {}
+  }
+
+  function addScoreEntry(name, score, level, timeSec) {
+    var arr = loadScores();
+    // 同名玩家只保留最高分：新分更高则替换旧记录，新分不更高则忽略
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].name === name) {
+        if (score <= arr[i].score) return;
+        arr.splice(i, 1);
+        break;
+      }
+    }
+    arr.push({ name: name, score: score, level: level, time: timeSec });
+    arr.sort(function (a, b) { return b.score - a.score; });
+    saveScores(arr);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function renderRankList() {
+    var list = document.getElementById('rank-list');
+    if (!list) return;
+    // 同名玩家只取最高分，再按分数降序取前 10
+    var all = loadScores();
+    var bestByName = {};
+    all.forEach(function (s) {
+      if (!bestByName[s.name] || s.score > bestByName[s.name].score) bestByName[s.name] = s;
+    });
+    var arr = Object.keys(bestByName).map(function (k) { return bestByName[k]; })
+      .sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
+    var me = getPlayerName();
+    list.innerHTML = '';
+    if (arr.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">暂无记录，快去创造你的战绩吧！</div>';
+      return;
+    }
+    var medal = ['🥇', '🥈', '🥉'];
+    arr.forEach(function (s, i) {
+      var row = document.createElement('div');
+      row.className = 'rank-row' + (s.name === me ? ' rank-me' : '');
+      row.innerHTML =
+        '<span class="rank-no">' + (medal[i] || (i + 1)) + '</span>' +
+        '<span class="rank-name">' + escHtml(s.name) + '</span>' +
+        '<span class="rank-lv">Lv.' + s.level + '</span>' +
+        '<span class="rank-score">' + s.score + ' 分</span>';
+      list.appendChild(row);
+    });
+  }
+
+  function initRankPanel(focusInput) {
+    var input = document.getElementById('rank-name-input');
+    if (input) {
+      input.value = getPlayerName();
+      if (focusInput) setTimeout(function () { input.focus(); }, 100);
+    }
+    renderRankList();
+  }
+
+  function openRankPanel(focusInput) {
+    showPanel('rank');
+    initRankPanel(focusInput);
+  }
+
+  var btnRank = document.getElementById('btn-rank');
+  if (btnRank) {
+    btnRank.addEventListener('click', function () { openRankPanel(false); });
+  }
+  var btnRankBack = document.getElementById('btn-rank-back');
+  if (btnRankBack) {
+    btnRankBack.addEventListener('click', function () {
+      if (pendingRankScore) pendingRankScore = null; // 放弃未命名暂存
+      showPanel('menu');
+      updateMenuConfig();
+    });
+  }
+  var btnRankSave = document.getElementById('btn-rank-save');
+  if (btnRankSave) {
+    btnRankSave.addEventListener('click', function () {
+      var input = document.getElementById('rank-name-input');
+      var n = (input ? input.value : '').trim().slice(0, 12);
+      if (!n) { showToast('请输入玩家名称'); return; }
+      setPlayerName(n);
+      if (pendingRankScore) {
+        addScoreEntry(n, pendingRankScore.score, pendingRankScore.level, pendingRankScore.timeSec);
+        pendingRankScore = null;
+        showToast('本次得分已记录！');
+        setTimeout(function () { backToMenu(); }, 900);
+        return;
+      }
+      renderRankList();
+      showToast('玩家名称已保存');
+    });
   }
 
   // 初始化界面
@@ -2366,22 +2651,27 @@
 
   // ==================== 敌机 / 子弹 / 道具绘制 ====================
 
-  /** 球形敌人：分级球体 + 中心血量数字（小/中/大/超大四等级） */
+  /** 球形敌人：分级球体 + 中心血量数字（小/中/大/超大四等级）；治疗型绿色+连接线，防御型金色+无敌护盾 */
   function drawEnemy(e) {
     var cx = e.x + e.width / 2;
     var cy = e.y + e.height / 2;
     var r = e.radius || e.width / 2;
     var colors = { small: '#ff6b6b', medium: '#ff9f43', large: '#c44dff', xlarge: '#ff4d8a' };
+    // 特殊类型覆盖配色：治疗型=翠绿，防御型=金黄
+    if (e.special === 'healer') colors = { small: '#3ddc84', medium: '#3ddc84', large: '#2ecf7a', xlarge: '#27c46f' };
+    if (e.special === 'defender') colors = { small: '#ffd166', medium: '#ffd166', large: '#ffc94d', xlarge: '#f5b93a' };
     var col = colors[e.type] || '#ff6b6b';
+    // 防御型无敌状态：金色脉冲描边 + 护盾环
+    var defending = e.special === 'defender' && e.invulnUntil && e.invulnUntil > state.time;
     ctx.save();
     // 外发光
-    ctx.shadowColor = col;
-    ctx.shadowBlur = 10 + r * 0.25;
+    ctx.shadowColor = defending ? '#fff8dc' : col;
+    ctx.shadowBlur = (defending ? 22 : 10 + r * 0.25);
     // 球体径向渐变
     var g = ctx.createRadialGradient(cx - r * 0.32, cy - r * 0.32, r * 0.15, cx, cy, r);
-    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0, defending ? '#ffffff' : '#ffffff');
     g.addColorStop(0.28, col);
-    g.addColorStop(1, '#5a1030');
+    g.addColorStop(1, e.special === 'healer' ? '#0f4a2f' : (e.special === 'defender' ? '#5a4a10' : '#5a1030'));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -2396,6 +2686,42 @@
     ctx.beginPath();
     ctx.arc(cx - r * 0.32, cy - r * 0.32, r * 0.2, 0, Math.PI * 2);
     ctx.fill();
+    // 防御型无敌护盾环
+    if (defending) {
+      var pulse = 0.55 + 0.45 * Math.sin(state.time * 18);
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = '#fff8dc';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffe9a3';
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+    // 治疗型：向治疗目标画绿色能量连接线
+    if (e.special === 'healer' && e.healTarget) {
+      for (var ti = 0; ti < state.enemies.length; ti++) {
+        var t = state.enemies[ti];
+        if (t.id !== e.healTarget) continue;
+        var tx = t.x + t.width / 2;
+        var ty = t.y + t.height / 2;
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = 'rgba(61, 220, 132, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#3ddc84';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+        break;
+      }
+    }
     // 中心血量数字
     var hpNum = Math.max(0, Math.ceil(e.hp));
     var fontSize = Math.max(9, Math.round(r * 0.95));
@@ -2413,6 +2739,16 @@
       ctx.beginPath();
       ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
       ctx.stroke();
+    }
+    // 特殊类型角标（治疗=十字，防御=盾）
+    if (e.special === 'healer') {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.fillText('✚', cx, cy - r - 2);
+    } else if (e.special === 'defender') {
+      ctx.fillStyle = defending ? '#fff' : '#7a5c00';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.fillText('⛨', cx, cy - r - 2);
     }
     ctx.restore();
   }
@@ -3487,13 +3823,22 @@
       if (state.powerups.length < powerupBefore) soundEvents.powerup = true;
       if (statusBefore !== 'gameover' && state.status === 'gameover') {
         soundEvents.gameover = true;
-        // 死亡后自动返回初始界面（短暂显示结算后自动回主菜单，手机无键盘也能继续）
-        if (!gameoverReturnScheduled) {
+        // 记录成绩：已命名直接入榜并在 2 秒后自动回主菜单；未命名打开排行榜引导命名（暂停自动返回，避免打断输入）
+        var pname = getPlayerName();
+        if (pname) {
+          addScoreEntry(pname, state.score, state.level, Math.floor(state.time));
           gameoverReturnScheduled = true;
           returnToMenuTimer = setTimeout(function () {
             gameoverReturnScheduled = false;
             backToMenu();
           }, 2000);
+        } else {
+          pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time) };
+          clearTimeout(returnToMenuTimer);
+          returnToMenuTimer = null;
+          gameoverReturnScheduled = false;
+          openRankPanel(true);
+          showToast('输入玩家名称，记录本次得分');
         }
       }
       if (!bossBefore && state.boss) soundEvents.boss = true;
