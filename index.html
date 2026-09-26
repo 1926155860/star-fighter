@@ -472,6 +472,23 @@
     .ship-card .ship-stats { font-size: 11px; color: #8aa0c8; line-height: 1.6; margin-top: 4px; }
 
     /* ===== 游戏内设置（手机无键盘时使用） ===== */
+    #speed-btn {
+      position: fixed;
+      top: 66px;
+      left: 12px;
+      z-index: 25;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #ffd166;
+      background: rgba(40, 28, 6, 0.82);
+      color: #ffd166;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255, 209, 102, 0.3);
+      display: none;
+    }
     #in-game-btn {
       position: fixed;
       top: 12px;
@@ -694,6 +711,7 @@
   </div>
 
   <button type="button" id="in-game-btn" title="设置">⚙</button>
+  <button type="button" id="speed-btn" title="游戏倍速">⏩ 1x</button>
 
   <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
   <div id="buff-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,460px);background:rgba(3,8,30,0.96);border:1px solid #4ee0ff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 0 30px rgba(78,224,255,0.35);">
@@ -856,10 +874,17 @@
       phantom: { label: '幻影', speed: 1.1,  fire: 1.0,  hp: 0.9,  color: '#c98bff' }
     },
 
-    // 多样 Boss（弹幕模式按波次轮换）
-    bossModes: ['fan', 'spiral', 'ring', 'aimed'],
-    bossNames: { fan: '恶魔·炮手', spiral: '恶魔·旋翼', ring: '恶魔·领主', aimed: '恶魔·猎手' },
-    bossModeHpFactor: { fan: 1, spiral: 1.1, ring: 1.25, aimed: 1.05 },
+    // 多样 Boss（弹幕模式按波次轮换起点，Boss 在场时按固定顺序循环 20 种攻击方式）
+    // P7：20 种规律弹幕——按 patternIdx 顺序循环；Boss 弹幕均不可被玩家抵消
+    bossModes: ['fan', 'spiral', 'ring', 'aimed', 'cross', 'doubleRing', 'waves', 'rain', 'scatter', 'aimedFan', 'wall', 'gates', 'star', 'petals', 'spiralRing', 'zigzag', 'tracking', 'storm', 'curvy', 'finale'],
+    bossNames: {
+      fan: '恶魔·炮手', spiral: '恶魔·旋翼', ring: '恶魔·领主', aimed: '恶魔·猎手',
+      cross: '恶魔·十字', doubleRing: '恶魔·双环', waves: '恶魔·浪涌', rain: '恶魔·暴雨',
+      scatter: '恶魔·散弹', aimedFan: '恶魔·狙击', wall: '恶魔·壁垒', gates: '恶魔·闸门',
+      star: '恶魔·星坠', petals: '恶魔·花葬', spiralRing: '恶魔·涡环', zigzag: '恶魔·折光',
+      tracking: '恶魔·追猎', storm: '恶魔·风暴', curvy: '恶魔·曲蛇', finale: '恶魔·终幕'
+    },
+    bossModeHpFactor: { fan: 1, spiral: 1.1, ring: 1.25, aimed: 1.05, cross: 1, doubleRing: 1.2, waves: 1, rain: 1, scatter: 1.1, aimedFan: 1.15, wall: 1.3, gates: 1.1, star: 1.2, petals: 1.15, spiralRing: 1.25, zigzag: 1, tracking: 1.15, storm: 1.3, curvy: 1.05, finale: 1.4 },
 
     // 难度
     difficulty: 1,           // 1 ~ 10
@@ -880,6 +905,7 @@
     enemyHpPerLevels: 3,
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
+    maxEnemies: 50,          // P7：地图上最多 50 个敌对单位；溢出分裂转化为不可抵消弹幕
 
     // 特殊敌人（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客 + P4 火焰兵/雷电兵/自爆兵）
     specialWeights: { normal: 36, healer: 7, defender: 7, chaser: 6, armored: 4, spreader: 4, devourer: 6, charger: 7, tank: 5, assassin: 6, flamer: 6, stormer: 5, suicider: 5 },
@@ -1347,6 +1373,8 @@
 
   function spawnEnemy(state) {
     var cfg = state.config;
+    // P7：地图上最多 50 个敌对单位（含克隆体）——达到上限后不再自然生成
+    if (state.enemies.length >= cfg.maxEnemies) return null;
     // P4：克隆体——1% 概率、一局只出现一次、与玩家飞机一模一样
     if (!state.cloneSpawned && Math.random() < cfg.cloneEnemyChance) {
       state.cloneSpawned = true;
@@ -1384,19 +1412,38 @@
     return enemy;
   }
 
-  /** 分裂：中球及以上死亡时，在母球位置生成 2~3 个低一级球（子球继承母球特殊能力） */
+  /** 分裂：中球及以上死亡时，在母球位置生成 2~3 个低一级球（子球继承母球特殊能力）
+   *  P7：地图上限 50——若分裂会超过上限，超出的分裂数量转化为不可抵消的弹幕（数量与应分裂数一致） */
   function splitEnemy(state, parent) {
     var level = parent.level;
     if (!level || level <= 0) return;
+    var cfg = state.config;
     var names = ['small', 'medium', 'large', 'xlarge'];
     var childName = names[level - 1];
     var n = 2 + Math.floor(Math.random() * 2); // 2~3 个
     var cx = parent.x + parent.width / 2;
     var cy = parent.y + parent.height / 2;
-    for (var i = 0; i < n; i++) {
+    var space = Math.max(0, cfg.maxEnemies - state.enemies.length);
+    var make = Math.min(n, space);
+    var overflow = n - make; // 无法生成的溢出分裂 → 转弹幕
+    for (var i = 0; i < make; i++) {
       var child = createSphereEnemy(state, childName, cx, cy, parent.speed || 100, parent.special);
       state.codexEvents.push(child.special === 'normal' ? 'sphere:' + child.type : child.special);
       state.enemies.push(child);
+    }
+    // P7：溢出分裂全部转化为不可抵消弹幕（数量与分裂数量一致，向四周散射）
+    for (var oi = 0; oi < overflow; oi++) {
+      var oAng = (oi / overflow) * Math.PI * 2 + Math.random() * 0.6;
+      state.enemyBullets.push({
+        id: newId(state),
+        x: cx - cfg.enemyBulletWidth / 2,
+        y: cy - cfg.enemyBulletHeight / 2,
+        width: cfg.enemyBulletWidth,
+        height: cfg.enemyBulletHeight,
+        vx: Math.cos(oAng) * 220,
+        vy: Math.sin(oAng) * 220,
+        noCancel: true, special: true
+      });
     }
   }
 
@@ -1679,32 +1726,21 @@
     return cfg.wingmanDamage + state.damageBonus;
   }
 
+  /** P7：飞机被击中后不掉血——常规受击（敌弹 / 身体碰撞 / Boss 轰炸）全部免疫。
+   *  吞噬者武器的主动碰撞 1:1 扣血属攻击机制，保留在碰撞逻辑中。 */
   function damagePlayer(state) {
     var cfg = state.config;
-    // P5：吞噬者模式——自身为球形血量（初始 50），扣血而非扣命
-    if (state.weapon === 'devour') {
-      state.devourHp = Math.max(0, state.devourHp - 1);
-      state.invincibleUntil = state.time + cfg.invincibleDuration;
-      state.combo = 0; // 被击中：连击重置
-      if (state.devourHp <= 0) killDevourPlayer(state);
-      return state.devourHp;
-    }
-    state.lives = Math.max(0, state.lives - 1);
+    // P5 原逻辑（吞噬者扣球形血 / 常规扣命）在 P7 改为受击不掉血
+    state.combo = 0; // 被击中：连击重置（保留连击惩罚，不掉血）
     state.invincibleUntil = state.time + cfg.invincibleDuration;
-    state.combo = 0; // 被击中：连击重置
-    return state.lives;
+    return state.weapon === 'devour' ? state.devourHp : state.lives;
   }
 
-  /** P6：Boss 常驻轰炸命中——玩家只剩 1 血（若已 1 血保持不变），附短暂无敌帧 */
+  /** P6/P7：Boss 常驻轰炸命中——P7 起飞机被击中不掉血（仅保留预警爆炸视觉与连击重置） */
   function setPlayerToOneHp(state) {
     var cfg = state.config;
     state.combo = 0;
     state.invincibleUntil = state.time + cfg.invincibleDuration;
-    if (state.weapon === 'devour') {
-      state.devourHp = 1;
-    } else {
-      state.lives = 1;
-    }
     return state;
   }
 
@@ -1851,7 +1887,9 @@
       width: cfg.enemyBulletWidth,
       height: cfg.enemyBulletHeight,
       vx: o.vx,
-      vy: o.vy
+      vy: o.vy,
+      noCancel: !!o.noCancel,  // P7：不可抵消弹幕（Boss 弹幕 / 自爆 / 分裂溢出）
+      special: !!o.special
     });
     return state.enemyBullets[state.enemyBullets.length - 1];
   }
@@ -1971,6 +2009,7 @@
       nextFire: cfg.bossFireInterval,
       mode: mode,
       name: cfg.bossNames[mode] || '恶魔',
+      patternIdx: Math.floor(state.wave / cfg.waveBossEvery) - 1, // P7：20 种弹幕规律轮换起点（按波次定起点，逐轮循环）
       spiralAngle: Math.random() * Math.PI * 2, // 螺旋弹幕起始角
       fireSub: 0, // 部分模式连发计数器
       invuln: 2,   // 进场保护：短暂无敌，让玩家看清 Boss 形象
@@ -2000,77 +2039,146 @@
     return pool.slice(0, count);
   }
 
+  /** P7：Boss 20 种规律弹幕——按 patternIdx 固定顺序循环；全部弹幕 noCancel 不可被玩家抵消 */
   function bossFire(state) {
     var cfg = state.config;
     var boss = state.boss;
     if (!boss) return false;
     var cx = boss.x + boss.width / 2;
     var y = boss.y + boss.height;
-    var mode = boss.mode || 'fan';
+    var mode = cfg.bossModes[(boss.patternIdx || 0) % cfg.bossModes.length];
+    var spd = cfg.bossBulletSpeed;
+    var bspd = spd * 0.85;
+    // 朝玩家方向基准角
+    var pcx = state.player ? state.player.x + state.player.width / 2 : cx;
+    var pcy = state.player ? state.player.y + state.player.height / 2 : cfg.height;
+    var aim = Math.atan2(pcy - y, pcx - cx);
+    var EB = function (ang, speed, extra) {
+      var o = { x: cx - cfg.enemyBulletWidth / 2, y: y, vx: Math.sin(ang) * speed, vy: Math.cos(ang) * speed, noCancel: true };
+      if (extra) for (var ek in extra) o[ek] = extra[ek];
+      pushEnemyBullet(state, o);
+    };
 
     if (mode === 'spiral') {
-      // 螺旋弹幕：两束反向旋转
+      // 双螺旋：两束反向旋转
       boss.spiralAngle += 0.42;
-      boss.fireSub = (boss.fireSub || 0) + 1;
-      for (var si = 0; si < 2; si++) {
-        var sAng = boss.spiralAngle + (si === 0 ? 0 : Math.PI);
-        pushEnemyBullet(state, {
-          x: cx - cfg.enemyBulletWidth / 2,
-          y: y,
-          vx: Math.sin(sAng) * cfg.bossBulletSpeed * 0.85,
-          vy: Math.cos(sAng) * cfg.bossBulletSpeed * 0.85
-        });
-      }
-      return true;
-    }
-
-    if (mode === 'ring') {
+      EB(boss.spiralAngle, bspd);
+      EB(boss.spiralAngle + Math.PI, bspd);
+    } else if (mode === 'ring') {
       // 环形爆发：全向 10 弹
-      var n = 10;
-      var baseAng = Math.atan2(cfg.height - y, cx - cx); // 朝下
-      for (var ri = 0; ri < n; ri++) {
-        var rAng = baseAng + (ri / n) * Math.PI * 2;
-        pushEnemyBullet(state, {
-          x: cx - cfg.enemyBulletWidth / 2,
-          y: y,
-          vx: Math.sin(rAng) * cfg.bossBulletSpeed * 0.72,
-          vy: Math.cos(rAng) * cfg.bossBulletSpeed * 0.72
-        });
-      }
-      return true;
-    }
-
-    if (mode === 'aimed') {
-      // 瞄准弹：朝玩家方向 3 连发
-      var pcx = state.player ? state.player.x + state.player.width / 2 : cx;
-      var pcy = state.player ? state.player.y + state.player.height / 2 : cfg.height;
-      var base = Math.atan2(pcy - y, pcx - cx);
+      for (var ri = 0; ri < 10; ri++) EB((ri / 10) * Math.PI * 2, bspd * 0.85);
+    } else if (mode === 'aimed') {
+      // 瞄准连发：3 连
       boss.fireSub = (boss.fireSub || 0) + 1;
-      var burst = 1 + Math.floor(boss.fireSub / 2); // 每两次触发 1/2 连发
+      var burst = 1 + Math.floor(boss.fireSub / 2);
       if (burst > 3) { boss.fireSub = 0; burst = 1; }
-      for (var ai = 0; ai < burst; ai++) {
-        var aAng = base + (ai - (burst - 1) / 2) * 0.16;
-        pushEnemyBullet(state, {
-          x: cx - cfg.enemyBulletWidth / 2,
-          y: y,
-          vx: Math.sin(aAng) * cfg.bossBulletSpeed * 0.95,
-          vy: Math.cos(aAng) * cfg.bossBulletSpeed * 0.95
-        });
+      for (var ai = 0; ai < burst; ai++) EB(aim + (ai - (burst - 1) / 2) * 0.16, spd * 0.95);
+    } else if (mode === 'cross') {
+      // 十字交叉：四向 + 对角
+      EB(aim, spd * 0.9); EB(aim + Math.PI / 2, spd * 0.9); EB(aim + Math.PI, spd * 0.9); EB(aim - Math.PI / 2, spd * 0.9);
+    } else if (mode === 'doubleRing') {
+      // 双环：内外两圈反向旋转
+      boss.spiralAngle = boss.spiralAngle || 0;
+      boss.spiralAngle += 0.3;
+      for (var dr = 0; dr < 8; dr++) { EB(boss.spiralAngle + (dr / 8) * Math.PI * 2, bspd * 0.6); EB(-boss.spiralAngle + (dr / 8) * Math.PI * 2, bspd * 0.95); }
+    } else if (mode === 'waves') {
+      // 波浪横移：一组从左到右正弦横弹
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      var wCount = 7;
+      var baseX = 20 + ((boss.fireSub * 90) % (cfg.width - 140));
+      for (var wi = 0; wi < wCount; wi++) {
+        var wx = baseX + wi * 18;
+        var wob = Math.sin(boss.fireSub * 0.9 + wi) * 60;
+        pushEnemyBullet(state, { x: wx - cfg.enemyBulletWidth / 2, y: y, vx: wob, vy: 300, noCancel: true });
       }
-      return true;
+    } else if (mode === 'rain') {
+      // 弹幕雨：随机横向落点
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      for (var ri2 = 0; ri2 < 6; ri2++) {
+        var rx = Math.random() * (cfg.width - 60) + 30;
+        pushEnemyBullet(state, { x: rx - cfg.enemyBulletWidth / 2, y: -10, vx: 0, vy: 260 + Math.random() * 120, noCancel: true });
+      }
+    } else if (mode === 'scatter') {
+      // 全向散射：12 弹随机
+      for (var si = 0; si < 12; si++) EB(Math.random() * Math.PI * 2, bspd * (0.6 + Math.random() * 0.6));
+    } else if (mode === 'aimedFan') {
+      // 狙击扇形：朝玩家 5 弹窄扇
+      for (var af = 0; af < 5; af++) EB(aim + (af - 2) * 0.13, spd * 0.98);
+    } else if (mode === 'wall') {
+      // 弹幕墙：横排 9 弹同步下压
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      var rows = 1 + (boss.fireSub % 2); // 交替单/双排
+      for (var wl = 0; wl < 9; wl++) {
+        var wx2 = 30 + wl * ((cfg.width - 60) / 8);
+        pushEnemyBullet(state, { x: wx2 - cfg.enemyBulletWidth / 2, y: y - (rows === 2 ? 26 : 0), vx: 0, vy: 320, noCancel: true });
+      }
+    } else if (mode === 'gates') {
+      // 闸门交错：上下错落两排
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      for (var gt = 0; gt < 8; gt++) {
+        var gx = 40 + gt * ((cfg.width - 80) / 7);
+        var gy2 = y - ((boss.fireSub % 2 === 0) ? ((gt % 2) * 34) : ((1 - gt % 2) * 34));
+        pushEnemyBullet(state, { x: gx - cfg.enemyBulletWidth / 2, y: gy2, vx: 0, vy: 330, noCancel: true });
+      }
+    } else if (mode === 'star') {
+      // 星形：5 向 5 层错位
+      for (var st = 0; st < 5; st++) {
+        for (var sl = 0; sl < 5; sl++) EB((st / 5) * Math.PI * 2 + sl * 0.12, bspd * (0.5 + sl * 0.18));
+      }
+    } else if (mode === 'petals') {
+      // 花瓣：6 瓣旋转
+      boss.spiralAngle = boss.spiralAngle || 0;
+      boss.spiralAngle += 0.5;
+      for (var pt = 0; pt < 6; pt++) {
+        var pa = (pt / 6) * Math.PI * 2 + boss.spiralAngle;
+        EB(pa, bspd); EB(pa + 0.22, bspd * 0.8);
+      }
+    } else if (mode === 'spiralRing') {
+      // 涡环：螺旋 + 环交替
+      boss.spiralAngle = boss.spiralAngle || 0;
+      boss.spiralAngle += 0.35;
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      if (boss.fireSub % 2 === 0) {
+        for (var sr = 0; sr < 10; sr++) EB((sr / 10) * Math.PI * 2, bspd * 0.7);
+      } else {
+        EB(boss.spiralAngle, bspd * 1.05); EB(boss.spiralAngle + Math.PI, bspd * 1.05);
+      }
+    } else if (mode === 'zigzag') {
+      // 之字形：横向摆动下坠
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      for (var zg = 0; zg < 5; zg++) {
+        var zy = y + zg * 24;
+        var zx = cx + (boss.fireSub % 2 === 0 ? zg * 70 : -zg * 70);
+        pushEnemyBullet(state, { x: zx - cfg.enemyBulletWidth / 2, y: zy, vx: (boss.fireSub % 2 === 0 ? 60 : -60), vy: 340, noCancel: true });
+      }
+    } else if (mode === 'tracking') {
+      // 追猎：2 发高速瞄准 + 2 发预判
+      EB(aim, spd * 1.1); EB(aim + 0.1, spd * 1.1);
+      EB(aim - 0.3, bspd * 0.9); EB(aim + 0.3, bspd * 0.9);
+    } else if (mode === 'storm') {
+      // 风暴：两组密集扇形
+      EB(aim - 0.5, spd * 0.9); EB(aim - 0.25, spd * 0.9); EB(aim, spd * 0.9); EB(aim + 0.25, spd * 0.9); EB(aim + 0.5, spd * 0.9);
+      EB(aim - 0.75, bspd * 0.8); EB(aim + 0.75, bspd * 0.8);
+    } else if (mode === 'curvy') {
+      // 曲蛇：正弦横向漂移下坠
+      boss.fireSub = (boss.fireSub || 0) + 1;
+      for (var cv = 0; cv < 6; cv++) {
+        var cx2 = 30 + ((boss.fireSub * 120 + cv * 130) % (cfg.width - 60));
+        pushEnemyBullet(state, { x: cx2 - cfg.enemyBulletWidth / 2, y: y - cv * 20, vx: Math.sin(boss.fireSub + cv) * 140, vy: 300, noCancel: true });
+      }
+    } else if (mode === 'finale') {
+      // 终幕：全屏密集散射
+      for (var fi3 = 0; fi3 < 16; fi3++) EB(Math.random() * Math.PI * 2, bspd * (0.5 + Math.random() * 0.9));
+    } else {
+      // fan 扇形（默认）
+      var count = cfg.bossBulletCount;
+      for (var i = 0; i < count; i++) {
+        var angle = -cfg.bossBulletSpread / 2 + (count === 1 ? 0 : (cfg.bossBulletSpread * i) / (count - 1));
+        EB(angle, spd);
+      }
     }
-
-    // fan 扇形（默认）
-    var count = cfg.bossBulletCount;
-    for (var i = 0; i < count; i++) {
-      var angle = -cfg.bossBulletSpread / 2 + (count === 1 ? 0 : (cfg.bossBulletSpread * i) / (count - 1));
-      pushEnemyBullet(state, {
-        x: cx - cfg.enemyBulletWidth / 2,
-        y: y,
-        vx: Math.sin(angle) * cfg.bossBulletSpeed,
-        vy: Math.cos(angle) * cfg.bossBulletSpeed
-      });
-    }
+    // 规律性：本轮发射完毕，进入下一种模式（20 种固定顺序循环）
+    boss.patternIdx = (boss.patternIdx || 0) + 1;
     return true;
   }
 
@@ -2478,8 +2586,9 @@
       }
     }
 
-    // 敌机子弹抵消：光束路径上的敌弹消失
+    // 敌机子弹抵消：光束路径上的敌弹消失（P7：noCancel 不可抵消弹幕——Boss/自爆/分裂溢出——不被清除）
     for (var ebi = state.enemyBullets.length - 1; ebi >= 0; ebi--) {
+      if (state.enemyBullets[ebi].noCancel) continue;
       for (var bk = 0; bk < beams.length; bk++) {
         if (rectsOverlap(beams[bk], state.enemyBullets[ebi])) {
           state.enemyBullets.splice(ebi, 1);
@@ -2524,8 +2633,9 @@
         }
       }
     }
-    // 火焰烧毁敌弹
+    // 火焰烧毁敌弹（P7：noCancel 不可抵消弹幕不被清除）
     for (var ebi2 = state.enemyBullets.length - 1; ebi2 >= 0; ebi2--) {
+      if (state.enemyBullets[ebi2].noCancel) continue;
       for (var zk = 0; zk < zones.length; zk++) {
         if (rectsOverlap(zones[zk], state.enemyBullets[ebi2])) {
           state.enemyBullets.splice(ebi2, 1);
@@ -2890,6 +3000,7 @@
           // 挥砍清除范围内敌弹
           for (var sbi = state.enemyBullets.length - 1; sbi >= 0; sbi--) {
             var seb = state.enemyBullets[sbi];
+            if (seb.noCancel) continue;
             var sebx = seb.x + seb.width / 2;
             var seby = seb.y + seb.height / 2;
             if (Math.sqrt((sebx - scx) * (sebx - scx) + (seby - scy) * (seby - scy)) < sradius) {
@@ -3096,9 +3207,10 @@
     boss.x += Math.sin(state.time * cfg.bossMoveFrequency) * cfg.bossMoveAmplitude * dt;
     boss.x = clamp(boss.x, 0, cfg.width - boss.width);
     boss.y += boss.speed * dt;
+    // P7：Boss 从下方离开后也从屏幕上方出现（回卷，不消失）
     if (boss.y - boss.height > cfg.height) {
-      state.boss = null;
-      return;
+      boss.y = -boss.height / 2;
+      boss.x = clamp(Math.random() * cfg.width, 0, cfg.width - boss.width);
     }
     boss.nextFire -= dt;
     if (boss.nextFire <= 0) {
@@ -3825,6 +3937,8 @@
 
   function showInGameBtn(visible) {
     if (inGameBtn) inGameBtn.style.display = visible ? 'block' : 'none';
+    var sb = document.getElementById('speed-btn');
+    if (sb) sb.style.display = visible ? 'block' : 'none';
     if (!visible) hideGamePanel();
   }
 
@@ -3907,6 +4021,18 @@
     inGameBtn.addEventListener('click', function () {
       audio.unlock();
       openGamePanel();
+    });
+  }
+  // P7：游戏倍速按钮（1x → 2x → 4x → 1x 循环）
+  var speedBtn = document.getElementById('speed-btn');
+  if (speedBtn) {
+    speedBtn.addEventListener('click', function () {
+      audio.unlock();
+      if (gameSpeed === 1) gameSpeed = 2;
+      else if (gameSpeed === 2) gameSpeed = 4;
+      else gameSpeed = 1;
+      speedBtn.textContent = '⏩ ' + gameSpeed + 'x';
+      showToast('游戏倍速：' + gameSpeed + 'x');
     });
   }
   var btnGameResume = document.getElementById('btn-game-resume');
@@ -4569,6 +4695,7 @@
   var isTouching = false;
   var lastTime = 0;
   var rafId = null;
+  var gameSpeed = 1;          // P7：游戏倍速（1x / 2x / 4x）
   var firingRequested = false;
   var laserVisible = false;
   var chargeVisible = false;
@@ -7047,6 +7174,7 @@
   function loop(now) {
     var dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
+    dt *= gameSpeed; // P7：游戏倍速（2x / 4x 时时间流速加倍，上限单帧 0.05*4）
 
     // 命中顿帧：短暂停止游戏逻辑（画面继续渲染），增强打击感
     if (now < hitStopUntil) {
