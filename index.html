@@ -251,6 +251,12 @@
       width: 21.8%; height: 6.2%;
       font-size: 14px; letter-spacing: 1px;
     }
+    /* 武器成长：位于"开始游戏"正下方 */
+    #btn-upgrade-menu {
+      left: 32.2%; top: 86.5%;
+      width: 33.1%; height: 6.2%;
+      font-size: 14px; letter-spacing: 2px;
+    }
     .menu-overlay .btn {
       border: 1px solid #4ee0ff;
       border-radius: 6px;
@@ -402,10 +408,12 @@
     <canvas id="game" width="480" height="640"></canvas>
 
     <!-- 游戏 HUD（游戏进行时显示） -->
-    <div id="hud" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;">
+    <div id="hud" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;box-sizing:border-box;padding:8px 12px;">
+      <div id="hud-score" style="position:absolute;top:8px;left:70px;font-size:15px;font-weight:700;color:#fff;text-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
       <div id="hud-wave" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:15px;font-weight:600;color:#7df0ff;text-shadow:0 0 8px rgba(78,224,255,0.8);letter-spacing:2px;white-space:nowrap;"></div>
-      <div id="hud-weapon-lv" style="position:absolute;top:10px;left:14px;font-size:12px;color:#9fc9ff;text-shadow:0 0 6px rgba(78,224,255,0.6);"></div>
-      <div id="hud-combo" style="position:absolute;top:10px;right:14px;font-size:14px;font-weight:600;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
+      <div id="hud-combo" style="position:absolute;top:8px;right:12px;font-size:14px;font-weight:600;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
+      <div id="hud-weapon-lv" style="position:absolute;top:30px;left:70px;font-size:12px;color:#9fc9ff;text-shadow:0 0 6px rgba(78,224,255,0.6);"></div>
+      <div id="hud-hearts" style="position:absolute;top:28px;right:12px;font-size:15px;color:#ff5a7a;text-shadow:0 0 6px rgba(255,90,122,0.8);letter-spacing:2px;"></div>
       <div id="ult-wrap" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:200px;text-align:center;pointer-events:auto;">
         <div style="height:10px;border:1px solid #4ee0ff;border-radius:5px;background:rgba(3,8,30,0.7);overflow:hidden;">
           <div id="ult-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4ee0ff,#7df0ff);transition:width .15s;"></div>
@@ -421,9 +429,10 @@
         <button class="btn side" id="btn-loadout">选择装备</button>
         <button class="btn primary start" id="btn-start">开始游戏</button>
         <button class="btn side" id="btn-difficulty">选择难度</button>
+        <button class="btn side" id="btn-upgrade-menu">武器成长</button>
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
-      <div id="menu-stars" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;">★ 0</div>
+      <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
     <!-- 装备选择 -->
@@ -2009,10 +2018,12 @@
     var lo = document.getElementById('btn-loadout');
     var st = document.getElementById('btn-start');
     var df = document.getElementById('btn-difficulty');
+    var up = document.getElementById('btn-upgrade-menu');
     var fs = Math.max(11, Math.round(16 * k));
     s.style.fontSize = fs + 'px';
     lo.style.fontSize = Math.round(fs * 0.95) + 'px';
     df.style.fontSize = Math.round(fs * 0.95) + 'px';
+    if (up) up.style.fontSize = Math.round(fs * 0.95) + 'px';
     st.style.fontSize = Math.round(fs * 1.3) + 'px';
   }
 
@@ -2157,6 +2168,8 @@
 
   var btnUpgradeOpen = document.getElementById('btn-upgrade-open');
   if (btnUpgradeOpen) btnUpgradeOpen.addEventListener('click', openUpgradePanel);
+  var btnUpgradeMenu = document.getElementById('btn-upgrade-menu');
+  if (btnUpgradeMenu) btnUpgradeMenu.addEventListener('click', openUpgradePanel);
   var btnUpgradeBack = document.getElementById('btn-upgrade-back');
   if (btnUpgradeBack) btnUpgradeBack.addEventListener('click', function () { showPanel('settings'); });
 
@@ -3438,56 +3451,8 @@
   }
 
   function drawHUD() {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px "Microsoft YaHei", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 4;
-    ctx.fillText('得分 ' + state.score, 12, 26);
-    ctx.shadowBlur = 0;
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText('Lv.' + state.level, W - 12, 26);
-
-    var wcfg = GameCore.getWeaponConfig(state);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#4ee0ff';
-    ctx.fillText('武器 · ' + wcfg.label, W / 2, 26);
-
-    var buffs = [];
-    if (state.multishotLevel > 0) buffs.push('弹道+' + state.multishotLevel);
-    if (state.fireSpeedFactor < 1) buffs.push('攻速x' + (1 / state.fireSpeedFactor).toFixed(1));
-    if (state.damageBonus > 0) buffs.push('伤害+' + state.damageBonus);
-    if (state.bulletSizeBonus > 0) buffs.push('子弹x' + (1 + state.bulletSizeBonus * state.config.bulletSizeStep).toFixed(1));
-    if (state.laserWidthBonus > 0) buffs.push('激光粗+' + state.laserWidthBonus);
-    if (buffs.length > 0) {
-      ctx.fillStyle = '#9be8ff';
-      ctx.font = '12px "Microsoft YaHei", sans-serif';
-      ctx.fillText(buffs.join('  '), W / 2, 44);
-    }
-
-    if (state.status === 'playing' || state.status === 'gameover') {
-      drawHearts(16, 40, state.lives, state.config.maxLives);
-    }
-
-    if (state.status === 'playing') {
-      if (state.boss) {
-        ctx.fillStyle = '#ff3b6b';
-        ctx.font = 'bold 14px "Microsoft YaHei", sans-serif';
-        ctx.textAlign = 'center';
-        var pulse = 0.6 + 0.4 * Math.sin(state.time * 6);
-        ctx.globalAlpha = pulse;
-        ctx.fillText('⚠ BOSS 来袭 ⚠', W / 2, 60);
-        ctx.globalAlpha = 1;
-      } else if (state.waveState === 'combat' && (state.wave % state.config.waveBossEvery === 0)) {
-        // Boss 波（每 waveBossEvery 波一次）：提示守卫敌人
-        ctx.fillStyle = 'rgba(255, 100, 150, 0.6)';
-        ctx.font = '12px "Microsoft YaHei", sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText('BOSS 波 · 清除守卫', W - 12, 60);
-      }
-    }
+    // 顶部状态信息全部由 DOM HUD 显示（得分/波次/连击/武器等级/生命/能量大招），避免与手机顶部文字重叠
+    // 此处仅保留游戏画面层，不再在 canvas 顶部绘制任何文字
   }
 
   // ==================== 全息展示舱（主菜单场景） ====================
@@ -4154,11 +4119,17 @@
 
   function updateHud() {
     if (state.status !== 'playing') return;
+    var scoreEl = document.getElementById('hud-score');
+    if (scoreEl) scoreEl.textContent = '得分 ' + state.score;
     var waveEl = document.getElementById('hud-wave');
     if (waveEl) {
-      waveEl.textContent = state.waveState === 'break'
-        ? '休 息 ' + Math.max(0, state.waveBreakTimer).toFixed(1) + 's'
-        : '第 ' + state.wave + ' 波';
+      if (state.boss) {
+        waveEl.textContent = '⚠ BOSS 来袭 ⚠';
+      } else if (state.waveState === 'break') {
+        waveEl.textContent = '休 息 ' + Math.max(0, state.waveBreakTimer).toFixed(1) + 's';
+      } else {
+        waveEl.textContent = (state.wave % state.config.waveBossEvery === 0) ? '第 ' + state.wave + ' 波 · BOSS' : '第 ' + state.wave + ' 波';
+      }
     }
     var wl = document.getElementById('hud-weapon-lv');
     if (wl) {
@@ -4171,6 +4142,14 @@
       } else {
         comboEl.textContent = '';
       }
+    }
+    var heartsEl = document.getElementById('hud-hearts');
+    if (heartsEl) {
+      var heartStr = '';
+      for (var h = 0; h < state.config.maxLives; h++) {
+        heartStr += h < state.lives ? '♥' : '♡';
+      }
+      heartsEl.textContent = heartStr;
     }
     var bar = document.getElementById('ult-bar');
     if (bar) bar.style.width = Math.round(state.energy / state.config.ultMax * 100) + '%';
