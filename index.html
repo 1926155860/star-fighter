@@ -332,11 +332,36 @@
       border-color: #ffe28a;
       box-shadow: 0 0 18px rgba(255, 209, 102, 0.6);
     }
-    /* ===== 图鉴（初始界面右上角排行榜旁） ===== */
+    /* 排行榜武器分类筛选条 */
+    .rank-weapon-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin: 6px 0 10px;
+    }
+    .rank-weapon-filter button {
+      border: 1px solid #3a5a7a;
+      background: rgba(10, 25, 50, 0.7);
+      color: #9fd4ff;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rank-weapon-filter button.on {
+      border-color: #ffd166;
+      color: #ffd166;
+      background: rgba(70, 45, 8, 0.72);
+      box-shadow: 0 0 8px rgba(255, 209, 102, 0.4);
+    }
+    /* ===== 图鉴（初始界面左下角，与右上角排行榜彻底分开） ===== */
     #btn-codex {
       position: fixed;
-      top: 14px;
-      right: 108px;
+      bottom: 14px;
+      left: 14px;
       z-index: 26;
       padding: 9px 16px;
       font-size: 14px;
@@ -658,6 +683,7 @@
           <input type="text" id="rank-name-input" maxlength="12" placeholder="输入你的玩家名称" />
           <button type="button" class="btn small" id="btn-rank-save">保存</button>
         </div>
+        <div class="rank-weapon-filter" id="rank-weapon-filter"></div>
         <div class="rank-list" id="rank-list"></div>
       </div>
       <div id="achieve-body" style="display:none;min-height:120px;"></div>
@@ -748,12 +774,15 @@
       charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' },
       flamethrower: { cooldown: 0.02, damage: 1, bulletSpeed: 0, bulletWidth: 46, bulletHeight: 96, dps: 64, flameRange: 220, flameWidth: 100, label: '火焰喷射' },
       lightning: { cooldown: 0.5, damage: 4, bulletSpeed: 620, bulletWidth: 10, bulletHeight: 22, chainCount: 3, chainRadius: 210, chainFalloff: 0.5, label: '雷电' },
-      hacker: { cooldown: 0.18, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 200, wingmanStart: 2, wingmanCost: 0.5, devourPct: 0.3, label: '黑客' }
+      // P5：蜂巢（无武器，僚机自动攻击，最多 10 架，僚机不受弹道/攻击力加成）
+      hswarm: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, wingmanStart: 1, wingmanMax: 10, label: '蜂巢' },
+      // P5：吞噬者（球形血量 50，碰撞固定 1:1 不可修正，击杀吞噬敌人初始血量与能力）
+      devour: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 0, label: '吞噬者' }
     },
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
       gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys',
-      laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic', hacker: 'magic'
+      laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
     },
     bulletSpread: 14,
 
@@ -990,9 +1019,11 @@
       nextEnemyFireTime: cfg.enemyFireInterval,
       nextPowerupTime: cfg.powerupSpawnInterval,
       lastId: 0,
-      // P4：黑客武器 / 克隆体 / 新敌人状态
+      // P5：吞噬者武器（球形血量 50）/ 克隆体 / 新敌人状态
       cloneSpawned: false,          // 克隆体一局只出现一次
-      hackerHp: cfg.weapons.hacker.hp, // 黑客模式自身血量（初始 50）
+      devourHp: cfg.weapons.devour.hp, // 吞噬者模式自身血量（初始 50）
+      devourAbilities: [],          // 已吞噬继承的敌人能力名（展示 + 碰撞加成）
+      devourBossBuffs: [],          // 已吞噬的 Boss 能力名
       codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
     };
     return state;
@@ -1110,14 +1141,33 @@
           state.bullets.push({ id: newId(state), type: 'lightningbolt', x: p.x + p.width / 2 + (Math.random() * 600 - 300), y: p.y - 40, width: 10, height: 22, vx: 0, vy: -400, damage: Math.max(1, wdmg * 4), life: 0, dmgType: 'magic' });
         }
         break;
-      case 'hacker': // 吞噬风暴：立即吞噬全场敌人（血量与能力），清空弹幕
+      case 'hswarm': // 蜂群出动：所有僚机全屏扇形齐射一轮
+        {
+          var p0 = state.player;
+          var swcx = p0.x + p0.width / 2;
+          var swcy = p0.y + p0.height / 2;
+          var swDmg = getWingmanDamage(state);
+          for (var swi = 0; swi < state.wingman; swi++) {
+            var sOff = (swi - (state.wingman - 1) / 2) * 30;
+            for (var sb = 0; sb < 6; sb++) {
+              var sAng = -Math.PI / 2 + (sb - 2.5) * 0.22;
+              state.bullets.push({ id: newId(state), type: 'wingbullet', x: swcx + sOff - 2, y: swcy - 30, width: 4, height: 9, vx: Math.cos(sAng) * 320, vy: Math.sin(sAng) * 320, damage: swDmg, life: 0, dmgType: 'phys' });
+            }
+          }
+        }
+        break;
+      case 'devour': // 吞噬风暴：立即吞噬全场敌人（血量与能力），清空弹幕
         for (var hki = state.enemies.length - 1; hki >= 0; hki--) {
           var he = state.enemies[hki];
           if (he.special === 'clone') continue;
-          state._killWeapon = 'hacker';
-          hurtEnemy(state, he, 999999, 'magic');
-          hackerDevour(state, he);
+          state._killWeapon = 'devour';
+          hurtEnemy(state, he, 999999, 'devour');
+          devourFeed(state, he);
           state.score += (he.score || 0);
+        }
+        if (state.boss) {
+          state._killWeapon = 'devour';
+          hurtBoss(state, state.boss.hp + 1, 'devour');
         }
         for (var hbi = state.enemyBullets.length - 1; hbi >= 0; hbi--) state.enemyBullets.splice(hbi, 1);
         break;
@@ -1361,9 +1411,16 @@
   function setWeapon(state, weapon) {
     if (state.config.weapons[weapon]) {
       state.weapon = weapon;
-      // P4：黑客武器——开局自带两个僚机
-      if (weapon === 'hacker' && state.wingman < state.config.weapons.hacker.wingmanStart) {
-        state.wingman = state.config.weapons.hacker.wingmanStart;
+      // P5：蜂巢——开局自带一个僚机；吞噬者——重置球形血量 50
+      if (weapon === 'hswarm' && state.wingman < state.config.weapons.hswarm.wingmanStart) {
+        state.wingman = state.config.weapons.hswarm.wingmanStart;
+      }
+      if (weapon === 'devour') {
+        state.devourHp = state.config.weapons.devour.hp;
+      }
+      // P5：武器图鉴——选择新武器时解锁对应条目
+      if (weapon === 'hswarm' || weapon === 'devour') {
+        if (state.codexEvents.indexOf(weapon) === -1) state.codexEvents.push(weapon);
       }
       return true;
     }
@@ -1418,33 +1475,12 @@
       state.flameTimer = 0.2;
       return true;
     }
-    if (state.weapon === 'hacker') {
-      // P4：黑客武器——手动僚机齐射（按住攻击键时所有僚机开火，每次消耗自身血量）
-      if (state.wingman > 0) {
-        var p = state.player;
-        var wcx = p.x + p.width / 2;
-        var wcy = p.y + p.height / 2;
-        var wdmg = getWingmanDamage(state);
-        for (var wm = 0; wm < state.wingman; wm++) {
-          var wOff = (wm - (state.wingman - 1) / 2) * 30;
-          state.bullets.push({
-            id: newId(state),
-            type: 'wingbullet',
-            x: wcx + wOff - 2,
-            y: wcy - 34,
-            width: 4,
-            height: 9,
-            vx: 0,
-            vy: -460,
-            damage: wdmg,
-            life: 0,
-            dmgType: 'phys'
-          });
-        }
-        state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost * state.wingman);
-        if (state.hackerHp <= 0) killHackerPlayer(state);
-      }
-      state.nextFireTime = state.time + getFireCooldown(state);
+    if (state.weapon === 'hswarm') {
+      // P5：蜂巢——没有武器，不发射子弹（攻击全靠僚机自动开火）
+      return true;
+    }
+    if (state.weapon === 'devour') {
+      // P5：吞噬者——没有子弹，攻击方式是碰撞伤害（见敌机碰撞处理）
       return true;
     }
     if (state.weapon === 'charge') {
@@ -1635,21 +1671,22 @@
     return true;
   }
 
-  /** P2：僚机当前伤害（含伤害加成） */
+  /** P2：僚机当前伤害；P5：蜂巢武器僚机不受攻击力/弹道加成（固定基础伤害） */
   function getWingmanDamage(state) {
     var cfg = state.config;
+    if (state.weapon === 'hswarm') return cfg.wingmanDamage;
     return cfg.wingmanDamage + state.damageBonus;
   }
 
   function damagePlayer(state) {
     var cfg = state.config;
-    // P4：黑客模式——自身为球形血量（初始 50），扣血而非扣命
-    if (state.weapon === 'hacker') {
-      state.hackerHp = Math.max(0, state.hackerHp - 1);
+    // P5：吞噬者模式——自身为球形血量（初始 50），扣血而非扣命
+    if (state.weapon === 'devour') {
+      state.devourHp = Math.max(0, state.devourHp - 1);
       state.invincibleUntil = state.time + cfg.invincibleDuration;
       state.combo = 0; // 被击中：连击重置
-      if (state.hackerHp <= 0) killHackerPlayer(state);
-      return state.hackerHp;
+      if (state.devourHp <= 0) killDevourPlayer(state);
+      return state.devourHp;
     }
     state.lives = Math.max(0, state.lives - 1);
     state.invincibleUntil = state.time + cfg.invincibleDuration;
@@ -1657,21 +1694,36 @@
     return state.lives;
   }
 
-  /** P4：黑客模式血量归零 → 游戏结束 */
-  function killHackerPlayer(state) {
-    state.hackerHp = 0;
+  /** P5：吞噬者血量归零 → 游戏结束 */
+  function killDevourPlayer(state) {
+    state.devourHp = 0;
     state.lives = 0;
     state.status = 'gameover';
   }
 
-  /** P4：黑客吞噬——击杀敌人后恢复自身血量（按敌人最大血量比例），概率继承其能力 */
-  function hackerDevour(state, enemy) {
-    var cfg = state.config;
-    var gain = Math.max(1, Math.round(enemy.maxHp * cfg.weapons.hacker.devourPct));
-    state.hackerHp = Math.min(999, state.hackerHp + gain);
-    // 概率继承被吞噬敌人的特殊能力（本局内强化僚机吞噬效果，记录在 state 上供前端展示）
-    if (enemy.special !== 'normal' && enemy.special !== 'boss' && Math.random() < 0.25) {
-      state.hackerDevoured = enemy.special;
+  /** P5：吞噬者吞噬——击杀敌人后恢复其全部初始血量，并继承其能力（含 Boss 能力） */
+  function devourFeed(state, enemy) {
+    if (enemy.maxHp > 0) {
+      state.devourHp = Math.min(999, state.devourHp + Math.round(enemy.maxHp));
+    }
+    if (enemy.special !== 'normal' && enemy.special !== 'clone') {
+      if (state.devourAbilities.indexOf(enemy.special) === -1) {
+        state.devourAbilities.push(enemy.special);
+      }
+    }
+  }
+
+  /** P5：吞噬者吞噬 Boss——恢复 Boss 全部初始血量，继承其加成能力 */
+  function devourBossFeed(state, boss) {
+    if (boss.maxHp > 0) {
+      state.devourHp = Math.min(999, state.devourHp + Math.round(boss.maxHp));
+    }
+    if (boss.buffs) {
+      for (var bi = 0; bi < boss.buffs.length; bi++) {
+        if (state.devourBossBuffs.indexOf(boss.buffs[bi]) === -1) {
+          state.devourBossBuffs.push(boss.buffs[bi]);
+        }
+      }
     }
   }
 
@@ -1781,9 +1833,9 @@
         }
         break;
       case 'wingman':
-        // P2：僚机护卫 +1；P4：黑客武器下僚机数量无上限，否则上限 wingmanMax
-        if (state.weapon === 'hacker') {
-          state.wingman += 1;
+        // P2：僚机护卫 +1；P5：蜂巢武器僚机最多 10 架，其余武器上限 3
+        if (state.weapon === 'hswarm') {
+          state.wingman = Math.min(cfg.weapons.hswarm.wingmanMax, state.wingman + 1);
         } else {
           state.wingman = Math.min(cfg.wingmanMax, state.wingman + 1);
         }
@@ -2136,8 +2188,8 @@
     if (enemy.invulnUntil && enemy.invulnUntil > state.time) return false; // 防御型：无敌状态免疫伤害
     var cfg = state.config;
     dmgType = dmgType || 'phys';
-    // P3：物抗/魔抗减免
-    var resist = getEnemyResist(state, enemy, dmgType);
+    // P3：物抗/魔抗减免；P5：'devour' 类型（吞噬者碰撞）不可被任何元素修正——固定伤害
+    var resist = (dmgType === 'devour') ? 0 : getEnemyResist(state, enemy, dmgType);
     damage = Math.max(1, Math.round(damage * (1 - resist)));
     enemy.hp -= damage;
     if (enemy.hp <= 0) {
@@ -2176,9 +2228,9 @@
       if (enemy.special === 'suicider') {
         suiciderBurst(state, enemy);
       }
-      // P4：黑客武器——吞噬被自己杀死的敌人血量与能力
-      if (state.weapon === 'hacker') {
-        hackerDevour(state, enemy);
+      // P5：吞噬者武器——吞噬被自己杀死的敌人（全部初始血量 + 能力）
+      if (state.weapon === 'devour') {
+        devourFeed(state, enemy);
       }
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
@@ -2230,6 +2282,8 @@
     if (hasBossBuff(state, 'resist50')) { physR += 0.5; magicR += 0.5; }
     physR = Math.min(0.9, physR); magicR = Math.min(0.9, magicR);
     var resist = dmgType === 'magic' ? magicR : physR;
+    // P5：吞噬者碰撞伤害不可被任何元素修正（'devour' 类型免疫 Boss 抗性）
+    if (dmgType === 'devour') resist = 0;
     damage = Math.max(1, Math.round(damage * (1 - resist)));
     boss.hp -= damage;
     if (boss.hp <= 0) {
@@ -2254,9 +2308,9 @@
           dev2.maxHp = Math.max(dev2.maxHp, dev2.hp);
         }
       }
-      // P4：黑客武器吞噬 Boss 血量（含能力继承）
-      if (state.weapon === 'hacker') {
-        hackerDevour(state, { maxHp: boss.maxHp, special: 'boss', type: 'xlarge' });
+      // P5：吞噬者武器吞噬 Boss（全部初始血量 + Boss 能力）
+      if (state.weapon === 'devour') {
+        devourBossFeed(state, boss);
       }
       // P3：Boss 加成 j「生命诅咒」：Boss 死亡后直接扣除玩家血量上限两点
       if (hasBossBuff(state, 'lifeDrain')) {
@@ -2623,8 +2677,7 @@
     updateP4Enemies(state, dt);
 
     // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）
-    // P4：黑客武器僚机为手动模式（按住攻击键才齐射），此处跳过自动开火
-    if (state.wingman > 0 && state.weapon !== 'hacker') {
+    if (state.wingman > 0) {
       state.wingmanCooldown -= dt;
       if (state.wingmanCooldown <= 0) {
         state.wingmanCooldown = cfg.wingmanCooldown;
@@ -2836,6 +2889,20 @@
     for (var k = state.enemies.length - 1; k >= 0; k--) {
       var enemy2 = state.enemies[k];
       if (rectsOverlap(state.player, enemy2)) {
+        // P5：吞噬者——碰撞伤害不可被任何元素修正：敌方扣 1、自身扣 1（带碰撞冷却，防御型无敌/克隆体免疫仍生效）
+        if (state.weapon === 'devour') {
+          if (enemy2.collideTimer === undefined) enemy2.collideTimer = 0;
+          enemy2.collideTimer -= dt;
+          if (enemy2.collideTimer <= 0) {
+            enemy2.collideTimer = 0.5;
+            if (enemy2.special !== 'clone' && !(enemy2.invulnUntil && enemy2.invulnUntil > state.time)) {
+              hurtEnemy(state, enemy2, 1, 'devour');
+            }
+            state.devourHp = Math.max(0, state.devourHp - 1);
+            if (state.devourHp <= 0) killDevourPlayer(state);
+          }
+          continue;
+        }
         if (isInvincible(state)) continue;
         if (hasShield(state)) {
           hurtEnemy(state, enemy2, 999999);
@@ -2848,7 +2915,17 @@
 
     // BOSS 撞玩家
     if (state.boss && rectsOverlap(state.player, state.boss)) {
-      if (!hasShield(state) && !isInvincible(state)) {
+      // P5：吞噬者——与 Boss 碰撞同样 1:1 固定伤害（Boss 无抗性修正，冷却 0.5s）
+      if (state.weapon === 'devour') {
+        if (state._bossCollideTimer === undefined) state._bossCollideTimer = 0;
+        state._bossCollideTimer -= dt;
+        if (state._bossCollideTimer <= 0) {
+          state._bossCollideTimer = 0.5;
+          hurtBoss(state, 1, 'devour');
+          state.devourHp = Math.max(0, state.devourHp - 1);
+          if (state.devourHp <= 0) killDevourPlayer(state);
+        }
+      } else if (!hasShield(state) && !isInvincible(state)) {
         damagePlayer(state);
       }
     }
@@ -3165,7 +3242,8 @@
     { id: 'charge', icon: '◎', name: '蓄力炮', desc: '按住蓄力\n松开爆发' },
     { id: 'flamethrower', icon: '🔥', name: '火焰喷射', desc: '持续灼烧\n烧毁弹幕' },
     { id: 'lightning', icon: '⚡', name: '雷电', desc: '连锁攻击\n跳跃伤害' },
-    { id: 'hacker', icon: '🕸', name: '黑客', desc: '吞噬敌人\n化身为球' }
+    { id: 'hswarm', icon: '🐝', name: '蜂巢', desc: '无武器\n僚机自动攻击' },
+    { id: 'devour', icon: '🩸', name: '吞噬者', desc: '碰撞攻击\n吞噬成长' }
   ];
 
   function renderWeaponGrid() {
@@ -3716,10 +3794,11 @@
 
   var RANK_KEY = 'sf_scores';
   var NAME_KEY = 'sf_name';
-  // 云端共享记分板（npoint 免费 JSON 存储；basket 内容为数组 [{name,score,level,time}]）
+  // 云端共享记分板（npoint 免费 JSON 存储；basket 内容为数组 [{name,score,level,time,weapon}]）
   // 注意：必须用 text/plain 提交（不带 Content-Type），否则 npoint 对浏览器 preflight 返回 500
   var CLOUD_RANK_URL = 'https://api.npoint.io/3dff28b9ea0bbac7b98b';
   var pendingRankScore = null; // 死亡时若尚未命名，暂存本次成绩
+  var rankWeaponFilter = 'all'; // 排行榜武器分类筛选（'all' = 全部）
 
   function loadScores() {
     try {
@@ -3731,17 +3810,19 @@
   }
 
   function saveScores(arr) {
-    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr.slice(0, 20))); } catch (err) {}
+    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr.slice(0, 40))); } catch (err) {}
   }
 
-  /** 合并并去重：同名玩家只取最高分，按分数降序 */
-  function mergeRank(list) {
+  /** 合并并去重：同武器榜内同名玩家只取最高分，按分数降序；filter 为 'all' 或武器 id */
+  function mergeRank(list, filter) {
     var m = {};
     for (var i = 0; i < list.length; i++) {
       var s = list[i];
       if (!s || !s.name || typeof s.score !== 'number') continue;
-      if (!m[s.name] || s.score > m[s.name].score) {
-        m[s.name] = { name: s.name, score: s.score, level: s.level || 1, time: s.time || 0 };
+      var w = s.weapon || 'classic';
+      if (filter && filter !== 'all' && w !== filter) continue;
+      if (!m[w + '\u0000' + s.name] || s.score > m[w + '\u0000' + s.name].score) {
+        m[w + '\u0000' + s.name] = { name: s.name, score: s.score, level: s.level || 1, time: s.time || 0, weapon: w };
       }
     }
     return Object.keys(m).map(function (k) { return m[k]; })
@@ -3791,8 +3872,8 @@
     try { localStorage.setItem(NAME_KEY, n); } catch (err) {}
   }
 
-  function addScoreEntry(name, score, level, timeSec) {
-    var merged = mergeRank(loadScores().concat([{ name: name, score: score, level: level, time: timeSec }]));
+  function addScoreEntry(name, score, level, timeSec, weapon) {
+    var merged = mergeRank(loadScores().concat([{ name: name, score: score, level: level, time: timeSec, weapon: weapon || 'classic' }]));
     saveScores(merged);
     pushRankToCloud();
     return merged;
@@ -3807,8 +3888,8 @@
   function renderRankList() {
     var list = document.getElementById('rank-list');
     if (!list) return;
-    // 同名玩家只取最高分，再按分数降序取前 10
-    var arr = mergeRank(loadScores()).slice(0, 10);
+    // 同武器榜内同名玩家只取最高分，再按分数降序取前 10
+    var arr = mergeRank(loadScores(), rankWeaponFilter).slice(0, 10);
     var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
@@ -3823,6 +3904,7 @@
         '<span class="rank-no">' + (medal[i] || (i + 1)) + '</span>' +
         '<span class="rank-name">' + escHtml(s.name) + '</span>' +
         '<span class="rank-lv">Lv.' + s.level + '</span>' +
+        '<span class="rank-w">' + (WEAPON_NAMES[s.weapon] || '经典') + '</span>' +
         '<span class="rank-score">' + s.score + ' 分</span>';
       list.appendChild(row);
     });
@@ -3851,13 +3933,28 @@
       recordScoreToRank._settled = true;
       addStars(Math.floor(state.score / 10));
     }
+    // P4：排行榜按武器分类——主副武器取攻击伤害更高的那个
+    var rankWeapon = pickRankWeapon();
     var pname = getPlayerName();
     if (pname) {
-      addScoreEntry(pname, state.score, state.level, Math.floor(state.time));
+      addScoreEntry(pname, state.score, state.level, Math.floor(state.time), rankWeapon);
       return true;
     }
-    pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time) };
+    pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time), weapon: rankWeapon };
     return false;
+  }
+
+  /** P4：主副武器中取攻击伤害更高的武器（用于排行榜分类） */
+  function pickRankWeapon() {
+    function dmg(w) {
+      var c = state.config.weapons[w];
+      return (c ? c.damage : 0) + (state.damageBonus || 0);
+    }
+    var w = state.weapon || 'gun';
+    if (state.secondaryWeapon) {
+      w = dmg(state.secondaryWeapon) > dmg(state.weapon) ? state.secondaryWeapon : state.weapon;
+    }
+    return w;
   }
 
   function addStars(n) {
@@ -3869,12 +3966,34 @@
     return p.stars;
   }
 
+  /** 渲染排行榜武器分类筛选条（全部 + 每把武器） */
+  function renderRankFilter() {
+    var box = document.getElementById('rank-weapon-filter');
+    if (!box) return;
+    box.innerHTML = '';
+    var opts = [{ id: 'all', name: '全部' }].concat(WEAPONS.map(function (w) {
+      return { id: w.id, name: w.name };
+    }));
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.className = rankWeaponFilter === o.id ? 'on' : '';
+      b.textContent = o.name;
+      b.addEventListener('click', function () {
+        rankWeaponFilter = o.id;
+        renderRankFilter();
+        renderRankList();
+      });
+      box.appendChild(b);
+    });
+  }
+
   function initRankPanel(focusInput) {
     var input = document.getElementById('rank-name-input');
     if (input) {
       input.value = getPlayerName();
       if (focusInput) setTimeout(function () { input.focus(); }, 100);
     }
+    renderRankFilter();
     renderRankList();
   }
 
@@ -3904,7 +4023,7 @@
       if (!n) { showToast('请输入玩家名称'); return; }
       setPlayerName(n);
       if (pendingRankScore) {
-        addScoreEntry(n, pendingRankScore.score, pendingRankScore.level, pendingRankScore.timeSec);
+        addScoreEntry(n, pendingRankScore.score, pendingRankScore.level, pendingRankScore.timeSec, pendingRankScore.weapon);
         pendingRankScore = null;
         renderRankList(); // 刷新榜单，让玩家看到本次成绩入榜
         showToast('本次得分已记录！');
@@ -4018,7 +4137,8 @@
     { id: 'stormer', icon: '☇', name: '雷电兵', cat: '新敌人', desc: '在小范围区域释放雷电，攻击前有红色警示圈。' },
     { id: 'suicider', icon: '💥', name: '自爆兵', cat: '新敌人', desc: '出现后 2 秒无敌并记录受击次数，死亡后转化为无法抵消的特殊弹幕。' },
     { id: 'clone', icon: '🪞', name: '克隆体', cat: '新敌人', desc: '与玩家战机一模一样，拥有玩家武器，红色攻击，15 秒后消失，无法被攻击。' },
-    { id: 'hacker', icon: '🕸', name: '黑客武器', cat: '武器', desc: '化身为球形生命体，吞噬敌人恢复血量，开局自带两个僚机。' }
+    { id: 'hswarm', icon: '🐝', name: '蜂巢武器', cat: '武器', desc: '没有武器，开局自带一个僚机，僚机自动攻击且最多 10 架，不受弹道与攻击力加成。' },
+    { id: 'devour', icon: '🩸', name: '吞噬者武器', cat: '武器', desc: '化身球形生命体，碰撞固定 1:1 伤害，击杀敌人后吞噬其全部初始血量与能力，连 Boss 能力也能继承。' }
   ];
   var CODEX_IDS = {};
   CODEX.forEach(function (c) { CODEX_IDS[c.id] = c; });
@@ -4599,19 +4719,19 @@
 
   function drawPlayer(x, y, w, h) {
     var flashing = GameCore.isInvincible(state) && Math.floor(state.time * 10) % 2 === 0;
-    // P4：黑客武器——玩家化身为球形，头顶/中心显示自身血量
-    if (state.weapon === 'hacker') {
+    // P5：吞噬者武器——玩家化身为球形，头顶/中心显示自身血量
+    if (state.weapon === 'devour') {
       var hcx = x + w / 2;
       var hcy = y + h / 2;
       ctx.save();
       ctx.globalAlpha = flashing ? 0.4 : 1;
-      // 能量球体（黑客色：暗紫+青辉）
+      // 能量球体（吞噬者色：血红+暗红辉光）
       var hg = ctx.createRadialGradient(hcx - w * 0.2, hcy - h * 0.2, 2, hcx, hcy, Math.max(w, h) * 0.55);
       hg.addColorStop(0, '#ffffff');
-      hg.addColorStop(0.35, '#c09bff');
-      hg.addColorStop(0.75, '#6a3fd6');
-      hg.addColorStop(1, '#2a1a66');
-      ctx.shadowColor = '#a86bff';
+      hg.addColorStop(0.35, '#ff9d9d');
+      hg.addColorStop(0.75, '#c22a4a');
+      hg.addColorStop(1, '#4a0f24');
+      ctx.shadowColor = '#ff5577';
       ctx.shadowBlur = 20;
       ctx.fillStyle = hg;
       ctx.beginPath();
@@ -4623,14 +4743,14 @@
       ctx.beginPath();
       ctx.arc(hcx - w * 0.12, hcy - h * 0.15, Math.max(w, h) * 0.09, 0, Math.PI * 2);
       ctx.fill();
-      // 血条环
+      // 血条环（以初始血量 50 为满环基准）
       var hpr = Math.max(w, h) * 0.42 + 6;
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(hcx, hcy, hpr, 0, Math.PI * 2);
       ctx.stroke();
-      var ratio = Math.max(0, Math.min(1, state.hackerHp / (state.config.weapons.hacker.hp * 4)));
+      var ratio = Math.max(0, Math.min(1, state.devourHp / (state.config.weapons.devour.hp * 4)));
       ctx.strokeStyle = ratio > 0.4 ? '#6dff8b' : '#ff5d5d';
       ctx.beginPath();
       ctx.arc(hcx, hcy, hpr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
@@ -4641,7 +4761,20 @@
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 4;
-      ctx.fillText('❤ ' + Math.ceil(state.hackerHp), hcx, hcy - hpr - 8);
+      ctx.fillText('❤ ' + Math.ceil(state.devourHp), hcx, hcy - hpr - 8);
+      // 已吞噬能力/ Boss 能力徽标
+      var badgeY = hcy - hpr - 26;
+      ctx.font = 'bold 11px "Microsoft YaHei", sans-serif';
+      ctx.fillStyle = '#ffd166';
+      var ab = state.devourAbilities || [];
+      var bb = state.devourBossBuffs || [];
+      if (bb.length > 0) {
+        ctx.fillText('👑 ' + bb.join('·'), hcx, badgeY);
+        badgeY -= 14;
+      }
+      if (ab.length > 0) {
+        ctx.fillText('🧬 ' + ab.join('·'), hcx, badgeY);
+      }
       ctx.restore();
       return;
     }
@@ -6391,7 +6524,7 @@
 
   // ==================== 能量大招 / HUD ====================
 
-  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hacker: '黑客' };
+  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者' };
 
   // ==================== 打击感（顿帧 / 屏幕震动 / 全屏闪光） ====================
 
@@ -6463,7 +6596,7 @@
     { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
     { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
     { type: 'life', icon: '❤', label: '生命 +1', desc: '上限内恢复一条命', maxed: function () { return state.lives >= state.config.maxLives; } },
-    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.weapon === 'hacker' ? false : state.wingman >= state.config.wingmanMax; } }
+    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.weapon === 'hswarm' ? state.wingman >= state.config.weapons.hswarm.wingmanMax : state.wingman >= state.config.wingmanMax; } }
   ];
 
   var buffPanel = document.getElementById('buff-panel');
@@ -6485,20 +6618,6 @@
       var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
     var picks = pool.slice(0, 3);
-    // P4：黑客武器——奖励选择必定出现僚机选项（选僚机获得两个）
-    if (state.weapon === 'hacker') {
-      var hasWing = false;
-      for (var wi = 0; wi < picks.length; wi++) {
-        if (picks[wi].type === 'wingman') { hasWing = true; break; }
-      }
-      if (!hasWing) {
-        var wCard = null;
-        for (var wj = 0; wj < pool.length; wj++) {
-          if (pool[wj].type === 'wingman') { wCard = pool[wj]; break; }
-        }
-        if (wCard) picks[0] = wCard;
-      }
-    }
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
     picks.forEach(function (b) {
@@ -6507,13 +6626,7 @@
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
       btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
       btn.addEventListener('click', function () {
-        // P4：黑客选僚机 → 一次获得两个
-        if (b.type === 'wingman' && state.weapon === 'hacker') {
-          GameCore.applyPowerup(state, 'wingman');
-          GameCore.applyPowerup(state, 'wingman');
-        } else {
-          GameCore.applyPowerup(state, b.type);
-        }
+        GameCore.applyPowerup(state, b.type);
         GameCore.togglePause(state);
         buffPanel.style.display = 'none';
         audio.powerup();
@@ -6541,7 +6654,7 @@
       var ULT_NAMES = {
         gun: '弹幕风暴', cannon: '地毯轰炸', laser: '全屏激光', boomerang: '超级回旋镖',
         saber: '光刃风暴', homing: '导弹雨', charge: '巨型蓄力炮', flamethrower: '焚天之火', lightning: '雷暴降临',
-        hacker: '吞噬风暴'
+        hswarm: '蜂群出动', devour: '吞噬风暴'
       };
       showToast('大招·' + (ULT_NAMES[ret.weapon] || '能量爆发'));
       return true;
@@ -6596,10 +6709,10 @@
     }
     var heartsEl = document.getElementById('hud-hearts');
     if (heartsEl) {
-      // P4：黑客模式 HUD 显示球形血量
-      if (state.weapon === 'hacker') {
-        heartsEl.textContent = '🕸 血量 ' + Math.ceil(state.hackerHp);
-        heartsEl.style.color = '#ff7ddb';
+      // P5：吞噬者模式 HUD 显示球形血量
+      if (state.weapon === 'devour') {
+        heartsEl.textContent = '🩸 血量 ' + Math.ceil(state.devourHp);
+        heartsEl.style.color = '#ff7d7d';
       } else {
         heartsEl.style.color = '';
         var heartStr = '';
