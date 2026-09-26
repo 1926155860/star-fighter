@@ -1040,10 +1040,6 @@
     var cfg = state.config;
     var bossWave = (n % cfg.waveBossEvery === 0);
     state.pendingSpawns = Math.min(cfg.waveBaseSpawns + (n - 1) * cfg.waveSpawnsPerLevel, 80);
-    // P3：第 10 波起每 500 分强化一次（设置首个分数阈值）
-    if (n === 10 && !state.nextBuffScore) {
-      state.nextBuffScore = Math.floor(state.score / cfg.buffScoreInterval) * cfg.buffScoreInterval + cfg.buffScoreInterval;
-    }
     if (bossWave) {
       state.pendingSpawns = Math.max(2, Math.floor(state.pendingSpawns / 2));
       spawnBoss(state);
@@ -5716,12 +5712,10 @@
     if (!buffPanel) return;
     if (state.status !== 'playing') return;
     if (state.paused) return; // 暂停面板打开时不弹
-    // P3：第 10 波起按分数触发（每 500 分一次）；第 1~9 波仍按波间休息触发
-    var scoreTrigger = state.nextBuffScore > 0 && state.score >= state.nextBuffScore;
-    if (!scoreTrigger) {
-      if (state.waveState !== 'break') return;
-      if (state.buffOffered) return;
-    }
+    // P3：第 1~9 波每波强化一次；第 10 波起每 5 波一次（10/15/20…）
+    if (state.waveState !== 'break') return;
+    if (state.buffOffered) return;
+    if (state.wave >= 10 && state.wave % 5 !== 0) return;
     state.buffOffered = true;
     GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
     var pool = BUFF_POOL.filter(function (b) { return !b.maxed || !b.maxed(); });
@@ -5744,11 +5738,6 @@
         buffPanel.style.display = 'none';
         audio.powerup();
         showToast('强化：' + b.label);
-        // P3：分数触发模式 → 抬升下一次分数阈值，并允许再次触发
-        if (scoreTrigger) {
-          state.nextBuffScore += state.config.buffScoreInterval;
-          state.buffOffered = false;
-        }
       });
       box.appendChild(btn);
     });
@@ -5909,8 +5898,8 @@
       // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
       if (waveBefore !== state.wave) {
         track.damagedInWave = false;
-        // P3：第 10 波起强化改为按分数（每 500 分）触发，不再每波重置；1~9 波仍每波一次
-        if (!state.nextBuffScore) state.buffOffered = false;
+        // P3：第 1~9 波每波重置强化标记；第 10 波起每 5 波重置一次
+        if (state.wave < 10 || state.wave % 5 === 0) state.buffOffered = false;
         music.setIntensity(state.wave);
       }
       if (state.lives < livesBefore) {
