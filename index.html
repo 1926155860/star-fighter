@@ -594,7 +594,7 @@
     enemyFireLevelFactor: 0.94,
 
     // 道具
-    powerupTypes: ['score', 'shield', 'speed', 'life', 'multishot', 'firespeed', 'damage', 'bulletsize', 'laserwidth'],
+    powerupTypes: ['score', 'shield', 'speed', 'life', 'multishot', 'firespeed', 'damage', 'bulletsize', 'laserwidth', 'nuke'],
     powerupSpawnInterval: 6,
     minPowerupSpawnInterval: 3,
     powerupLevelFactor: 0.92,
@@ -907,13 +907,18 @@
     var count = getBulletCount(state);
 
     if (state.weapon === 'saber') {
-      // 光刃：发射式武器，离开飞机自行追踪攻击敌人
+      // 光刃：离开飞机后挥砍范围攻击，不会消失；场上同时存在的数量上限 = 弹道数量
       // 弹道+1 → 光刃数量+1；"增加激光"道具 → 光刃长度增加
       var bladeW = Math.max(4, wcfg.bulletWidth);
       var bladeH = Math.max(8, wcfg.bulletHeight + state.laserWidthBonus * wcfg.bladeLengthStep);
       var dmg = wcfg.damage + state.damageBonus;
-      for (var s = 0; s < count; s++) {
-        var soff = (s - (count - 1) / 2) * cfg.bulletSpread * 0.8;
+      var existing = 0;
+      for (var eix = 0; eix < state.bullets.length; eix++) {
+        if (state.bullets[eix].type === 'saberblade') existing++;
+      }
+      var toFire = Math.max(0, count - existing);
+      for (var s = 0; s < toFire; s++) {
+        var soff = (s - (toFire - 1) / 2) * cfg.bulletSpread * 0.8;
         state.bullets.push({
           id: newId(state),
           type: 'saberblade',
@@ -1127,6 +1132,13 @@
       case 'damage': state.damageBonus += 1; break; // 攻击力道具无限叠加（无上限）
       case 'bulletsize': state.bulletSizeBonus = Math.min(cfg.bulletSizeMax, state.bulletSizeBonus + 1); break;
       case 'laserwidth': state.laserWidthBonus = Math.min(cfg.laserWidthMax, state.laserWidthBonus + 1); break;
+      case 'nuke':
+        // 清屏炸弹：清除场上所有敌人并按各自分值加分（不触发分裂）
+        for (var nk = state.enemies.length - 1; nk >= 0; nk--) {
+          state.score += (state.enemies[nk].score || 0);
+          state.enemies.splice(nk, 1);
+        }
+        break;
       default: break;
     }
     return state;
@@ -1478,6 +1490,40 @@
         updateBoomerang(state, b, dt);
       } else if (b.type === 'homing' || b.type === 'saberblade') {
         updateHoming(state, b, dt);
+        if (b.type === 'saberblade') {
+          // 光刃挥砍：离开飞机后对自身周围敌人持续范围伤害（不消失，直到飞出屏幕）
+          var swcfg = state.config.weapons.saber;
+          var scx = b.x + b.width / 2;
+          var scy = b.y + b.height / 2;
+          var sradius = Math.max(b.width, b.height) * 0.9;
+          var sdps = swcfg.meleeDps + state.damageBonus * state.config.laserDpsPerDamage;
+          for (var si = state.enemies.length - 1; si >= 0; si--) {
+            var se = state.enemies[si];
+            var secx = se.x + se.width / 2;
+            var secy = se.y + se.height / 2;
+            var sdist = Math.sqrt((secx - scx) * (secx - scx) + (secy - scy) * (secy - scy));
+            if (sdist < sradius + Math.max(se.width, se.height) / 2) {
+              hurtEnemy(state, se, sdps * dt);
+            }
+          }
+          // 挥砍 BOSS
+          if (state.boss) {
+            var sbx = state.boss.x + state.boss.width / 2;
+            var sby = state.boss.y + state.boss.height / 2;
+            if (Math.sqrt((sbx - scx) * (sbx - scx) + (sby - scy) * (sby - scy)) < sradius + Math.max(state.boss.width, state.boss.height) / 2) {
+              hurtBoss(state, sdps * dt);
+            }
+          }
+          // 挥砍清除范围内敌弹
+          for (var sbi = state.enemyBullets.length - 1; sbi >= 0; sbi--) {
+            var seb = state.enemyBullets[sbi];
+            var sebx = seb.x + seb.width / 2;
+            var seby = seb.y + seb.height / 2;
+            if (Math.sqrt((sebx - scx) * (sebx - scx) + (seby - scy) * (seby - scy)) < sradius) {
+              state.enemyBullets.splice(sbi, 1);
+            }
+          }
+        }
       } else {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
@@ -1496,6 +1542,8 @@
           var tgt = state.enemies[ei2];
           // 蓄力弹穿透：同一目标只造成一次伤害，能量球继续向前
           if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[tgt.id]) continue;
+          // 光刃：伤害由挥砍范围持续结算，此处仅标记命中（不消失）
+          if (bullet.type === 'saberblade') { hit = true; break; }
           hurtEnemy(state, tgt, bullet.damage);
           hit = true;
           // 回旋镖命中敌人后：随机向周围弹射
@@ -1513,8 +1561,10 @@
         }
       }
       if (!hit && state.boss && rectsOverlap(bullet, state.boss)) {
-        // 蓄力弹对 Boss 同样穿透（同一 Boss 只结算一次伤害）
-        if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[state.boss.id]) {
+        // 光刃对 Boss：伤害由挥砍范围持续结算
+        if (bullet.type === 'saberblade') {
+          hit = true;
+        } else if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[state.boss.id]) {
           hit = true;
         } else {
           hurtBoss(state, bullet.damage);
@@ -1536,8 +1586,8 @@
         }
       }
       if (hit) {
-        // 回旋镖与蓄力弹命中不消失（回旋镖持续弹跳；蓄力弹穿透继续向前）
-        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt') {
+        // 回旋镖/蓄力弹/光刃命中不消失（回旋镖持续弹跳；蓄力弹穿透；光刃挥砍持续存在）
+        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade') {
           state.bullets.splice(bi, 1);
         }
       }
@@ -2873,31 +2923,27 @@
       ctx.closePath();
       ctx.fill();
     } else if (b.type === 'saberblade') {
-      // 光刃：离开飞机自行攻击的发光刀刃（长度随"增加激光"道具提升）
+      // 光刃：离开飞机自行挥砍的旋转刀锋（长度随"增加激光"道具提升；挥砍范围随尺寸）
+      var sx = b.x + b.width / 2;
+      var sy = b.y + b.height / 2;
+      ctx.translate(sx, sy);
+      ctx.rotate(state.time * 12); // 挥砍旋转
       ctx.shadowColor = '#7df0ff';
       ctx.shadowBlur = 16;
       ctx.fillStyle = '#7df0ff';
-      var sx = b.x + b.width / 2;
-      var sy = b.y + b.height / 2;
+      var hw = b.width / 2;
+      var hh = b.height / 2;
       ctx.beginPath();
-      ctx.moveTo(sx - b.width / 2, sy + b.height / 2);
-      ctx.lineTo(sx + b.width / 2, sy + b.height / 2);
-      ctx.lineTo(sx + b.width * 0.35, sy);
-      ctx.lineTo(sx + b.width / 2, sy - b.height / 2);
-      ctx.lineTo(sx - b.width / 2, sy - b.height / 2);
-      ctx.lineTo(sx - b.width * 0.35, sy);
+      ctx.moveTo(-hw, hh);
+      ctx.lineTo(hw, hh);
+      ctx.lineTo(hw * 0.35, 0);
+      ctx.lineTo(hw, -hh);
+      ctx.lineTo(-hw, -hh);
+      ctx.lineTo(-hw * 0.35, 0);
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.fillRect(sx - b.width * 0.22, sy - b.height / 2 + 2, b.width * 0.44, b.height - 4);
-      // 光刃尾焰（拖尾）
-      ctx.fillStyle = 'rgba(125, 240, 255, 0.35)';
-      ctx.beginPath();
-      ctx.moveTo(sx - b.width * 0.28, sy + b.height / 2);
-      ctx.lineTo(sx + b.width * 0.28, sy + b.height / 2);
-      ctx.lineTo(sx, sy + b.height / 2 + 10 + Math.sin(state.time * 30) * 3);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(-hw * 0.22, -hh + 2, hw * 0.44, hh * 2 - 4);
     } else if (b.type === 'chargebolt') {
       // 蓄力炮：蓄力越大弹丸越大越亮
       var charge = b.charge || 0;
@@ -2946,7 +2992,7 @@
     var colors = {
       score: '#ffd166', shield: '#4ee0ff', speed: '#ff9f43',
       life: '#ff6b9d', multishot: '#7dfff0', firespeed: '#ff5a7a', damage: '#c44dff',
-      bulletsize: '#9dff6b', laserwidth: '#7df6ff'
+      bulletsize: '#9dff6b', laserwidth: '#7df6ff', nuke: '#ff5252'
     };
     ctx.shadowColor = colors[p.type] || '#fff';
     ctx.shadowBlur = 12;
@@ -3056,6 +3102,27 @@
       ctx.fillRect(cx - r * 0.55, cy + r * 0.3, r * 1.1, r * 0.22);
       ctx.fillStyle = '#fff';
       ctx.fillRect(cx - r * 0.8, cy - r * 0.02, r * 1.6, r * 0.14);
+    } else if (p.type === 'nuke') {
+      // 清屏炸弹：红色炸弹球 + 引线火花
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.05, cy - r * 0.55);
+      ctx.quadraticCurveTo(cx - r * 0.45, cy - r * 0.75, cx - r * 0.6, cy - r * 0.45);
+      ctx.stroke();
+      ctx.fillStyle = colors[p.type];
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.18, cy - r * 0.12, r * 0.14, 0, Math.PI * 2);
+      ctx.arc(cx + r * 0.18, cy + r * 0.15, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.6, cy - r * 0.45, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
   }
