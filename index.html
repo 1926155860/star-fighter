@@ -451,6 +451,12 @@
         <div id="hud-weapon-cur" style="font-size:12px;color:#9be8ff;text-shadow:0 0 6px rgba(78,224,255,0.6);margin-bottom:4px;"></div>
         <button type="button" id="btn-swap" style="padding:7px 16px;font-size:13px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.82);border:1px solid #4ee0ff;border-radius:8px;box-shadow:0 0 12px rgba(78,224,255,0.35);cursor:pointer;display:none;">⇄ 切换武器</button>
       </div>
+      <div id="dash-wrap" style="position:absolute;left:12px;bottom:14px;width:92px;text-align:center;pointer-events:auto;">
+        <div style="height:8px;border:1px solid #4ee0ff;border-radius:4px;background:rgba(3,8,30,0.7);overflow:hidden;">
+          <div id="dash-bar" style="height:100%;width:100%;background:linear-gradient(90deg,#ffd166,#ff9f43);"></div>
+        </div>
+        <button type="button" id="btn-dash" style="margin-top:5px;padding:5px 14px;font-size:13px;font-weight:700;color:#ffd166;background:rgba(40,28,6,0.82);border:1px solid #ffd166;border-radius:8px;box-shadow:0 0 10px rgba(255,209,102,0.3);cursor:pointer;">⚡ 闪避</button>
+      </div>
     </div>
 
     <div id="menu" class="overlay active menu-overlay">
@@ -576,6 +582,13 @@
 
   <button type="button" id="in-game-btn" title="设置">⚙</button>
 
+  <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
+  <div id="buff-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,460px);background:rgba(3,8,30,0.96);border:1px solid #4ee0ff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 0 30px rgba(78,224,255,0.35);">
+    <div style="font-size:17px;color:#7df0ff;letter-spacing:3px;margin-bottom:4px;">波 间 强 化</div>
+    <div style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">三选一 · 立即生效</div>
+    <div id="buff-options" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+
   <script>/**
  * game-core.js — 星际战机核心游戏逻辑（纯函数，不依赖 DOM，可在 Node 中测试）
  *
@@ -659,6 +672,14 @@
     waveSpawnsPerLevel: 1,   // 每波敌人数量递增
     waveBossEvery: 3,        // 每 N 波出现一次 Boss 波
 
+    // P2：冲刺闪避（带短暂无敌帧）
+    dash: { cooldown: 2.5, duration: 0.18, speed: 900 },
+
+    // P2：僚机护卫（自动攻击，道具可升级，上限 3 架）
+    wingmanMax: 3,
+    wingmanDamage: 1,
+    wingmanCooldown: 0.55,
+
     // 武器升级树（局内武器经验）
     weaponLevelKills: 5,     // 每击杀 5 个该武器杀死的敌人升 1 级
     weaponLevelMax: 5,       // 武器最高 5 级
@@ -705,13 +726,16 @@
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
 
-    // 特殊敌人（治疗型 / 防御型）
-    specialWeights: { normal: 70, healer: 16, defender: 14 }, // 生成时按权重随机分配
+    // 特殊敌人（治疗型 / 防御型 / 追踪自爆型 / 重甲型 / 弹幕散射型）
+    specialWeights: { normal: 60, healer: 12, defender: 12, chaser: 10, armored: 6, spreader: 4 },
     healInterval: 1.2,        // 治疗型：每 1.2 秒对范围内敌人治疗一次
     healRadius: 150,          // 治疗半径
     healAmount: 2,            // 每次治疗回复血量
     defenderInvulnCycle: 3,   // 防御型：每 3 秒开启一次无敌状态
     defenderInvulnDuration: 1, // 无敌持续 1 秒
+    armorDamageFactor: 0.5,   // 重甲型：受到的伤害减半（向下取整，至少 1）
+    chaserSpeedFactor: 1.25,  // 追踪自爆型：追踪玩家时的速度倍率
+    spreaderBullets: 6,       // 弹幕散射型：死亡时向四周散射子弹数
     enemyDriftMin: 25,        // 普通敌人水平漂移速度下限（碰到左右界面反弹）
     enemyDriftMax: 70,        // 普通敌人水平漂移速度上限
 
@@ -722,7 +746,7 @@
     enemyFireLevelFactor: 0.94,
 
     // 道具
-    powerupTypes: ['score', 'shield', 'speed', 'life', 'multishot', 'firespeed', 'damage', 'bulletsize', 'laserwidth', 'nuke'],
+    powerupTypes: ['score', 'shield', 'speed', 'life', 'multishot', 'firespeed', 'damage', 'bulletsize', 'laserwidth', 'nuke', 'wingman'],
     powerupSpawnInterval: 6,
     minPowerupSpawnInterval: 3,
     powerupLevelFactor: 0.92,
@@ -802,6 +826,13 @@
       shieldUntil: 0,
       speedBoostUntil: 0,
       invincibleUntil: 0,
+      // P2：冲刺闪避 / 僚机护卫
+      dashReadyAt: 0,
+      dashUntil: 0,
+      dashDirX: 0,
+      dashDirY: -1,
+      wingman: 0,
+      wingmanCooldown: 0,
       nextSpawnTime: cfg.enemySpawnInterval,
       nextFireTime: 0,
       nextEnemyFireTime: cfg.enemyFireInterval,
@@ -950,12 +981,15 @@
     return names[0];
   }
 
-  /** 随机分配敌人特殊能力（治疗型/防御型/普通） */
+  /** 随机分配敌人特殊能力（治疗/防御/追踪自爆/重甲/弹幕散射/普通） */
   function pickEnemySpecial(state) {
     var cfg = state.config;
     var r = Math.random() * 100;
     if (r < cfg.specialWeights.healer) return 'healer';
     if (r < cfg.specialWeights.healer + cfg.specialWeights.defender) return 'defender';
+    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser) return 'chaser';
+    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser + cfg.specialWeights.armored) return 'armored';
+    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser + cfg.specialWeights.armored + cfg.specialWeights.spreader) return 'spreader';
     return 'normal';
   }
 
@@ -1249,7 +1283,26 @@
   }
 
   function isInvincible(state) {
-    return state.time < state.invincibleUntil;
+    // 受击无敌 + 冲刺无敌帧
+    return state.time < state.invincibleUntil || state.time < state.dashUntil;
+  }
+
+  /** P2：冲刺闪避（带短暂无敌帧），返回是否触发成功 */
+  function tryDash(state, dirX, dirY) {
+    if (state.status !== 'playing') return false;
+    var cfg = state.config.dash;
+    if (state.time < state.dashReadyAt) return false;
+    state.dashReadyAt = state.time + cfg.cooldown;
+    state.dashUntil = state.time + cfg.duration;
+    state.dashDirX = (dirX === undefined) ? 0 : dirX;
+    state.dashDirY = (dirY === undefined) ? -1 : dirY;
+    return true;
+  }
+
+  /** P2：僚机当前伤害（含伤害加成） */
+  function getWingmanDamage(state) {
+    var cfg = state.config;
+    return cfg.wingmanDamage + state.damageBonus;
   }
 
   function damagePlayer(state) {
@@ -1356,6 +1409,10 @@
           state.score += (state.enemies[nk].score || 0);
           state.enemies.splice(nk, 1);
         }
+        break;
+      case 'wingman':
+        // P2：僚机护卫 +1（上限 wingmanMax）
+        state.wingman = Math.min(cfg.wingmanMax, state.wingman + 1);
         break;
       default: break;
     }
@@ -1531,10 +1588,27 @@
   /** 对敌机/BOSS 造成伤害；返回是否击毁（防御型敌人无敌期间免疫） */
   function hurtEnemy(state, enemy, damage) {
     if (enemy.invulnUntil && enemy.invulnUntil > state.time) return false; // 防御型：无敌状态免疫伤害
+    var cfg = state.config;
+    // 重甲型：受到的伤害减半（至少 1）
+    if (enemy.special === 'armored') damage = Math.max(1, Math.round(damage * cfg.armorDamageFactor));
     enemy.hp -= damage;
     if (enemy.hp <= 0) {
       var idx = state.enemies.indexOf(enemy);
       if (idx !== -1) state.enemies.splice(idx, 1);
+      // 弹幕散射型：死亡时向四周散射子弹
+      if (enemy.special === 'spreader') {
+        var scx = enemy.x + enemy.width / 2;
+        var scy = enemy.y + enemy.height / 2;
+        for (var sp = 0; sp < cfg.spreaderBullets; sp++) {
+          var spAng = (sp / cfg.spreaderBullets) * Math.PI * 2;
+          pushEnemyBullet(state, {
+            x: scx - cfg.enemyBulletWidth / 2,
+            y: scy - cfg.enemyBulletHeight / 2,
+            vx: Math.sin(spAng) * cfg.enemyBulletSpeed * 0.8,
+            vy: Math.cos(spAng) * cfg.enemyBulletSpeed * 0.8
+          });
+        }
+      }
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
       state.comboTimer = state.config.comboWindow;
@@ -1781,6 +1855,15 @@
     // 左右界面反弹；通过下方/上方界面时回卷到另一侧重新出现（敌人不会消失，需击杀清除）
     for (var i = state.enemies.length - 1; i >= 0; i--) {
       var e = state.enemies[i];
+      // 追踪自爆型：持续朝玩家方向加速移动
+      if (e.special === 'chaser' && state.player) {
+        var chx = state.player.x + state.player.width / 2 - (e.x + e.width / 2);
+        var chy = state.player.y + state.player.height / 2 - (e.y + e.height / 2);
+        var chd = Math.sqrt(chx * chx + chy * chy) || 1;
+        var chsp = e.speed * cfg.chaserSpeedFactor;
+        e.vx = chx / chd * chsp;
+        e.vy = chy / chd * chsp;
+      }
       e.x += (e.vx || 0) * dt;
       e.y += (e.vy !== undefined ? e.vy : e.speed) * dt;
       if (e.x < 0) { e.x = 0; e.vx = Math.abs(e.vx || 0); }
@@ -1792,6 +1875,33 @@
     // 特殊敌人逻辑：治疗型（给范围内敌人回血）与防御型（周期性无敌）
     updateHealers(state, dt);
     updateDefenders(state, dt);
+
+    // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）
+    if (state.wingman > 0) {
+      state.wingmanCooldown -= dt;
+      if (state.wingmanCooldown <= 0) {
+        state.wingmanCooldown = cfg.wingmanCooldown;
+        var wp = state.player;
+        var wcx = wp.x + wp.width / 2;
+        var wcy = wp.y + wp.height / 2;
+        var wdmg = getWingmanDamage(state);
+        for (var wm = 0; wm < state.wingman; wm++) {
+          var wOff = (wm - (state.wingman - 1) / 2) * 30;
+          state.bullets.push({
+            id: newId(state),
+            type: 'wingbullet',
+            x: wcx + wOff - 2,
+            y: wcy - 30,
+            width: 4,
+            height: 9,
+            vx: 0,
+            vy: -440,
+            damage: wdmg,
+            life: 0
+          });
+        }
+      }
+    }
 
     // BOSS 逻辑
     updateBoss(state, dt);
@@ -2065,6 +2175,7 @@
     update: update,
     spawnEnemy: spawnEnemy,
     createSphereEnemy: createSphereEnemy,
+    pickEnemySpecial: pickEnemySpecial,
     splitEnemy: splitEnemy,
     enemyFire: enemyFire,
     pushEnemyBullet: pushEnemyBullet,
@@ -2077,6 +2188,8 @@
     switchWeapon: switchWeapon,
     getShipFireFactor: getShipFireFactor,
     getBossTypeForWave: getBossTypeForWave,
+    tryDash: tryDash,
+    getWingmanDamage: getWingmanDamage,
     getWeaponConfig: getWeaponConfig,
     getBulletCount: getBulletCount,
     getFireCooldown: getFireCooldown,
@@ -2281,30 +2394,68 @@
     return pct / 100;
   }
 
-  // ==================== 战机皮肤 ====================
+  // ==================== 战机皮肤（星币解锁） ====================
 
   var SHIPS = [
-    { id: 'star', icon: '🛸', name: '星舰', stats: '速 1.0 · 火 1.0 · 命 1.0' },
-    { id: 'viper', icon: '🐍', name: '毒蛇', stats: '速 1.25 · 火 0.85 · 命 0.8' },
-    { id: 'titan', icon: '🛡', name: '泰坦', stats: '速 0.8 · 火 1.15 · 命 1.25' },
-    { id: 'phantom', icon: '👻', name: '幻影', stats: '速 1.1 · 火 1.0 · 命 0.9' }
+    { id: 'star', icon: '🛸', name: '星舰', stats: '速 1.0 · 火 1.0 · 命 1.0', cost: 0 },
+    { id: 'viper', icon: '🐍', name: '毒蛇', stats: '速 1.25 · 火 0.85 · 命 0.8', cost: 120 },
+    { id: 'titan', icon: '🛡', name: '泰坦', stats: '速 0.8 · 火 1.15 · 命 1.25', cost: 200 },
+    { id: 'phantom', icon: '👻', name: '幻影', stats: '速 1.1 · 火 1.0 · 命 0.9', cost: 150 }
   ];
+
+  var SHIPS_KEY = 'sf_ships';
+
+  function getOwnedShips() {
+    try {
+      var raw = localStorage.getItem(SHIPS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  }
+
+  function saveOwnedShips(o) {
+    try { localStorage.setItem(SHIPS_KEY, JSON.stringify(o)); } catch (err) {}
+  }
+
+  function isShipOwned(id) {
+    if (id === 'star') return true; // 初始机型免费
+    return !!getOwnedShips()[id];
+  }
 
   function renderShipGrid() {
     var grid = document.getElementById('ship-grid');
     if (!grid) return;
     grid.innerHTML = '';
     SHIPS.forEach(function (sh) {
+      var owned = isShipOwned(sh.id);
       var card = document.createElement('div');
       card.className = 'ship-card' + (settings.ship === sh.id ? ' active' : '');
       card.innerHTML =
         '<div class="ship-ship">' + sh.icon + '</div>' +
         '<div class="ship-name">' + sh.name + '</div>' +
-        '<div class="ship-stats">' + sh.stats + '</div>';
+        '<div class="ship-stats">' + sh.stats + '</div>' +
+        '<div class="ship-stats" style="color:' + (owned ? '#52c41a' : '#ffd166') + ';margin-top:2px;">' + (owned ? '✓ 已拥有' : '★' + sh.cost + ' 解锁') + '</div>';
       card.addEventListener('click', function () {
-        settings.ship = sh.id;
+        if (!owned) {
+          var p = getProfile();
+          if (p.stars < sh.cost) {
+            showToast('星币不足（需 ★' + sh.cost + '，当前 ★' + p.stars + '）');
+            return;
+          }
+          p.stars -= sh.cost;
+          saveProfile(p);
+          var o = getOwnedShips();
+          o[sh.id] = true;
+          saveOwnedShips(o);
+          updateMenuStars();
+          settings.ship = sh.id;
+          showToast(sh.name + ' 已解锁！');
+          audio.powerup();
+        } else {
+          settings.ship = sh.id;
+          audio.powerup();
+        }
         renderShipGrid();
-        audio.powerup();
       });
       grid.appendChild(card);
     });
@@ -2605,6 +2756,7 @@
     gameoverReturnScheduled = false;
     showInGameBtn(false);
     showHud(false);
+    hideBuffPanel();
     showPanel('menu');
     updateMenuConfig();
     updateMenuStars();
@@ -3371,15 +3523,16 @@
     ctx.globalAlpha = 1;
   }
 
-  // ==================== 未来科技风玩家飞机 ====================
+  // ==================== 玩家飞机（参考图圆润卡通蓝白战机建模） ====================
 
   function drawPlayer(x, y, w, h) {
     var flashing = GameCore.isInvincible(state) && Math.floor(state.time * 10) % 2 === 0;
     ctx.save();
     ctx.globalAlpha = flashing ? 0.4 : 1;
 
-    // 战机皮肤主色（不同机型不同涂装）
+    // 战机皮肤主色（不同机型不同涂装，白机身 + 主色点缀）
     var shipColor = (GameCore.DEFAULT_CONFIG.ships[state.ship] || GameCore.DEFAULT_CONFIG.ships.star).color;
+    var cx = x + w / 2;
 
     // 主引擎光
     ctx.shadowColor = shipColor;
@@ -3390,55 +3543,81 @@
     gradF.addColorStop(1, 'rgba(120, 240, 255, 0)');
     ctx.fillStyle = gradF;
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.3, y + h);
-    ctx.lineTo(x + w * 0.7, y + h);
-    ctx.lineTo(x + w / 2, y + h + flame + 8);
+    ctx.moveTo(cx - w * 0.22, y + h);
+    ctx.lineTo(cx + w * 0.22, y + h);
+    ctx.lineTo(cx, y + h + flame + 8);
     ctx.closePath();
     ctx.fill();
 
-    // 机身（未来科技：流线多段，颜色随皮肤变化）
+    // V 型双尾翼（主色）
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = shipColor;
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.3, y + h * 0.78);
+    ctx.lineTo(cx - w * 0.44, y + h * 0.5);
+    ctx.lineTo(cx - w * 0.16, y + h * 0.82);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx + w * 0.3, y + h * 0.78);
+    ctx.lineTo(cx + w * 0.44, y + h * 0.5);
+    ctx.lineTo(cx + w * 0.16, y + h * 0.82);
+    ctx.closePath();
+    ctx.fill();
+
+    // 机身：圆润流线胶囊（白底 + 主色渐变），对应参考图卡通战机形态
     var bodyGrad = ctx.createLinearGradient(x, 0, x + w, 0);
-    bodyGrad.addColorStop(0, shipColor);
-    bodyGrad.addColorStop(0.5, '#eaffff');
-    bodyGrad.addColorStop(1, shipColor);
+    bodyGrad.addColorStop(0, '#ffffff');
+    bodyGrad.addColorStop(0.35, shipColor);
+    bodyGrad.addColorStop(0.65, '#ffffff');
+    bodyGrad.addColorStop(1, '#e8f6ff');
     ctx.shadowBlur = 18;
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    ctx.moveTo(x + w / 2, y);                    // 机头
-    ctx.lineTo(x + w, y + h * 0.62);             // 右翼尖
-    ctx.lineTo(x + w * 0.76, y + h * 0.62);
-    ctx.lineTo(x + w * 0.7, y + h);              // 右尾
-    ctx.lineTo(x + w * 0.3, y + h);              // 左尾
-    ctx.lineTo(x + w * 0.24, y + h * 0.62);
-    ctx.lineTo(x, y + h * 0.62);                 // 左翼尖
+    ctx.moveTo(cx, y);                              // 圆润机头
+    ctx.quadraticCurveTo(x + w * 0.52, y - h * 0.1, x + w * 0.34, y + h * 0.12);
+    ctx.lineTo(x + w * 0.3, y + h * 0.86);
+    ctx.quadraticCurveTo(x + w * 0.36, y + h, cx, y + h);          // 圆润机尾
+    ctx.quadraticCurveTo(x + w * 0.64, y + h, x + w * 0.7, y + h * 0.86);
+    ctx.lineTo(x + w * 0.66, y + h * 0.12);
+    ctx.quadraticCurveTo(x + w * 0.48, y - h * 0.1, cx, y);
     ctx.closePath();
     ctx.fill();
 
-    // 机翼高光
+    // 圆润水平机翼（左右，对应参考图翼形）
     ctx.shadowBlur = 8;
-    ctx.fillStyle = 'rgba(160, 240, 255, 0.5)';
+    ctx.fillStyle = shipColor;
     ctx.beginPath();
-    ctx.moveTo(x + w / 2, y + h * 0.1);
-    ctx.lineTo(x + w * 0.82, y + h * 0.5);
-    ctx.lineTo(x + w * 0.6, y + h * 0.5);
+    ctx.moveTo(x + w * 0.36, y + h * 0.4);
+    ctx.quadraticCurveTo(x + w * 0.08, y + h * 0.42, x + w * 0.04, y + h * 0.58);
+    ctx.quadraticCurveTo(x + w * 0.2, y + h * 0.6, x + w * 0.4, y + h * 0.52);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(x + w / 2, y + h * 0.1);
-    ctx.lineTo(x + w * 0.18, y + h * 0.5);
-    ctx.lineTo(x + w * 0.4, y + h * 0.5);
+    ctx.moveTo(x + w * 0.64, y + h * 0.4);
+    ctx.quadraticCurveTo(x + w * 0.92, y + h * 0.42, x + w * 0.96, y + h * 0.58);
+    ctx.quadraticCurveTo(x + w * 0.8, y + h * 0.6, x + w * 0.6, y + h * 0.52);
     ctx.closePath();
     ctx.fill();
 
-    // 座舱（能量核心）
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = '#0b2f4d';
+    // 翼面白色高光
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
     ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h * 0.38, w * 0.13, h * 0.16, 0, 0, Math.PI * 2);
+    ctx.moveTo(cx, y + h * 0.06);
+    ctx.quadraticCurveTo(x + w * 0.6, y + h * 0.18, x + w * 0.6, y + h * 0.4);
+    ctx.lineTo(cx, y + h * 0.34);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+
+    // 圆润玻璃座舱（浅蓝半透明）
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(140, 215, 255, 0.85)';
     ctx.beginPath();
-    ctx.arc(x + w / 2 - w * 0.04, y + h * 0.34, w * 0.05, 0, Math.PI * 2);
+    ctx.ellipse(cx, y + h * 0.36, w * 0.15, h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath();
+    ctx.ellipse(cx - w * 0.04, y + h * 0.31, w * 0.06, h * 0.07, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // 机头能量点
@@ -3446,7 +3625,7 @@
     ctx.shadowBlur = 10;
     ctx.fillStyle = '#ffd166';
     ctx.beginPath();
-    ctx.arc(x + w / 2, y + h * 0.08, 2.5, 0, Math.PI * 2);
+    ctx.arc(cx, y + h * 0.08, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
@@ -3459,11 +3638,11 @@
       ctx.strokeStyle = 'rgba(78, 224, 255, 0.9)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
+      ctx.arc(cx, y + h / 2, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = 'rgba(78, 224, 255, 0.10)';
       ctx.beginPath();
-      ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
+      ctx.arc(cx, y + h / 2, r, 0, Math.PI * 2);
       ctx.fill();
       var ratio = Math.max(0, (state.shieldUntil - state.time) / state.config.shieldDuration);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
@@ -3518,14 +3697,46 @@
 
   // ==================== 敌机 / 子弹 / 道具绘制 ====================
 
+  /** 僚机护卫：跟随玩家的自动攻击小战机 */
+  function drawWingmen() {
+    if (!state.wingman || state.status !== 'playing') return;
+    var p = state.player;
+    var cx = p.x + p.width / 2;
+    var cy = p.y + p.height / 2;
+    for (var i = 0; i < state.wingman; i++) {
+      var off = (i - (state.wingman - 1) / 2) * 34;
+      var wx = cx + off;
+      var wy = cy - 12 + Math.sin(state.time * 6 + i * 2) * 3;
+      ctx.save();
+      ctx.shadowColor = '#7df0ff';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#7df0ff';
+      ctx.beginPath();
+      ctx.moveTo(wx, wy - 10);
+      ctx.lineTo(wx - 9, wy + 7);
+      ctx.lineTo(wx + 9, wy + 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(wx, wy - 3, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   /** 球形敌人：分级球体 + 中心血量数字（小/中/大/超大四等级）；治疗型绿色+连接线，防御型金色+无敌护盾 */
   function drawEnemy(e) {
     var cx = e.x + e.width / 2;
     var cy = e.y + e.height / 2;
     var r = e.radius || e.width / 2;
     var colors = { small: '#ff6b6b', medium: '#ff9f43', large: '#c44dff', xlarge: '#ff4d8a' };
-    // 特殊类型覆盖配色：治疗型=翠绿，防御型=金黄
+    // 特殊类型覆盖配色：治疗型=翠绿，防御型=金黄，追踪自爆型=橙红，重甲型=银灰，弹幕散射型=紫蓝
     if (e.special === 'healer') colors = { small: '#3ddc84', medium: '#3ddc84', large: '#2ecf7a', xlarge: '#27c46f' };
+    if (e.special === 'defender') colors = { small: '#ffd166', medium: '#ffd166', large: '#f2b93b', xlarge: '#e6a82c' };
+    if (e.special === 'chaser') colors = { small: '#ff7b4a', medium: '#ff7b4a', large: '#f2693a', xlarge: '#e85c2d' };
+    if (e.special === 'armored') colors = { small: '#b8c4d8', medium: '#b8c4d8', large: '#a3b1c8', xlarge: '#8fa0bb' };
+    if (e.special === 'spreader') colors = { small: '#9b7bff', medium: '#9b7bff', large: '#8a6bf0', xlarge: '#7a5ae0' };
     if (e.special === 'defender') colors = { small: '#ffd166', medium: '#ffd166', large: '#ffc94d', xlarge: '#f5b93a' };
     var col = colors[e.type] || '#ff6b6b';
     // 防御型无敌状态：金色脉冲描边 + 护盾环
@@ -4438,6 +4649,16 @@
 
     if (state.status === 'playing' || state.status === 'gameover') {
       drawPlayer(state.player.x, state.player.y, state.player.width, state.player.height);
+      drawWingmen();
+    }
+
+    // 冲刺残影（半透明机身轮廓，增强速度感）
+    for (var dgi = 0; dgi < dashGhosts.length; dgi++) {
+      var dg2 = dashGhosts[dgi];
+      ctx.globalAlpha = 0.35 * (dg2.t / 0.35);
+      ctx.fillStyle = '#4ee0ff';
+      ctx.fillRect(dg2.x + dg2.width * 0.1, dg2.y + dg2.height * 0.08, dg2.width * 0.8, dg2.height * 0.84);
+      ctx.globalAlpha = 1;
     }
 
     // 蓄力炮预览（飞机前方显示当前蓄力弹丸大小）
@@ -4515,6 +4736,16 @@
     if (e.code === 'KeyQ' && state.status === 'playing' && !state.paused) {
       GameCore.switchWeapon(state);
       audio.powerup();
+    }
+    // P2：冲刺闪避 ShiftLeft / ShiftRight / KeyJ（朝当前移动方向，未移动则向上）
+    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyJ') && state.status === 'playing' && !state.paused) {
+      var dx = 0, dy = -1;
+      if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
+      else if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
+      if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
+      else if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
+      if (dx === 0 && dy === 0) dy = -1;
+      triggerDash(dx, dy);
     }
     // 游戏中数字键切换武器
     if (state.status === 'playing') {
@@ -4651,6 +4882,84 @@
     });
   }
 
+  // ==================== P2：冲刺闪避 ====================
+
+  var dashGhosts = []; // 冲刺残影
+
+  function triggerDash(dirX, dirY) {
+    if (GameCore.tryDash(state, dirX, dirY)) {
+      audio.powerup();
+      addFlash('255,235,150', 70);
+      showDashGhost();
+      return true;
+    }
+    return false;
+  }
+
+  function showDashGhost() {
+    // 冲刺起点残影（淡蓝色机身轮廓）
+    dashGhosts.push({ x: state.player.x, y: state.player.y, t: 0.35 });
+  }
+
+  var btnDash = document.getElementById('btn-dash');
+  if (btnDash) {
+    btnDash.addEventListener('click', function () {
+      audio.unlock();
+      triggerDash(0, -1); // 向上闪避（手机常用）
+    });
+  }
+
+  // ==================== P2：波间强化三选一 ====================
+
+  var BUFF_POOL = [
+    { type: 'damage', icon: '⚔', label: '攻击力 +1', desc: '伤害永久 +1' },
+    { type: 'multishot', icon: '▮▮', label: '弹道 +1', desc: '同时发射弹道 +1', maxed: function () { return state.multishotLevel >= state.config.multishotMax - 1; } },
+    { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
+    { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
+    { type: 'life', icon: '❤', label: '生命 +1', desc: '上限内恢复一条命', maxed: function () { return state.lives >= state.config.maxLives; } },
+    { type: 'wingman', icon: '✈', label: '僚机 +1', desc: '自动攻击的护卫机', maxed: function () { return state.wingman >= state.config.wingmanMax; } }
+  ];
+
+  var buffPanel = document.getElementById('buff-panel');
+
+  function offerBuffPanel() {
+    if (!buffPanel) return;
+    if (state.status !== 'playing') return;
+    if (state.paused) return; // 暂停面板打开时不弹
+    if (state.waveState !== 'break') return;
+    if (state.buffOffered) return;
+    state.buffOffered = true;
+    GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
+    var pool = BUFF_POOL.filter(function (b) { return !b.maxed || !b.maxed(); });
+    // 洗牌取前 3
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    var picks = pool.slice(0, 3);
+    var box = document.getElementById('buff-options');
+    box.innerHTML = '';
+    picks.forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.className = 'btn primary';
+      btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+      btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
+      btn.addEventListener('click', function () {
+        GameCore.applyPowerup(state, b.type);
+        GameCore.togglePause(state);
+        buffPanel.style.display = 'none';
+        audio.powerup();
+        showToast('强化：' + b.label);
+      });
+      box.appendChild(btn);
+    });
+    buffPanel.style.display = 'block';
+  }
+
+  function hideBuffPanel() {
+    if (buffPanel) buffPanel.style.display = 'none';
+  }
+
   function tryActivateUlt() {
     if (GameCore.activateUlt(state)) {
       soundEvents.ult = true;
@@ -4721,6 +5030,13 @@
     if (bar) bar.style.width = Math.round(state.energy / state.config.ultMax * 100) + '%';
     var ultBtn = document.getElementById('btn-ult');
     if (ultBtn) ultBtn.style.display = state.energy >= state.config.ultMax ? 'block' : 'none';
+    // P2：冲刺冷却条
+    var dashBar = document.getElementById('dash-bar');
+    if (dashBar) {
+      var dcd = state.config.dash;
+      var dpct = state.time >= state.dashReadyAt ? 1 : Math.max(0, 1 - (state.dashReadyAt - state.time) / dcd.cooldown);
+      dashBar.style.width = Math.round(dpct * 100) + '%';
+    }
   }
 
   function loop(now) {
@@ -4752,6 +5068,19 @@
       if (wantFire) {
         fired = GameCore.fireBullet(state, dt);
       }
+
+      // P2：冲刺移动（高速位移 + 无敌帧）
+      if (state.dashUntil > state.time) {
+        var dsp = state.config.dash.speed * dt;
+        GameCore.movePlayer(state, state.player.x + state.dashDirX * dsp, state.player.y + state.dashDirY * dsp);
+      } else if (dashGhosts.length > 0) {
+        dashGhosts.length = 0;
+      }
+      // 残影衰减
+      for (var dg = dashGhosts.length - 1; dg >= 0; dg--) {
+        dashGhosts[dg].t -= dt;
+        if (dashGhosts[dg].t <= 0) dashGhosts.splice(dg, 1);
+      }
       // 键盘大招（F / E 键）
       if (keys['KeyF'] || keys['KeyE']) {
         keys['KeyF'] = false;
@@ -4774,6 +5103,7 @@
       // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
       if (waveBefore !== state.wave) {
         track.damagedInWave = false;
+        state.buffOffered = false; // 每波重置强化选择标记
         music.setIntensity(state.wave);
       }
       if (state.lives < livesBefore) {
@@ -4794,6 +5124,8 @@
         addHitStop(70);
       }
       checkAchievements();
+      // P2：波间强化三选一（进入 break 且未选择时弹出）
+      offerBuffPanel();
 
       // 蓄力炮满蓄力自动发射：播放音效并消费标志
       if (state.chargeAutoFired) {
