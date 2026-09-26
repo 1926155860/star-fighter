@@ -357,11 +357,11 @@
       background: rgba(70, 45, 8, 0.72);
       box-shadow: 0 0 8px rgba(255, 209, 102, 0.4);
     }
-    /* ===== 图鉴（初始界面左下角，与右上角排行榜彻底分开） ===== */
+    /* ===== 图鉴（排行榜旁边，右上角） ===== */
     #btn-codex {
       position: fixed;
-      bottom: 14px;
-      left: 14px;
+      top: 14px;
+      right: 108px;
       z-index: 26;
       padding: 9px 16px;
       font-size: 14px;
@@ -836,6 +836,13 @@
     // P3：强化频率（第 10 波后每 500 分选择一次强化）
     buffScoreInterval: 500,
 
+    // P5：吞噬者武器配置（球形血量上限 100，能力层数上限 5，Boss 能力不叠加）
+    devourHpMax: 100,
+    devourAbilityMax: 5,
+    devourSkillFlame: { dps: 36, range: 240, width: 90 },  // 继承火焰能力：按住攻击喷射火焰
+    devourSkillStorm: { damage: 8, interval: 0.5, radius: 220 }, // 继承雷电能力：按住攻击释放连锁雷击
+    devourSkillHeal: { perSec: 4 }, // 继承治疗能力：按住攻击持续治疗
+
     // P2：冲刺闪避（带短暂无敌帧）
     dash: { cooldown: 2.5, duration: 0.18, speed: 900 },
 
@@ -1019,11 +1026,14 @@
       nextEnemyFireTime: cfg.enemyFireInterval,
       nextPowerupTime: cfg.powerupSpawnInterval,
       lastId: 0,
-      // P5：吞噬者武器（球形血量 50）/ 克隆体 / 新敌人状态
+      // P5：吞噬者武器（球形血量上限 100）/ 克隆体 / 新敌人状态
       cloneSpawned: false,          // 克隆体一局只出现一次
-      devourHp: cfg.weapons.devour.hp, // 吞噬者模式自身血量（初始 50）
-      devourAbilities: [],          // 已吞噬继承的敌人能力名（展示 + 碰撞加成）
-      devourBossBuffs: [],          // 已吞噬的 Boss 能力名
+      devourHp: cfg.weapons.devour.hp, // 吞噬者模式自身血量（初始 50，上限 devourHpMax）
+      devourAbilities: {},          // 已吞噬继承的敌人能力层数 {能力名: 层数}（1~5 层，5 倍增强）
+      devourBossBuffs: [],          // 已吞噬的 Boss 能力名（只记录不增强）
+      devourActing: false,          // 吞噬者是否按住攻击键（前端置位，用于释放继承技能）
+      devourSkillTimer: 0,          // 吞噬者技能周期计时
+      ultNextWave: 1,               // P5：大招每 3 波仅可一次——下次可释放大招的波次
       codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
     };
     return state;
@@ -1089,6 +1099,9 @@
   function activateUlt(state) {
     if (state.status !== 'playing') return false;
     if (state.energy < state.config.ultMax) return false;
+    // P5：大招每 3 波仅能使用一次（能量满但波次冷却中不可放）
+    if (state.wave < state.ultNextWave) return false;
+    state.ultNextWave = state.wave + 3;
     state.energy = 0;
     var cfg = state.config;
     var w = state.weapon;
@@ -1701,27 +1714,104 @@
     state.status = 'gameover';
   }
 
-  /** P5：吞噬者吞噬——击杀敌人后恢复其全部初始血量，并继承其能力（含 Boss 能力） */
+  /** P5：吞噬者吞噬——击杀敌人后恢复其全部初始血量，吞噬其能力（重复吞噬增强，最多 5 层；Boss 能力不增强） */
   function devourFeed(state, enemy) {
     if (enemy.maxHp > 0) {
-      state.devourHp = Math.min(999, state.devourHp + Math.round(enemy.maxHp));
+      state.devourHp = Math.min(state.config.devourHpMax, state.devourHp + Math.round(enemy.maxHp));
     }
     if (enemy.special !== 'normal' && enemy.special !== 'clone') {
-      if (state.devourAbilities.indexOf(enemy.special) === -1) {
-        state.devourAbilities.push(enemy.special);
-      }
+      var cur = state.devourAbilities[enemy.special] || 0;
+      state.devourAbilities[enemy.special] = Math.min(state.config.devourAbilityMax, cur + 1);
     }
   }
 
-  /** P5：吞噬者吞噬 Boss——恢复 Boss 全部初始血量，继承其加成能力 */
+  /** P5：吞噬者吞噬 Boss——恢复 Boss 全部初始血量，继承其加成能力（只记录、不叠加增强） */
   function devourBossFeed(state, boss) {
     if (boss.maxHp > 0) {
-      state.devourHp = Math.min(999, state.devourHp + Math.round(boss.maxHp));
+      state.devourHp = Math.min(state.config.devourHpMax, state.devourHp + Math.round(boss.maxHp));
     }
     if (boss.buffs) {
       for (var bi = 0; bi < boss.buffs.length; bi++) {
         if (state.devourBossBuffs.indexOf(boss.buffs[bi]) === -1) {
           state.devourBossBuffs.push(boss.buffs[bi]);
+        }
+      }
+    }
+  }
+
+  /** P5：吞噬者继承能力的技能层数 */
+  function getDevourAbilityLevel(state, name) {
+    return state.devourAbilities[name] || 0;
+  }
+
+  /** P5：吞噬者按住攻击键时释放继承能力（火焰喷射 / 雷电连锁 / 治疗），能力层数增强效果 */
+  function updateDevourSkills(state, dt) {
+    if (state.weapon !== 'devour' || !state.devourActing) {
+      state.devourSkillTimer = 0;
+      return;
+    }
+    var cfg = state.config;
+    var p = state.player;
+    var cx = p.x + p.width / 2;
+    var cy = p.y;
+    var hasFlame = getDevourAbilityLevel(state, 'flamer');
+    var hasStorm = getDevourAbilityLevel(state, 'stormer');
+    var hasHeal = getDevourAbilityLevel(state, 'healer');
+    // 治疗：持续恢复（层数 × 每秒回复）
+    if (hasHeal > 0) {
+      state.devourHp = Math.min(cfg.devourHpMax, state.devourHp + cfg.devourSkillHeal.perSec * hasHeal * dt);
+    }
+    state.devourSkillTimer -= dt;
+    if (state.devourSkillTimer > 0) return;
+    state.devourSkillTimer = 0.16;
+    // 火焰：从玩家向上喷射持续火焰（层数增强伤害与范围）
+    if (hasFlame > 0) {
+      var fDps = cfg.devourSkillFlame.dps * hasFlame;
+      var fRange = cfg.devourSkillFlame.range + 20 * (hasFlame - 1);
+      var fWidth = cfg.devourSkillFlame.width + 14 * (hasFlame - 1);
+      for (var fi = state.enemies.length - 1; fi >= 0; fi--) {
+        var fe = state.enemies[fi];
+        if (fe.special === 'clone') continue;
+        if (rectsOverlap(fe, { x: cx - fWidth / 2, y: cy - fRange, width: fWidth, height: fRange })) {
+          hurtEnemy(state, fe, fDps * 0.16, 'devour');
+        }
+      }
+    }
+    // 雷电：对上方最近敌人释放连锁（层数增强伤害与跳跃）
+    if (hasStorm > 0) {
+      var sDmg = cfg.devourSkillStorm.damage * hasStorm;
+      var best = null;
+      for (var si = 0; si < state.enemies.length; si++) {
+        var se = state.enemies[si];
+        if (se.special === 'clone') continue;
+        var sdx = (se.x + se.width / 2) - cx;
+        var sdy = (se.y + se.height / 2) - cy;
+        if (sdy > -cfg.devourSkillStorm.radius && Math.abs(sdx) < cfg.devourSkillStorm.radius * 0.6) {
+          if (!best || sdy < best.dy) best = { e: se, dy: sdy };
+        }
+      }
+      if (best) {
+        var hitSet = [best.e];
+        var cur = best.e;
+        for (var chain = 0; chain < Math.min(2 + hasStorm, 5); chain++) {
+          var nextBest = null;
+          var bx = cur.x + cur.width / 2;
+          var by = cur.y + cur.height / 2;
+          for (var ci = 0; ci < state.enemies.length; ci++) {
+            var ce = state.enemies[ci];
+            if (ce.special === 'clone' || hitSet.indexOf(ce) !== -1) continue;
+            var cdx = (ce.x + ce.width / 2) - bx;
+            var cdy = (ce.y + ce.height / 2) - by;
+            if (Math.sqrt(cdx * cdx + cdy * cdy) <= 200) {
+              if (!nextBest || Math.sqrt(cdx * cdx + cdy * cdy) < nextBest.d) nextBest = { e: ce, d: Math.sqrt(cdx * cdx + cdy * cdy) };
+            }
+          }
+          if (!nextBest) break;
+          hitSet.push(nextBest.e);
+          cur = nextBest.e;
+        }
+        for (var hi = 0; hi < hitSet.length; hi++) {
+          hurtEnemy(state, hitSet[hi], sDmg, 'devour');
         }
       }
     }
@@ -2705,6 +2795,9 @@
 
     // BOSS 逻辑
     updateBoss(state, dt);
+
+    // P5：吞噬者按住攻击键释放继承能力（火焰/雷电/治疗）
+    updateDevourSkills(state, dt);
 
     // 激光持续伤害
     if (state.laserActive) {
@@ -3797,8 +3890,24 @@
   // 云端共享记分板（npoint 免费 JSON 存储；basket 内容为数组 [{name,score,level,time,weapon}]）
   // 注意：必须用 text/plain 提交（不带 Content-Type），否则 npoint 对浏览器 preflight 返回 500
   var CLOUD_RANK_URL = 'https://api.npoint.io/3dff28b9ea0bbac7b98b';
-  var pendingRankScore = null; // 死亡时若尚未命名，暂存本次成绩
+  var pendingRankScore = null; // 死亡/中断时若尚未命名，暂存本次成绩
+  var PENDING_KEY = 'sf_pending_score'; // 持久化暂存（页面中断刷新不丢失）
   var rankWeaponFilter = 'all'; // 排行榜武器分类筛选（'all' = 全部）
+
+  function loadPendingScore() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      return (o && typeof o.score === 'number') ? o : null;
+    } catch (err) { return null; }
+  }
+  function savePendingScore(o) {
+    try {
+      if (o) localStorage.setItem(PENDING_KEY, JSON.stringify(o));
+      else localStorage.removeItem(PENDING_KEY);
+    } catch (err) {}
+  }
 
   function loadScores() {
     try {
@@ -3938,10 +4047,20 @@
     var pname = getPlayerName();
     if (pname) {
       addScoreEntry(pname, state.score, state.level, Math.floor(state.time), rankWeapon);
+      savePendingScore(null); // 已入榜则清空中断暂存
       return true;
     }
     pendingRankScore = { score: state.score, level: state.level, timeSec: Math.floor(state.time), weapon: rankWeapon };
+    savePendingScore(pendingRankScore); // 未命名：持久化暂存，中断/刷新不丢失
     return false;
+  }
+
+  /** P5：遇到突然性数据中断（关闭/切后台/刷新）——直接保存当前数据并上传排行榜 */
+  function autosaveOnInterrupt() {
+    if (!state || state.status !== 'playing') return;
+    if (state.score <= 0) return;
+    if (recordScoreToRank._settled) return;
+    recordScoreToRank();
   }
 
   /** P4：主副武器中取攻击伤害更高的武器（用于排行榜分类） */
@@ -3999,6 +4118,8 @@
 
   function openRankPanel(focusInput) {
     showPanel('rank');
+    // P5：页面中断暂存的成绩自动带出（刷新/切后台后仍可输入名字入榜）
+    if (!pendingRankScore) pendingRankScore = loadPendingScore();
     initRankPanel(focusInput);
     syncRankFromCloud(); // 打开时同步云端所有玩家的成绩
   }
@@ -4007,10 +4128,15 @@
   if (btnRank) {
     btnRank.addEventListener('click', function () { openRankPanel(false); });
   }
+  // P5：突然性数据中断（关闭页面/刷新/切后台）——直接保存当前数据并上传排行榜
+  window.addEventListener('beforeunload', autosaveOnInterrupt);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) autosaveOnInterrupt();
+  });
   var btnRankBack = document.getElementById('btn-rank-back');
   if (btnRankBack) {
     btnRankBack.addEventListener('click', function () {
-      if (pendingRankScore) pendingRankScore = null; // 放弃未命名暂存
+      if (pendingRankScore) { pendingRankScore = null; savePendingScore(null); } // 放弃未命名暂存
       showPanel('menu');
       updateMenuConfig();
     });
@@ -4025,6 +4151,7 @@
       if (pendingRankScore) {
         addScoreEntry(n, pendingRankScore.score, pendingRankScore.level, pendingRankScore.timeSec, pendingRankScore.weapon);
         pendingRankScore = null;
+        savePendingScore(null);
         renderRankList(); // 刷新榜单，让玩家看到本次成绩入榜
         showToast('本次得分已记录！');
         return; // 停留在排行榜展示名次，玩家点"返回"回主菜单
@@ -4762,18 +4889,20 @@
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 4;
       ctx.fillText('❤ ' + Math.ceil(state.devourHp), hcx, hcy - hpr - 8);
-      // 已吞噬能力/ Boss 能力徽标
+      // 已吞噬能力/ Boss 能力徽标（层数 = 能力等级，最多 5 层）
       var badgeY = hcy - hpr - 26;
       ctx.font = 'bold 11px "Microsoft YaHei", sans-serif';
       ctx.fillStyle = '#ffd166';
-      var ab = state.devourAbilities || [];
+      var ab = state.devourAbilities || {};
       var bb = state.devourBossBuffs || [];
+      var abKeys = Object.keys(ab);
       if (bb.length > 0) {
         ctx.fillText('👑 ' + bb.join('·'), hcx, badgeY);
         badgeY -= 14;
       }
-      if (ab.length > 0) {
-        ctx.fillText('🧬 ' + ab.join('·'), hcx, badgeY);
+      if (abKeys.length > 0) {
+        var abStr = abKeys.map(function (k) { return (k === 'flamer' ? '🔥' : k === 'stormer' ? '⚡' : k === 'healer' ? '💚' : '🧬') + k + (ab[k] > 1 ? '×' + ab[k] : ''); }).join(' ');
+        ctx.fillText(abStr, hcx, badgeY);
       }
       ctx.restore();
       return;
@@ -6642,6 +6771,11 @@
   }
 
   function tryActivateUlt() {
+    // P5：大招每 3 波仅可一次——冷却中提示
+    if (state.energy >= state.config.ultMax && state.wave < state.ultNextWave) {
+      showToast('大招冷却中：还需 ' + (state.ultNextWave - state.wave) + ' 波');
+      return false;
+    }
     var ret = GameCore.activateUlt(state);
     if (ret) {
       soundEvents.ult = true;
@@ -6725,7 +6859,27 @@
     var bar = document.getElementById('ult-bar');
     if (bar) bar.style.width = Math.round(state.energy / state.config.ultMax * 100) + '%';
     var ultBtn = document.getElementById('btn-ult');
-    if (ultBtn) ultBtn.style.display = state.energy >= state.config.ultMax ? 'block' : 'none';
+    if (ultBtn) {
+      var ultReady = state.energy >= state.config.ultMax;
+      // P5：大招每 3 波仅可一次——冷却中显示剩余波数（灰态）
+      if (ultReady && state.wave < state.ultNextWave) {
+        ultBtn.style.display = 'block';
+        ultBtn.textContent = '大招(需 ' + (state.ultNextWave - state.wave) + ' 波)';
+        ultBtn.style.background = 'rgba(60,90,110,0.55)';
+        ultBtn.style.color = '#9fb8c8';
+        ultBtn.style.borderColor = '#5a7a8a';
+        ultBtn.style.boxShadow = 'none';
+        ultBtn.disabled = true;
+      } else {
+        ultBtn.style.display = ultReady ? 'block' : 'none';
+        ultBtn.textContent = '大 招';
+        ultBtn.style.background = 'linear-gradient(135deg,#7df0ff,#4ee0ff)';
+        ultBtn.style.color = '#02121f';
+        ultBtn.style.borderColor = '#baf7ff';
+        ultBtn.style.boxShadow = '0 0 18px rgba(78,224,255,0.9)';
+        ultBtn.disabled = false;
+      }
+    }
     // P2：冲刺冷却条
     var dashBar = document.getElementById('dash-bar');
     if (dashBar) {
@@ -6764,6 +6918,8 @@
       if (wantFire) {
         fired = GameCore.fireBullet(state, dt);
       }
+      // P5：吞噬者按住攻击键 → 释放继承能力（火焰/雷电/治疗）
+      state.devourActing = wantFire && state.weapon === 'devour';
 
       // P2：冲刺移动（高速位移 + 无敌帧）
       if (state.dashUntil > state.time) {
