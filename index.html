@@ -748,7 +748,7 @@
       charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' },
       flamethrower: { cooldown: 0.02, damage: 1, bulletSpeed: 0, bulletWidth: 46, bulletHeight: 96, dps: 64, flameRange: 220, flameWidth: 100, label: '火焰喷射' },
       lightning: { cooldown: 0.5, damage: 4, bulletSpeed: 620, bulletWidth: 10, bulletHeight: 22, chainCount: 3, chainRadius: 210, chainFalloff: 0.5, label: '雷电' },
-      hacker: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 2, wingmanCost: 0.5, devourPct: 0.3, label: '黑客' }
+      hacker: { cooldown: 0.18, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 200, wingmanStart: 2, wingmanCost: 0.5, devourPct: 0.3, label: '黑客' }
     },
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
@@ -1419,12 +1419,32 @@
       return true;
     }
     if (state.weapon === 'hacker') {
-      // P4：黑客武器——不发射子弹，攻击由僚机承担（每次开火消耗自身血量）
+      // P4：黑客武器——手动僚机齐射（按住攻击键时所有僚机开火，每次消耗自身血量）
       if (state.wingman > 0) {
-        state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost);
+        var p = state.player;
+        var wcx = p.x + p.width / 2;
+        var wcy = p.y + p.height / 2;
+        var wdmg = getWingmanDamage(state);
+        for (var wm = 0; wm < state.wingman; wm++) {
+          var wOff = (wm - (state.wingman - 1) / 2) * 30;
+          state.bullets.push({
+            id: newId(state),
+            type: 'wingbullet',
+            x: wcx + wOff - 2,
+            y: wcy - 34,
+            width: 4,
+            height: 9,
+            vx: 0,
+            vy: -460,
+            damage: wdmg,
+            life: 0,
+            dmgType: 'phys'
+          });
+        }
+        state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost * state.wingman);
         if (state.hackerHp <= 0) killHackerPlayer(state);
       }
-      state.nextFireTime = state.time + 0.2;
+      state.nextFireTime = state.time + getFireCooldown(state);
       return true;
     }
     if (state.weapon === 'charge') {
@@ -2603,7 +2623,8 @@
     updateP4Enemies(state, dt);
 
     // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）
-    if (state.wingman > 0) {
+    // P4：黑客武器僚机为手动模式（按住攻击键才齐射），此处跳过自动开火
+    if (state.wingman > 0 && state.weapon !== 'hacker') {
       state.wingmanCooldown -= dt;
       if (state.wingmanCooldown <= 0) {
         state.wingmanCooldown = cfg.wingmanCooldown;
@@ -2611,11 +2632,6 @@
         var wcx = wp.x + wp.width / 2;
         var wcy = wp.y + wp.height / 2;
         var wdmg = getWingmanDamage(state);
-        // P4：黑客模式——僚机自动开火同样消耗自身血量
-        if (state.weapon === 'hacker') {
-          state.hackerHp = Math.max(0, state.hackerHp - cfg.weapons.hacker.wingmanCost * state.wingman);
-          if (state.hackerHp <= 0) { killHackerPlayer(state); }
-        }
         for (var wm = 0; wm < state.wingman; wm++) {
           var wOff = (wm - (state.wingman - 1) / 2) * 30;
           state.bullets.push({
