@@ -271,9 +271,9 @@
       width: 33.1%; height: 6.2%;
       font-size: 14px; letter-spacing: 2px;
     }
-    /* P3：武器成长移到"选择武器"下方 */
+    /* P7f：武器成长移到"开始游戏"右边（原难度按钮位置，与开始游戏同一行） */
     #btn-upgrade-menu {
-      left: 6.3%; top: 86.5%;
+      left: 68.2%; top: 79%;
       width: 21.9%; height: 6.2%;
       font-size: 14px; letter-spacing: 2px;
     }
@@ -307,6 +307,25 @@
     }
     .menu-title {
       display: none;
+    }
+
+    /* ===== 主菜单图鉴入口（排行按钮正下方，P7f） ===== */
+    #btn-menu-codex {
+      position: fixed;
+      top: 104px;
+      right: 14px;
+      z-index: 26;
+      padding: 8px 14px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      border: 1px solid #c98bff;
+      color: #c98bff;
+      background: rgba(35, 12, 58, 0.72);
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(201, 139, 255, 0.35), inset 0 0 10px rgba(201, 139, 255, 0.12);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     /* ===== 排行榜（初始界面右上角入口） ===== */
@@ -575,6 +594,7 @@
         <button class="btn side" id="btn-level">关卡模式</button>
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
+      <button type="button" id="btn-menu-codex">📖 图鉴</button>
       <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
@@ -4561,6 +4581,15 @@
   if (btnCodex) {
     btnCodex.addEventListener('click', function () {
       codexFromRank = true;
+      renderCodexBody();
+      showPanel('codex');
+    });
+  }
+  // P7f：主菜单排行正下方的图鉴入口（从主菜单打开，返回回主菜单）
+  var btnMenuCodex = document.getElementById('btn-menu-codex');
+  if (btnMenuCodex) {
+    btnMenuCodex.addEventListener('click', function () {
+      codexFromRank = false;
       renderCodexBody();
       showPanel('codex');
     });
