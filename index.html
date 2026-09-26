@@ -2335,9 +2335,9 @@
       if (pendingRankScore) {
         addScoreEntry(n, pendingRankScore.score, pendingRankScore.level, pendingRankScore.timeSec);
         pendingRankScore = null;
+        renderRankList(); // 刷新榜单，让玩家看到本次成绩入榜
         showToast('本次得分已记录！');
-        setTimeout(function () { backToMenu(); }, 900);
-        return;
+        return; // 停留在排行榜展示名次，玩家点"返回"回主菜单
       }
       renderRankList();
       showToast('玩家名称已保存');
