@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>星际战机</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,6 +34,12 @@
       cursor: crosshair;
       display: block;
       box-shadow: 0 0 40px rgba(78, 224, 255, 0.18);
+      /* 手机屏幕自适应：保持 480x640 逻辑分辨率，按屏幕缩放显示（横竖屏均完整适配） */
+      width: auto;
+      height: auto;
+      max-width: 100vw;
+      max-height: 100vh;
+      aspect-ratio: 480 / 640;
     }
 
     /* ===== 科技风面板 ===== */
@@ -506,9 +512,10 @@
     shieldDuration: 5,
     scorePowerupBonus: 50,
 
-    // 关卡（时间驱动：每 levelDuration 秒升 1 级）
+    // 关卡（时间驱动：前 10 级每 60 秒升 1 级，第 10 级完成后进入无尽模式，每 30 秒升 1 级）
     scorePerLevel: 10,       // 保留兼容字段（不再驱动关卡）
-    levelDuration: 60,       // 每 60 秒进入下一难度
+    levelDuration: 60,       // 前 10 级：每 60 秒进入下一难度
+    endlessLevelDuration: 30, // 无尽模式：第 10 级之后每 30 秒增加一层难度
     levelHpPerLevel: 1,      // 每级敌人血量增加量
 
     // BOSS
@@ -605,8 +612,15 @@
   }
 
   /** 按存活时间计算当前关卡（每 levelDuration 秒升 1 级，从 1 起） */
+  /** 按存活时间计算当前关卡：前 10 级每 levelDuration 秒升 1 级；完成第 10 级后进入无尽模式，每 endlessLevelDuration 秒再升 1 级（无上限） */
   function getLevel(state) {
-    return Math.floor(state.time / state.config.levelDuration) + 1;
+    var cfg = state.config;
+    var t = state.time;
+    var normalTotal = cfg.levelDuration * 10; // 前 10 级占用的总时长（600 秒）
+    if (t < normalTotal) {
+      return Math.floor(t / cfg.levelDuration) + 1;
+    }
+    return 10 + Math.floor((t - normalTotal) / cfg.endlessLevelDuration) + 1;
   }
 
   /** 难度系数：仅用于敌人血量加成（不改变速度/生成频率） */
@@ -979,7 +993,7 @@
       case 'life': state.lives = Math.min(cfg.maxLives, state.lives + 1); break;
       case 'multishot': state.multishotLevel = Math.min(cfg.multishotMax - 1, state.multishotLevel + 1); break;
       case 'firespeed': state.fireSpeedFactor = Math.max(cfg.fireSpeedMin, state.fireSpeedFactor * cfg.fireSpeedStep); break;
-      case 'damage': state.damageBonus = Math.min(cfg.damageBonusMax, state.damageBonus + 1); break;
+      case 'damage': state.damageBonus += 1; break; // 攻击力道具无限叠加（无上限）
       case 'bulletsize': state.bulletSizeBonus = Math.min(cfg.bulletSizeMax, state.bulletSizeBonus + 1); break;
       case 'laserwidth': state.laserWidthBonus = Math.min(cfg.laserWidthMax, state.laserWidthBonus + 1); break;
       default: break;
