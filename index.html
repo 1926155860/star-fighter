@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -251,10 +251,16 @@
       width: 21.8%; height: 6.2%;
       font-size: 14px; letter-spacing: 1px;
     }
-    /* 武器成长：位于"开始游戏"正下方 */
-    #btn-upgrade-menu {
+    /* P3：关卡模式：位于"开始游戏"正下方 */
+    #btn-level {
       left: 32.2%; top: 86.5%;
       width: 33.1%; height: 6.2%;
+      font-size: 14px; letter-spacing: 2px;
+    }
+    /* P3：武器成长移到"选择武器"下方 */
+    #btn-upgrade-menu {
+      left: 6.3%; top: 86.5%;
+      width: 21.9%; height: 6.2%;
       font-size: 14px; letter-spacing: 2px;
     }
     .menu-overlay .btn {
@@ -466,6 +472,7 @@
         <button class="btn side" id="btn-loadout">选择装备</button>
         <button class="btn primary start" id="btn-start">开始游戏</button>
         <button class="btn side" id="btn-difficulty">选择难度</button>
+        <button class="btn side" id="btn-level">关卡模式</button>
         <button class="btn side" id="btn-upgrade-menu">武器成长</button>
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
@@ -488,6 +495,14 @@
       <div class="diff-label">难度 1 ~ 10：只增加敌人血量（不加速）</div>
       <div class="difficulty-grid" id="difficulty-grid"></div>
       <button class="btn small" id="btn-difficulty-back">返 回</button>
+    </div>
+
+    <!-- P3：关卡模式（通关目标波次） -->
+    <div id="level" class="overlay">
+      <div class="panel-title">关 卡 模 式</div>
+      <div class="diff-label">选定关卡后直接开局：抵达目标波次并清空战场即通关</div>
+      <div class="difficulty-grid" id="level-grid"></div>
+      <button class="btn small" id="btn-level-back">返 回</button>
     </div>
 
     <!-- 设置 -->
@@ -640,7 +655,14 @@
       boomerang: { cooldown: 1.0, damage: 2, bulletSpeed: 420, bulletWidth: 18, bulletHeight: 18, bounceGrow: 1.18, bounceSpeedBoost: 1.06, maxBoomerangSize: 220, label: '回旋镖' },
       saber: { cooldown: 0.25, damage: 5, bulletSpeed: 500, bulletWidth: 10, bulletHeight: 30, meleeDps: 32, meleeRadius: 78, bladeLengthStep: 8, label: '光刃' },
       homing: { cooldown: 0.34, damage: 1, bulletSpeed: 320, bulletWidth: 8, bulletHeight: 16, turnRate: 420, label: '追踪弹' },
-      charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' }
+      charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' },
+      flamethrower: { cooldown: 0.02, damage: 1, bulletSpeed: 0, bulletWidth: 46, bulletHeight: 96, dps: 64, flameRange: 220, flameWidth: 100, label: '火焰喷射' },
+      lightning: { cooldown: 0.5, damage: 4, bulletSpeed: 620, bulletWidth: 10, bulletHeight: 22, chainCount: 3, chainRadius: 210, chainFalloff: 0.5, label: '雷电' }
+    },
+    // P3：武器伤害类型（物理 / 魔法）
+    weaponDamageType: {
+      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys',
+      laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
     },
     bulletSpread: 14,
 
@@ -669,8 +691,30 @@
     // 波次关卡（替代时间驱动难度）
     waveBreakDuration: 2.5,  // 波间休息时长
     waveBaseSpawns: 3,       // 第 1 波敌人数量
-    waveSpawnsPerLevel: 1,   // 每波敌人数量递增
+    waveSpawnsPerLevel: 2,   // 每波敌人数量递增（P3：敌人随波次越打越多）
     waveBossEvery: 3,        // 每 N 波出现一次 Boss 波
+
+    // P3：敌人抗性（物理/魔法，随波次逐渐获得）
+    enemyResistPerWave: 0.02, // 每波 +2% 抗性
+    enemyResistMax: 0.6,      // 抗性上限 60%
+    tankHpFactor: 5,          // 坦克型：5 倍血量
+    assassinTeleportTime: 2,  // 刺客型：2 秒未击杀瞬移到玩家旁
+    chargerChargeInterval: 2.5, // 冲撞型：冲撞周期
+    chargerWindupTime: 0.5,     // 冲撞蓄力时间
+    chargerChargeDuration: 0.8, // 冲撞持续时间
+    chargerChargeSpeedMult: 3.2, // 冲撞速度倍率
+    devourerRadius: 180,        // 吞噬型吞噬半径
+    devourerAbsorbPct: 0.5,     // 吸收被吞敌人血量比例
+    devourerBossAbsorbPct: 0.2, // 吸收 Boss 血量比例
+
+    // P3：Boss 加成（随机获得，数量随波次增长：1~10 波 1 种、10~20 波 2 种、20~30 波 3 种…）
+    bossBuffPool: ['physResist80', 'magicResist80', 'resist50', 'extraSplit', 'resistBuff50', 'gather', 'speedUp50', 'bombardment', 'lockProtect', 'lifeDrain', 'singleShot'],
+    bossBombInterval: 3.2,   // 轨道轰炸周期
+    bossBombWarnTime: 0.7,   // 轰炸预警时长
+    bossBombRadius: 90,      // 轰炸半径
+
+    // P3：强化频率（第 10 波后每 500 分选择一次强化）
+    buffScoreInterval: 500,
 
     // P2：冲刺闪避（带短暂无敌帧）
     dash: { cooldown: 2.5, duration: 0.18, speed: 900 },
@@ -726,8 +770,8 @@
     enemyBaseHp: 1,
     difficultyHpStep: 0.5,   // 每级难度敌机血量增量
 
-    // 特殊敌人（治疗型 / 防御型 / 追踪自爆型 / 重甲型 / 弹幕散射型）
-    specialWeights: { normal: 60, healer: 12, defender: 12, chaser: 10, armored: 6, spreader: 4 },
+    // 特殊敌人（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客）
+    specialWeights: { normal: 40, healer: 8, defender: 8, chaser: 7, armored: 5, spreader: 4, devourer: 7, charger: 8, tank: 6, assassin: 7 },
     healInterval: 1.2,        // 治疗型：每 1.2 秒对范围内敌人治疗一次
     healRadius: 150,          // 治疗半径
     healAmount: 2,            // 每次治疗回复血量
@@ -790,6 +834,7 @@
       level: 1,
       difficulty: cfg.difficulty,
       lives: Math.max(1, Math.round(cfg.lives * shipCfg.hp)),
+      maxLives: Math.max(1, Math.round(cfg.maxLives * shipCfg.hp)), // P3：血量上限（Boss 生命诅咒可扣）
       weapon: cfg.initialWeapon || 'gun',
       secondaryWeapon: cfg.initialSecondaryWeapon || null, // 副武器（实时双武器）
       ship: (cfg.ships[cfg.initialShip] ? cfg.initialShip : 'star'), // 战机皮肤
@@ -833,6 +878,14 @@
       dashDirY: -1,
       wingman: 0,
       wingmanCooldown: 0,
+      // P3：火焰喷射持续场 / 大招持续场 / 强化频率 / Boss 轰炸预警
+      flameActive: false,
+      flameTimer: 0,
+      ultLaserUntil: 0,
+      ultFlameUntil: 0,
+      nextBuffScore: 0,
+      buffOffered: false,
+      bossBombPending: null, // {x,y,width,height,warnUntil,hitAt}
       nextSpawnTime: cfg.enemySpawnInterval,
       nextFireTime: 0,
       nextEnemyFireTime: cfg.enemyFireInterval,
@@ -893,27 +946,73 @@
     return getWeaponLevel(state, weapon) * state.config.weaponLevelDmg;
   }
 
-  /** 大招：满能量时清屏所有敌人并按分值×连击加分（不分裂），对 Boss 造成最大血量比例伤害 */
+  /**
+   * 大招：每种武器有自己专属的大招（满能量触发）
+   * 机枪=弹幕风暴 / 大炮=地毯轰炸 / 激光=全屏扫射 / 回旋镖=超级回旋镖 / 光刃=全屏斩击
+   * 追踪弹=导弹雨 / 蓄力炮=巨型穿透弹 / 火焰喷射=火海灼烧 / 雷电=雷暴
+   * @returns {{weapon:string, kind:string}} 供前端播放专属特效
+   */
   function activateUlt(state) {
     if (state.status !== 'playing') return false;
     if (state.energy < state.config.ultMax) return false;
     state.energy = 0;
     var cfg = state.config;
-    for (var i = state.enemies.length - 1; i >= 0; i--) {
-      var e = state.enemies[i];
-      state.combo++;
-      state.score += Math.round(e.score * getComboMultiplier(state));
-      state.explosions.push({
-        x: e.x + e.width / 2,
-        y: e.y + e.height / 2,
-        kind: (e.level >= 2) ? 'large' : 'small'
-      });
-      state.enemies.splice(i, 1);
+    var w = state.weapon;
+    var p = state.player;
+    var wcfg = cfg.weapons[w];
+    var wdmg = (wcfg ? wcfg.damage : 1) + state.damageBonus + getWeaponLevelDamage(state, w);
+    wdmg = Math.max(1, Math.round(wdmg * getShipFireFactor(state)));
+    var result = { weapon: w, kind: 'ult-' + w };
+    switch (w) {
+      case 'gun': // 弹幕风暴：全屏扇形 24 发
+        for (var gi = 0; gi < 24; gi++) {
+          var ang = -Math.PI / 2 + (gi - 11.5) * (Math.PI / 22);
+          state.bullets.push({ id: newId(state), type: 'ultbullet', x: p.x + p.width / 2 - 3, y: p.y - 12, width: 6, height: 14, vx: Math.cos(ang) * 560, vy: Math.sin(ang) * 560, damage: wdmg, life: 0, dmgType: 'phys' });
+        }
+        break;
+      case 'cannon': // 地毯轰炸：8 枚炮弹随机落点
+        for (var ci = 0; ci < 8; ci++) {
+          state.bullets.push({ id: newId(state), type: 'bombbullet', x: Math.random() * cfg.width, y: -20, width: 18, height: 18, vx: 0, vy: 240, damage: Math.max(1, wdmg * 3), life: 0, dmgType: 'phys' });
+        }
+        break;
+      case 'laser': // 全屏激光扫射（持续 1.2s）
+        state.ultLaserUntil = state.time + 1.2;
+        break;
+      case 'boomerang': // 超级回旋镖：8 个全场弹射
+        for (var bi = 0; bi < 8; bi++) {
+          state.bullets.push({ id: newId(state), type: 'boomerang', x: p.x + p.width / 2 - 9, y: p.y - 20, width: 18, height: 18, vx: (Math.random() * 2 - 1) * 140, vy: -cfg.weapons.boomerang.bulletSpeed, damage: Math.max(1, wdmg * 2), life: 0, bounceCount: 0, dmgType: 'phys' });
+        }
+        break;
+      case 'saber': // 光刃风暴：全屏斩击 + 清弹
+        for (var si = state.enemies.length - 1; si >= 0; si--) {
+          state._killWeapon = 'saber';
+          hurtEnemy(state, state.enemies[si], Math.max(1, wdmg * 6), 'magic');
+        }
+        if (state.boss) hurtBoss(state, Math.max(1, Math.round(state.boss.maxHp * cfg.ultBossDamagePct)), 'magic');
+        for (var sbi = state.enemyBullets.length - 1; sbi >= 0; sbi--) state.enemyBullets.splice(sbi, 1);
+        break;
+      case 'homing': // 导弹雨：12 枚追踪弹
+        for (var hi = 0; hi < 12; hi++) {
+          state.bullets.push({ id: newId(state), type: 'homing', x: p.x + p.width / 2 - 4, y: p.y - 16, width: 8, height: 16, vx: 0, vy: -cfg.weapons.homing.bulletSpeed, damage: wdmg, life: 0, dmgType: 'phys' });
+        }
+        break;
+      case 'charge': // 巨型蓄力炮：全屏穿透
+        state.bullets.push({ id: newId(state), type: 'chargebolt', x: p.x + p.width / 2 - 30, y: p.y - 60, width: 60, height: 60, vx: 0, vy: -780, damage: Math.max(1, wdmg * 8), life: 0, bounceCount: 0, charge: 1, dmgType: 'phys' });
+        break;
+      case 'flamethrower': // 火海：全屏灼烧 2s
+        state.ultFlameUntil = state.time + 2;
+        break;
+      case 'lightning': // 雷暴：随机 6 道全屏闪电
+        for (var li = 0; li < 6; li++) {
+          state.bullets.push({ id: newId(state), type: 'lightningbolt', x: p.x + p.width / 2 + (Math.random() * 600 - 300), y: p.y - 40, width: 10, height: 22, vx: 0, vy: -400, damage: Math.max(1, wdmg * 4), life: 0, dmgType: 'magic' });
+        }
+        break;
     }
-    if (state.boss) {
-      hurtBoss(state, Math.max(1, Math.round(state.boss.maxHp * cfg.ultBossDamagePct)));
+    // 除光刃外：对 Boss 造成比例伤害（光刃大招已内置）
+    if (state.boss && w !== 'saber') {
+      hurtBoss(state, Math.max(1, Math.round(state.boss.maxHp * cfg.ultBossDamagePct)), cfg.weaponDamageType[w] || 'phys');
     }
-    return true;
+    return result;
   }
 
   /** 开启下一波：设置波次敌人数量；每 N 波为 Boss 波（召唤 Boss、敌人数量减半） */
@@ -924,7 +1023,11 @@
     state.waveRewarded = false;
     var cfg = state.config;
     var bossWave = (n % cfg.waveBossEvery === 0);
-    state.pendingSpawns = Math.min(cfg.waveBaseSpawns + (n - 1) * cfg.waveSpawnsPerLevel, 40);
+    state.pendingSpawns = Math.min(cfg.waveBaseSpawns + (n - 1) * cfg.waveSpawnsPerLevel, 80);
+    // P3：第 10 波起每 500 分强化一次（设置首个分数阈值）
+    if (n === 10 && !state.nextBuffScore) {
+      state.nextBuffScore = Math.floor(state.score / cfg.buffScoreInterval) * cfg.buffScoreInterval + cfg.buffScoreInterval;
+    }
     if (bossWave) {
       state.pendingSpawns = Math.max(2, Math.floor(state.pendingSpawns / 2));
       spawnBoss(state);
@@ -981,16 +1084,35 @@
     return names[0];
   }
 
-  /** 随机分配敌人特殊能力（治疗/防御/追踪自爆/重甲/弹幕散射/普通） */
+  /** 随机分配敌人特殊能力（治疗/防御/追踪自爆/重甲/弹幕散射/吞噬/冲撞/坦克/刺客/普通） */
   function pickEnemySpecial(state) {
     var cfg = state.config;
+    var w = cfg.specialWeights;
+    var order = ['healer', 'defender', 'chaser', 'armored', 'spreader', 'devourer', 'charger', 'tank', 'assassin'];
     var r = Math.random() * 100;
-    if (r < cfg.specialWeights.healer) return 'healer';
-    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender) return 'defender';
-    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser) return 'chaser';
-    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser + cfg.specialWeights.armored) return 'armored';
-    if (r < cfg.specialWeights.healer + cfg.specialWeights.defender + cfg.specialWeights.chaser + cfg.specialWeights.armored + cfg.specialWeights.spreader) return 'spreader';
+    var acc = w.normal;
+    for (var i = 0; i < order.length; i++) {
+      acc += (w[order[i]] || 0);
+      if (r < acc) return order[i];
+    }
     return 'normal';
+  }
+
+  /** P3：敌人抗性（物抗/魔抗）：随波次逐渐获得；Boss 有 resistBuff50 加成时全场 +50% */
+  function getEnemyResist(state, enemy, dmgType) {
+    var cfg = state.config;
+    var base = Math.min(cfg.enemyResistMax, Math.max(0, (state.wave - 1) * cfg.enemyResistPerWave));
+    var r = base;
+    // 重甲型：额外 50% 物抗（魔法伤害不受其护甲影响）
+    if (enemy.special === 'armored' && dmgType === 'phys') r += 0.5;
+    // Boss 加成 e：在场其他敌人获得 50% 抗性（物/魔各）
+    if (state.boss && hasBossBuff(state, 'resistBuff50')) r += 0.5;
+    return Math.min(0.9, r);
+  }
+
+  /** P3：判断 Boss 是否拥有指定加成 */
+  function hasBossBuff(state, id) {
+    return !!(state.boss && state.boss.buffs && state.boss.buffs.indexOf(id) !== -1);
   }
 
   /** 创建球形敌人（levelName: small/medium/large/xlarge）。centerX/Y 为球心；parentSpeed 存在表示分裂球（向四周散开，并继承母球特殊能力） */
@@ -1024,6 +1146,20 @@
       healTarget: null          // 治疗型：当前治疗目标 id（用于画连接线）
     };
     enemy.maxHp = enemy.hp;
+    // P3：坦克型 5 倍血量
+    if (enemy.special === 'tank') {
+      enemy.hp = Math.max(1, Math.round(enemy.hp * cfg.tankHpFactor));
+      enemy.maxHp = enemy.hp;
+    }
+    // P3：刺客型 2 秒未击杀瞬移到玩家旁
+    if (enemy.special === 'assassin') {
+      enemy.assassinTimer = cfg.assassinTeleportTime;
+    }
+    // P3：冲撞型状态机
+    if (enemy.special === 'charger') {
+      enemy.chargeState = 'idle';
+      enemy.chargeTimer = 0.6 + Math.random() * cfg.chargerChargeInterval;
+    }
     if (parentSpeed !== undefined) {
       // 分裂球：向随机方向弹射（偏下）
       var ang = Math.random() * Math.PI * 2;
@@ -1076,6 +1212,8 @@
   }
 
   function getBulletCount(state) {
+    // P3：Boss 加成 k「火力封锁」在场时弹道强制为 1
+    if (hasBossBuff(state, 'singleShot')) return 1;
     return 1 + state.multishotLevel;
   }
 
@@ -1115,6 +1253,12 @@
       state.laserActive = true;
       return true;
     }
+    if (state.weapon === 'flamethrower') {
+      // P3：火焰喷射（持续伤害，魔法）：激活持续喷火场，按住持续喷
+      state.flameActive = true;
+      state.flameTimer = 0.2;
+      return true;
+    }
     if (state.weapon === 'charge') {
       // 蓄力累积（满蓄力后自动攻击）
       state.charge = Math.min(1, state.charge + (dt || 0.016) / cfg.weapons.charge.chargeTime);
@@ -1152,7 +1296,8 @@
           vx: 0,
           vy: -wcfg.bulletSpeed,
           damage: dmg,
-          life: 0
+          life: 0,
+          dmgType: 'magic'
         });
       }
       state.nextFireTime = state.time + getFireCooldown(state);
@@ -1168,9 +1313,10 @@
       var offset = (i - (count - 1) / 2) * cfg.bulletSpread;
       var bx = p.x + p.width / 2 + offset - bw / 2;
       var by = p.y - bh;
+      var btype = (state.weapon === 'lightning') ? 'lightningbolt' : state.weapon;
       state.bullets.push({
         id: newId(state),
-        type: state.weapon,
+        type: btype,
         x: bx,
         y: by,
         width: bw,
@@ -1179,7 +1325,8 @@
         vy: -wcfg.bulletSpeed,
         damage: damage,
         life: 0,
-        bounceCount: 0
+        bounceCount: 0,
+        dmgType: cfg.weaponDamageType[state.weapon] || 'phys'
       });
     }
 
@@ -1219,7 +1366,8 @@
         damage: dmg,
         life: 0,
         bounceCount: 0,
-        charge: charge
+        charge: charge,
+        dmgType: 'phys'
       });
     }
     return true;
@@ -1452,9 +1600,24 @@
       name: cfg.bossNames[mode] || '恶魔',
       spiralAngle: Math.random() * Math.PI * 2, // 螺旋弹幕起始角
       fireSub: 0, // 部分模式连发计数器
-      invuln: 2   // 进场保护：短暂无敌，让玩家看清 Boss 形象
+      invuln: 2,   // 进场保护：短暂无敌，让玩家看清 Boss 形象
+      buffs: pickBossBuffs(state), // P3：随机 Boss 加成（数量随波次）
+      bombTimer: cfg.bossBombInterval // P3：轨道轰炸计时
     };
     return state.boss;
+  }
+
+  /** P3：随机抽取 Boss 加成（1~10 波 1 种、10~20 波 2 种、20~30 波 3 种…，最多 4 种） */
+  function pickBossBuffs(state) {
+    var cfg = state.config;
+    var count = Math.min(4, 1 + Math.floor((state.wave - 1) / 10));
+    var pool = cfg.bossBuffPool.slice();
+    // 洗牌
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    return pool.slice(0, count);
   }
 
   function bossFire(state) {
@@ -1585,12 +1748,17 @@
 
   // ==================== 伤害结算（敌机/BOSS） ====================
 
-  /** 对敌机/BOSS 造成伤害；返回是否击毁（防御型敌人无敌期间免疫） */
-  function hurtEnemy(state, enemy, damage) {
+  /**
+   * 对敌机造成伤害；返回是否击毁（防御型敌人无敌期间免疫）
+   * @param {string} dmgType 'phys' 物理 / 'magic' 魔法（受对应抗性减免）
+   */
+  function hurtEnemy(state, enemy, damage, dmgType) {
     if (enemy.invulnUntil && enemy.invulnUntil > state.time) return false; // 防御型：无敌状态免疫伤害
     var cfg = state.config;
-    // 重甲型：受到的伤害减半（至少 1）
-    if (enemy.special === 'armored') damage = Math.max(1, Math.round(damage * cfg.armorDamageFactor));
+    dmgType = dmgType || 'phys';
+    // P3：物抗/魔抗减免
+    var resist = getEnemyResist(state, enemy, dmgType);
+    damage = Math.max(1, Math.round(damage * (1 - resist)));
     enemy.hp -= damage;
     if (enemy.hp <= 0) {
       var idx = state.enemies.indexOf(enemy);
@@ -1607,6 +1775,21 @@
             vx: Math.sin(spAng) * cfg.enemyBulletSpeed * 0.8,
             vy: Math.cos(spAng) * cfg.enemyBulletSpeed * 0.8
           });
+        }
+      }
+      // P3：吞噬型敌人吞噬周围被杀死的敌人（获得其血量，概率继承其能力）
+      for (var dv = 0; dv < state.enemies.length; dv++) {
+        var dev = state.enemies[dv];
+        if (dev.special !== 'devourer' || dev.hp <= 0) continue;
+        var ddx = (dev.x + dev.width / 2) - (enemy.x + enemy.width / 2);
+        var ddy = (dev.y + dev.height / 2) - (enemy.y + enemy.height / 2);
+        if (Math.sqrt(ddx * ddx + ddy * ddy) <= cfg.devourerRadius) {
+          var gain = Math.max(1, Math.round(enemy.maxHp * cfg.devourerAbsorbPct));
+          dev.hp = Math.min(dev.maxHp * 3, dev.hp + gain);
+          dev.maxHp = Math.max(dev.maxHp, dev.hp);
+          if (enemy.special !== 'normal' && enemy.special !== 'devourer' && Math.random() < 0.3) {
+            dev.special = enemy.special; // 继承被吞敌人的能力
+          }
         }
       }
       // 连击：击杀续连击，按连击倍率加分
@@ -1626,16 +1809,40 @@
       });
       // 中球及以上被杀：分裂 2~3 个低一级球
       splitEnemy(state, enemy);
+      // P3：Boss 加成 d「增殖」：Boss 在场时所有敌人死亡额外分裂一次（小球也分裂）
+      if (hasBossBuff(state, 'extraSplit') && enemy.level > 0) {
+        splitEnemy(state, enemy);
+      } else if (hasBossBuff(state, 'extraSplit') && enemy.level === 0) {
+        // 小球没有更低级，生成 2 个同级小球作为"次分裂"
+        var spx2 = enemy.x + enemy.width / 2;
+        var spy2 = enemy.y + enemy.height / 2;
+        for (var ex = 0; ex < 2; ex++) {
+          var mini = createSphereEnemy(state, 'small', spx2, spy2, enemy.speed || 100, enemy.special);
+          state.enemies.push(mini);
+        }
+      }
       return true;
     }
     return false;
   }
 
-  function hurtBoss(state, damage) {
+  /** 对 Boss 造成伤害；返回是否击毁（进场保护/护卫屏障期间免疫） */
+  function hurtBoss(state, damage, dmgType) {
     var cfg = state.config;
     var boss = state.boss;
     if (!boss) return false;
     if (boss.invuln > 0) return false;   // 进场保护期间不受伤害
+    // P3：Boss 加成 i「护卫屏障」：场上敌人 < 5 个才能对 Boss 造成伤害
+    if (hasBossBuff(state, 'lockProtect') && state.enemies.length >= 5) return false;
+    dmgType = dmgType || 'phys';
+    // P3：Boss 物抗/魔抗（加成 a/b/c）
+    var physR = 0, magicR = 0;
+    if (hasBossBuff(state, 'physResist80')) physR += 0.8;
+    if (hasBossBuff(state, 'magicResist80')) magicR += 0.8;
+    if (hasBossBuff(state, 'resist50')) { physR += 0.5; magicR += 0.5; }
+    physR = Math.min(0.9, physR); magicR = Math.min(0.9, magicR);
+    var resist = dmgType === 'magic' ? magicR : physR;
+    damage = Math.max(1, Math.round(damage * (1 - resist)));
     boss.hp -= damage;
     if (boss.hp <= 0) {
       state.score += Math.round(cfg.bossScore * getComboMultiplier(state));
@@ -1647,6 +1854,23 @@
         y: boss.y + boss.height / 2,
         kind: 'boss'
       });
+      // P3：吞噬型可吞噬 Boss 的部分生命（"包括不限于 boss"）
+      for (var dv2 = 0; dv2 < state.enemies.length; dv2++) {
+        var dev2 = state.enemies[dv2];
+        if (dev2.special !== 'devourer' || dev2.hp <= 0) continue;
+        var d2x = (dev2.x + dev2.width / 2) - (boss.x + boss.width / 2);
+        var d2y = (dev2.y + dev2.height / 2) - (boss.y + boss.height / 2);
+        if (Math.sqrt(d2x * d2x + d2y * d2y) <= cfg.devourerRadius + 60) {
+          var gain2 = Math.max(1, Math.round(boss.maxHp * cfg.devourerBossAbsorbPct));
+          dev2.hp = Math.min(dev2.maxHp * 3, dev2.hp + gain2);
+          dev2.maxHp = Math.max(dev2.maxHp, dev2.hp);
+        }
+      }
+      // P3：Boss 加成 j「生命诅咒」：Boss 死亡后直接扣除玩家血量上限两点
+      if (hasBossBuff(state, 'lifeDrain')) {
+        state.maxLives = Math.max(1, state.maxLives - 2);
+        if (state.lives > state.maxLives) state.lives = state.maxLives;
+      }
       for (var d = 0; d < cfg.bossDropPowerups; d++) {
         dropPowerupAt(state, boss.x + boss.width / 2 + (d - (cfg.bossDropPowerups - 1) / 2) * 30, boss.y + boss.height / 2);
       }
@@ -1708,6 +1932,81 @@
           break;
         }
       }
+    }
+  }
+
+  /** P3：火焰喷射持续伤害（魔法）：玩家前方火焰锥形/矩形范围持续灼烧敌人与 Boss，可烧毁敌弹 */
+  function updateFlame(state, dt) {
+    var cfg = state.config;
+    var wcfg = cfg.weapons.flamethrower;
+    var p = state.player;
+    var count = getBulletCount(state);
+    var dps = (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'flamethrower')) * getShipFireFactor(state);
+    var zones = [];
+    for (var i = 0; i < count; i++) {
+      var offset = (i - (count - 1) / 2) * cfg.bulletSpread * 1.4;
+      var cx = p.x + p.width / 2 + offset;
+      zones.push({
+        x: cx - wcfg.flameWidth / 2,
+        y: p.y - wcfg.flameRange,
+        width: wcfg.flameWidth,
+        height: wcfg.flameRange
+      });
+    }
+    for (var ei = state.enemies.length - 1; ei >= 0; ei--) {
+      for (var zi = 0; zi < zones.length; zi++) {
+        if (rectsOverlap(zones[zi], state.enemies[ei])) {
+          state._killWeapon = 'flamethrower';
+          hurtEnemy(state, state.enemies[ei], dps * dt, 'magic');
+          break;
+        }
+      }
+    }
+    if (state.boss) {
+      for (var zj = 0; zj < zones.length; zj++) {
+        if (rectsOverlap(zones[zj], state.boss)) {
+          hurtBoss(state, dps * dt, 'magic');
+          break;
+        }
+      }
+    }
+    // 火焰烧毁敌弹
+    for (var ebi2 = state.enemyBullets.length - 1; ebi2 >= 0; ebi2--) {
+      for (var zk = 0; zk < zones.length; zk++) {
+        if (rectsOverlap(zones[zk], state.enemyBullets[ebi2])) {
+          state.enemyBullets.splice(ebi2, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  /** P3：雷电连锁攻击：命中敌人后向附近敌人弹跳（最多 chainCount 次，伤害递减，魔法） */
+  function chainLightning(state, b) {
+    var cfg = state.config;
+    var wcfg = cfg.weapons.lightning;
+    var hitIds = {};
+    var from = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    var dmg = b.damage;
+    for (var c = 0; c <= wcfg.chainCount; c++) {
+      // 找最近未被连锁的敌人
+      var best = null;
+      var bestD = wcfg.chainRadius;
+      for (var i = 0; i < state.enemies.length; i++) {
+        var e = state.enemies[i];
+        if (hitIds[e.id]) continue;
+        var ecx = e.x + e.width / 2;
+        var ecy = e.y + e.height / 2;
+        var d = Math.sqrt((ecx - from.x) * (ecx - from.x) + (ecy - from.y) * (ecy - from.y));
+        if (d < bestD) { best = e; bestD = d; }
+      }
+      if (!best) break;
+      hitIds[best.id] = true;
+      state._killWeapon = 'lightning';
+      hurtEnemy(state, best, Math.max(1, Math.round(dmg)), 'magic');
+      state.explosions.push({ x: best.x + best.width / 2, y: best.y + best.height / 2, kind: 'bolt', fromX: from.x, fromY: from.y });
+      from = { x: best.x + best.width / 2, y: best.y + best.height / 2 };
+      dmg = Math.max(1, Math.round(dmg * wcfg.chainFalloff));
     }
   }
 
@@ -1853,6 +2152,8 @@
 
     // 移动敌机（普通球向下；分裂球带 vx/vy 自由散开）
     // 左右界面反弹；通过下方/上方界面时回卷到另一侧重新出现（敌人不会消失，需击杀清除）
+    var gather = hasBossBuff(state, 'gather');        // P3：Boss 集结号（向 Boss 靠拢）
+    var speedUp = hasBossBuff(state, 'speedUp50');    // P3：Boss 加速光环（敌人速度 +50%）
     for (var i = state.enemies.length - 1; i >= 0; i--) {
       var e = state.enemies[i];
       // 追踪自爆型：持续朝玩家方向加速移动
@@ -1860,9 +2161,60 @@
         var chx = state.player.x + state.player.width / 2 - (e.x + e.width / 2);
         var chy = state.player.y + state.player.height / 2 - (e.y + e.height / 2);
         var chd = Math.sqrt(chx * chx + chy * chy) || 1;
-        var chsp = e.speed * cfg.chaserSpeedFactor;
+        var chsp = e.speed * cfg.chaserSpeedFactor * (speedUp ? 1.5 : 1);
         e.vx = chx / chd * chsp;
         e.vy = chy / chd * chsp;
+      }
+      // P3：冲撞型状态机（蓄力 → 高速冲撞）
+      if (e.special === 'charger' && state.player) {
+        if (e.chargeState === 'idle') {
+          e.chargeTimer -= dt;
+          if (e.chargeTimer <= 0) { e.chargeState = 'windup'; e.chargeTimer = cfg.chargerWindupTime; e.windupAt = state.time; }
+        } else if (e.chargeState === 'windup') {
+          e.chargeTimer -= dt;
+          e.vx = 0; e.vy = 0; // 蓄力停住
+          if (e.chargeTimer <= 0) {
+            e.chargeState = 'dash';
+            e.chargeTimer = cfg.chargerChargeDuration;
+            var cx2 = state.player.x + state.player.width / 2 - (e.x + e.width / 2);
+            var cy2 = state.player.y + state.player.height / 2 - (e.y + e.height / 2);
+            var cd2 = Math.sqrt(cx2 * cx2 + cy2 * cy2) || 1;
+            var dashSp = e.speed * cfg.chargerChargeSpeedMult * (speedUp ? 1.5 : 1);
+            e.vx = cx2 / cd2 * dashSp;
+            e.vy = cy2 / cd2 * dashSp;
+          }
+        } else { // dash
+          e.chargeTimer -= dt;
+          if (e.chargeTimer <= 0) {
+            e.chargeState = 'idle';
+            e.chargeTimer = cfg.chargerChargeInterval;
+            var drift2 = (Math.random() < 0.5 ? -1 : 1) * (cfg.enemyDriftMin + Math.random() * (cfg.enemyDriftMax - cfg.enemyDriftMin));
+            e.vx = drift2;
+            e.vy = e.speed;
+          }
+        }
+      }
+      // P3：刺客型 2 秒未击杀 → 瞬移到玩家旁边
+      if (e.special === 'assassin' && state.player && e.assassinTimer !== undefined) {
+        e.assassinTimer -= dt;
+        if (e.assassinTimer <= 0) {
+          e.assassinTimer = 9999; // 只瞬移一次
+          e.x = clamp(state.player.x + state.player.width / 2 - e.width / 2 + (Math.random() * 80 - 40), 0, cfg.width - e.width);
+          e.y = Math.max(0, state.player.y - e.height - 2);
+          e.vx = 0;
+          e.vy = e.speed * 1.6; // 贴脸后高速砸向玩家
+          state.explosions.push({ x: e.x + e.width / 2, y: e.y + e.height / 2, kind: 'small' });
+        }
+      }
+      // P3：Boss 集结号 → 敌人向 Boss 靠拢
+      if (gather && state.boss) {
+        var bxx = state.boss.x + state.boss.width / 2;
+        var byy = state.boss.y + state.boss.height / 2;
+        var gx = bxx - (e.x + e.width / 2);
+        var gy = byy - (e.y + e.height / 2);
+        var gd = Math.sqrt(gx * gx + gy * gy) || 1;
+        e.vx = (e.vx || 0) + gx / gd * e.speed * 0.35 * dt * 10;
+        e.vy = (e.vy !== undefined ? e.vy : e.speed) + gy / gd * e.speed * 0.35 * dt * 10;
       }
       e.x += (e.vx || 0) * dt;
       e.y += (e.vy !== undefined ? e.vy : e.speed) * dt;
@@ -1912,6 +2264,34 @@
       state.laserActive = false; // 本帧消费
     }
 
+    // P3：火焰喷射持续伤害（魔法）：喷火期间对前方扇形/矩形范围持续灼烧
+    if (state.flameActive) {
+      updateFlame(state, dt);
+      state.flameTimer -= dt;
+      if (state.flameTimer <= 0) state.flameActive = false;
+    }
+
+    // P3：武器专属大招持续场：激光全屏扫射 / 火焰火海
+    if (state.ultLaserUntil > state.time) {
+      var ultLaserDps = cfg.weapons.laser.dps * 6 * getShipFireFactor(state) + state.damageBonus * 10;
+      for (var uei = state.enemies.length - 1; uei >= 0; uei--) {
+        state._killWeapon = 'laser';
+        hurtEnemy(state, state.enemies[uei], ultLaserDps * dt, 'magic');
+      }
+      if (state.boss) hurtBoss(state, ultLaserDps * dt, 'magic');
+      for (var ueb = state.enemyBullets.length - 1; ueb >= 0; ueb--) {
+        state.enemyBullets.splice(ueb, 1);
+      }
+    }
+    if (state.ultFlameUntil > state.time) {
+      var ultFlameDps = cfg.weapons.flamethrower.dps * 5 * getShipFireFactor(state) + state.damageBonus * 10;
+      for (var ufi = state.enemies.length - 1; ufi >= 0; ufi--) {
+        state._killWeapon = 'flamethrower';
+        hurtEnemy(state, state.enemies[ufi], ultFlameDps * dt, 'magic');
+      }
+      if (state.boss) hurtBoss(state, ultFlameDps * dt, 'magic');
+    }
+
     // 移动玩家子弹
     for (var j = state.bullets.length - 1; j >= 0; j--) {
       var b = state.bullets[j];
@@ -1941,7 +2321,7 @@
             var sbx = state.boss.x + state.boss.width / 2;
             var sby = state.boss.y + state.boss.height / 2;
             if (Math.sqrt((sbx - scx) * (sbx - scx) + (sby - scy) * (sby - scy)) < sradius + Math.max(state.boss.width, state.boss.height) / 2) {
-              hurtBoss(state, sdps * dt);
+              hurtBoss(state, sdps * dt, 'magic');
             }
           }
           // 挥砍清除范围内敌弹
@@ -1957,7 +2337,8 @@
       } else {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
-        if (b.y + b.height < 0) {
+        // 上下任一方向出界都移除（bombbullet 向下飞）
+        if (b.y + b.height < 0 || b.y > cfg.height + 40 || b.x < -60 || b.x > cfg.width + 60) {
           state.bullets.splice(j, 1);
         }
       }
@@ -1974,8 +2355,14 @@
           if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[tgt.id]) continue;
           // 光刃：伤害由挥砍范围持续结算，此处仅标记命中（不消失）
           if (bullet.type === 'saberblade') { hit = true; break; }
+          // P3：雷电连锁攻击（命中后向附近敌人弹跳）
+          if (bullet.type === 'lightningbolt') {
+            chainLightning(state, bullet);
+            hit = true;
+            break;
+          }
           state._killWeapon = bullet.type === 'chargebolt' ? 'charge' : bullet.type;
-          hurtEnemy(state, tgt, bullet.damage);
+          hurtEnemy(state, tgt, bullet.damage, bullet.dmgType || 'phys');
           hit = true;
           // 回旋镖命中敌人后：随机向周围弹射
           if (bullet.type === 'boomerang') {
@@ -1995,10 +2382,13 @@
         // 光刃对 Boss：伤害由挥砍范围持续结算
         if (bullet.type === 'saberblade') {
           hit = true;
+        } else if (bullet.type === 'lightningbolt') {
+          chainLightning(state, bullet);
+          hit = true;
         } else if (bullet.type === 'chargebolt' && bullet.pierced && bullet.pierced[state.boss.id]) {
           hit = true;
         } else {
-          hurtBoss(state, bullet.damage);
+          hurtBoss(state, bullet.damage, bullet.dmgType || 'phys');
           hit = true;
           if (bullet.type === 'chargebolt') {
             bullet.pierced = bullet.pierced || {};
@@ -2109,6 +2499,36 @@
       bossFire(state);
       boss.nextFire = cfg.bossFireInterval;
     }
+    // P3：Boss 加成 h「轨道轰炸」：周期性范围攻击（先淡红预警，再命中）
+    if (hasBossBuff(state, 'bombardment')) {
+      if (state.bossBombPending) {
+        var pending = state.bossBombPending;
+        if (state.time >= pending.hitAt) {
+          // 命中：对区域内玩家造成伤害（护盾/无敌可挡）
+          var pb = pending;
+          if (!hasShield(state) && !isInvincible(state) && rectsOverlap(state.player, pb)) {
+            damagePlayer(state);
+          }
+          state.explosions.push({ x: pb.x + pb.width / 2, y: pb.y + pb.height / 2, kind: 'bomb' });
+          state.bossBombPending = null;
+          boss.bombTimer = cfg.bossBombInterval;
+        }
+      } else {
+        boss.bombTimer -= dt;
+        if (boss.bombTimer <= 0) {
+          // 生成新预警区域
+          var bw = cfg.bossBombRadius * 2;
+          state.bossBombPending = {
+            x: Math.random() * (cfg.width - bw),
+            y: 60 + Math.random() * (cfg.height * 0.5 - bw),
+            width: bw,
+            height: bw,
+            warnUntil: state.time + cfg.bossBombWarnTime,
+            hitAt: state.time + cfg.bossBombWarnTime
+          };
+        }
+      }
+    }
   }
 
   function newId(state) {
@@ -2139,6 +2559,15 @@
     state.paused = false;
     state.bulletSizeBonus = 0;
     state.laserWidthBonus = 0;
+    // P3：重置持续场 / 强化阈值 / 轰炸预警
+    state.flameActive = false;
+    state.flameTimer = 0;
+    state.ultLaserUntil = 0;
+    state.ultFlameUntil = 0;
+    state.nextBuffScore = 0;
+    state.buffOffered = false;
+    state.bossBombPending = null;
+    state.maxLives = Math.max(1, Math.round(cfg.maxLives * (cfg.ships[state.ship] || cfg.ships.star).hp));
     // 应用初始设置
     state.weapon = cfg.initialWeapon || 'gun';
     state.multishotLevel = clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1);
@@ -2224,9 +2653,17 @@
     getPowerupSpawnInterval: getPowerupSpawnInterval,
     getPlayerSpeed: getPlayerSpeed,
     hasShield: hasShield,
-    isInvincible: isInvincible
+    isInvincible: isInvincible,
+    // P3
+    getEnemyResist: getEnemyResist,
+    hasBossBuff: hasBossBuff,
+    pickBossBuffs: pickBossBuffs,
+    updateFlame: updateFlame,
+    chainLightning: chainLightning,
+    hurtBoss: hurtBoss
   };
 });
+
 </script>
   <script>/**
  * main.js — 星际战机 Demo：界面交互、科幻渲染、输入与音效
@@ -2326,7 +2763,9 @@
     { id: 'boomerang', icon: '✿', name: '回旋镖', desc: '弹射成长\n越弹越大' },
     { id: 'saber', icon: '⚔', name: '光刃', desc: '近战环绕\n挡弹清场' },
     { id: 'homing', icon: '⌖', name: '追踪弹', desc: '自动锁定\n精确打击' },
-    { id: 'charge', icon: '◎', name: '蓄力炮', desc: '按住蓄力\n松开爆发' }
+    { id: 'charge', icon: '◎', name: '蓄力炮', desc: '按住蓄力\n松开爆发' },
+    { id: 'flamethrower', icon: '🔥', name: '火焰喷射', desc: '持续灼烧\n烧毁弹幕' },
+    { id: 'lightning', icon: '⚡', name: '雷电', desc: '连锁攻击\n跳跃伤害' }
   ];
 
   function renderWeaponGrid() {
@@ -2582,6 +3021,37 @@
   document.getElementById('btn-difficulty-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
   document.getElementById('btn-settings-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
 
+  // ===== P3：关卡模式（目标波次通关） =====
+  var LEVELS = [
+    { target: 5, name: '关卡1 · 突围' },
+    { target: 10, name: '关卡2 · 遭遇' },
+    { target: 15, name: '关卡3 · 封锁' },
+    { target: 20, name: '关卡4 · 决战' },
+    { target: 25, name: '关卡5 · 深渊' },
+    { target: 30, name: '关卡6 · 无尽' }
+  ];
+  var btnLevel = document.getElementById('btn-level');
+  var btnLevelBack = document.getElementById('btn-level-back');
+  if (btnLevel) btnLevel.addEventListener('click', function () { showPanel('level'); });
+  if (btnLevelBack) btnLevelBack.addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
+  var levelGrid = document.getElementById('level-grid');
+  if (levelGrid) {
+    LEVELS.forEach(function (lv) {
+      var b = document.createElement('div');
+      b.className = 'diff-btn' + (settings.levelTarget === lv.target ? ' selected' : '');
+      b.style.cssText = 'width:auto;min-width:76px;font-size:14px;padding:14px 6px;';
+      b.textContent = lv.name;
+      b.title = '目标：第 ' + lv.target + ' 波';
+      b.addEventListener('click', function () {
+        settings.levelTarget = lv.target;
+        updateMenuConfig();
+        showPanel('menu');
+        showToast('已选 ' + lv.name + ' · 通关目标第 ' + lv.target + ' 波');
+      });
+      levelGrid.appendChild(b);
+    });
+  }
+
   // 主菜单按钮精确对齐背景图；窗口变化时重新对齐
   placeMenuButtons();
   window.addEventListener('resize', placeMenuButtons);
@@ -2718,6 +3188,9 @@
       lives: Math.max(1, Math.round((GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)) * shipCfg.hp))
     });
     GameCore.start(state);
+    // P3：关卡模式目标波次（前端附加字段，用于通关判定）
+    state.levelTarget = settings.levelTarget || 0;
+    state.levelDone = false;
     hidePanels();
     showInGameBtn(true);
     showHud(true);
@@ -2761,6 +3234,31 @@
     updateMenuConfig();
     updateMenuStars();
     state = GameCore.createGame();
+  }
+
+  /** P3：关卡模式通关结算：额外奖励分 + 星币加成，2 秒后返回主菜单 */
+  function completeLevel() {
+    if (state.levelDone) return;
+    state.levelDone = true;
+    state.status = 'gameover'; // 复用结算通道（防止继续吃子弹/死亡重复结算）
+    var bonus = 500 * (settings.levelTarget || 1);
+    state.score += bonus;
+    showToast('🎉 关卡通关！奖励 +' + bonus + ' 分');
+    addFlash('255,209,102', 220);
+    addShake(6, 160);
+    if (recordScoreToRank()) {
+      gameoverReturnScheduled = true;
+      returnToMenuTimer = setTimeout(function () {
+        gameoverReturnScheduled = false;
+        backToMenu();
+      }, 2200);
+    } else {
+      clearTimeout(returnToMenuTimer);
+      returnToMenuTimer = null;
+      gameoverReturnScheduled = false;
+      openRankPanel(true);
+      showToast('输入玩家名称，记录本次得分');
+    }
   }
 
   function renderGameWeapons() {
@@ -3426,8 +3924,15 @@
   // ==================== 粒子系统 ====================
 
   var particles = [];
+  // P3：雷电连锁线段（本帧绘制后衰减）
+  var boltLines = [];
 
-  function spawnExplosion(x, y, kind) {
+  function spawnExplosion(x, y, kind, fromX, fromY) {
+    // P3：雷电连锁连线（kind 'bolt' 带 fromX/fromY → 本帧绘制）
+    if (kind === 'bolt') {
+      boltLines.push({ x1: fromX, y1: fromY, x2: x, y2: y, life: 0, maxLife: 0.22 });
+      return;
+    }
     var count = kind === 'boss' ? 46 : kind === 'large' ? 26 : 12;
     var colors = kind === 'boss'
       ? ['#ff6b6b', '#ffd166', '#ff9f43', '#ffffff']
@@ -3461,6 +3966,11 @@
       p.y += p.vy * dt;
       p.vy += 60 * dt;
     }
+    // P3：雷电连线衰减
+    for (var bi = boltLines.length - 1; bi >= 0; bi--) {
+      boltLines[bi].life += dt;
+      if (boltLines[bi].life >= boltLines[bi].maxLife) boltLines.splice(bi, 1);
+    }
   }
 
   function drawParticles() {
@@ -3473,6 +3983,28 @@
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    // P3：雷电连锁折线（锯齿电弧）
+    for (var bi = 0; bi < boltLines.length; bi++) {
+      var bl = boltLines[bi];
+      var ba = 1 - bl.life / bl.maxLife;
+      ctx.save();
+      ctx.globalAlpha = ba;
+      ctx.strokeStyle = '#bfe9ff';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#6fd8ff';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(bl.x1, bl.y1);
+      var segs = 6;
+      for (var s = 1; s <= segs; s++) {
+        var t = s / segs;
+        var midX = bl.x1 + (bl.x2 - bl.x1) * t + (s < segs ? (Math.random() - 0.5) * 22 : 0);
+        var midY = bl.y1 + (bl.y2 - bl.y1) * t + (s < segs ? (Math.random() - 0.5) * 22 : 0);
+        ctx.lineTo(midX, midY);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // ==================== 星空背景 ====================
@@ -3737,7 +4269,10 @@
     if (e.special === 'chaser') colors = { small: '#ff7b4a', medium: '#ff7b4a', large: '#f2693a', xlarge: '#e85c2d' };
     if (e.special === 'armored') colors = { small: '#b8c4d8', medium: '#b8c4d8', large: '#a3b1c8', xlarge: '#8fa0bb' };
     if (e.special === 'spreader') colors = { small: '#9b7bff', medium: '#9b7bff', large: '#8a6bf0', xlarge: '#7a5ae0' };
-    if (e.special === 'defender') colors = { small: '#ffd166', medium: '#ffd166', large: '#ffc94d', xlarge: '#f5b93a' };
+    if (e.special === 'devourer') colors = { small: '#3a1b4d', medium: '#3a1b4d', large: '#2f1440', xlarge: '#260e36' };
+    if (e.special === 'charger') colors = { small: '#ffa62b', medium: '#ffa62b', large: '#f2961f', xlarge: '#e68a14' };
+    if (e.special === 'assassin') colors = { small: '#2ee6d8', medium: '#2ee6d8', large: '#26cfc2', xlarge: '#1fb8ac' };
+    if (e.special === 'tank') colors = { small: '#6b7482', medium: '#6b7482', large: '#5b6370', xlarge: '#4b5260' };
     var col = colors[e.type] || '#ff6b6b';
     // 防御型无敌状态：金色脉冲描边 + 护盾环
     var defending = e.special === 'defender' && e.invulnUntil && e.invulnUntil > state.time;
@@ -3827,6 +4362,60 @@
       ctx.fillStyle = defending ? '#fff' : '#7a5c00';
       ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
       ctx.fillText('⛨', cx, cy - r - 2);
+    } else if (e.special === 'devourer') {
+      // 吞噬型：暗紫球 + 深渊口器 + 周围吸食圈
+      ctx.fillStyle = 'rgba(58, 27, 77, 0.35)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 7 + Math.sin(state.time * 3) * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(200, 120, 255, 0.9)';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.fillText('◉', cx, cy - r - 2);
+    } else if (e.special === 'charger') {
+      // 冲撞型：蓄力时闪白，冲刺时红热箭头
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      if (e.chargeState === 'windup') {
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(state.time * 30);
+        ctx.fillText('⚠', cx, cy - r - 2);
+        ctx.globalAlpha = 1;
+      } else if (e.chargeState === 'dash') {
+        ctx.fillText('➤', cx, cy - r - 2);
+      } else {
+        ctx.fillText('▣', cx, cy - r - 2);
+      }
+    } else if (e.special === 'assassin') {
+      // 刺客型：青蓝闪烁，2 秒倒计时
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.time * 14);
+      ctx.fillText('☠', cx, cy - r - 2);
+      ctx.globalAlpha = 1;
+      if (e.assassinTimer !== undefined && e.assassinTimer < 2) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px sans-serif';
+        ctx.fillText(Math.ceil(e.assassinTimer) + '', cx, cy + r + 6);
+      }
+    } else if (e.special === 'tank') {
+      // 坦克型：深灰大球 + 装甲环 + 血条长
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.fillText('⛊', cx, cy - r - 2);
+    }
+    // 敌方血条（坦克/大球更直观）
+    if (e.special === 'tank' || e.type === 'large' || e.type === 'xlarge') {
+      var barW = Math.max(24, e.width + 8);
+      var barH = 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(cx - barW / 2, e.y - 8, barW, barH);
+      var hpRatio2 = Math.max(0, Math.min(1, e.hp / (e.maxHp || 1)));
+      ctx.fillStyle = e.special === 'tank' ? '#ff9f43' : '#ff6b6b';
+      ctx.fillRect(cx - barW / 2, e.y - 8, barW * hpRatio2, barH);
     }
     ctx.restore();
   }
@@ -3851,6 +4440,40 @@
       ctx.fillRect(b.x, b.y, b.width, b.height);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.fillRect(b.x + 1, b.y, Math.max(1, b.width - 2), b.height);
+    } else if (b.type === 'lightningbolt') {
+      // P3：雷电弹（魔法）：青白电球 + 电弧
+      ctx.shadowColor = '#bfe9ff';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#eaf8ff';
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#6fd8ff';
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(191, 233, 255, 0.9)';
+      ctx.lineWidth = 1.5;
+      for (var lz = -1; lz <= 1; lz++) {
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.width / 2 + lz * 3, b.y + b.height);
+        ctx.lineTo(b.x + b.width / 2 + lz * 6, b.y + b.height * 0.7);
+        ctx.lineTo(b.x + b.width / 2 + lz * 3, b.y + b.height * 0.4);
+        ctx.lineTo(b.x + b.width / 2 + lz * 6, b.y);
+        ctx.stroke();
+      }
+    } else if (b.type === 'ultbullet' || b.type === 'bombbullet') {
+      // P3：大招弹（弹幕风暴/地毯轰炸）：金蓝能量弹
+      ctx.shadowColor = b.type === 'bombbullet' ? '#ff9f43' : '#ffd166';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = b.type === 'bombbullet' ? '#ffb347' : '#ffd166';
+      ctx.beginPath();
+      ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.25, 0, Math.PI * 2);
+      ctx.fill();
     } else if (b.type === 'boomerang') {
       ctx.shadowColor = '#4ee0ff';
       ctx.shadowBlur = 10;
@@ -4131,7 +4754,69 @@
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1;
     ctx.strokeRect(cx - w * 0.55, y - 14, w * 1.1, 8);
+    // P3：Boss 加成徽章（显示在 Boss 头部上方）
+    if (boss.buffs && boss.buffs.length) {
+      var bn = boss.buffs.length;
+      var bnames = bossBuffNames();
+      var bw2 = 96 * bn + 8 * (bn - 1);
+      var bx = cx - bw2 / 2;
+      var by = y - 34;
+      for (var bi = 0; bi < bn; bi++) {
+        ctx.fillStyle = 'rgba(20, 8, 40, 0.78)';
+        ctx.strokeStyle = 'rgba(255, 90, 157, 0.75)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, bx, by, 96, 17, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffd6e8';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bnames[boss.buffs[bi]] || boss.buffs[bi], bx + 48, by + 9);
+        bx += 104;
+      }
+    }
+    // P3：Boss 轨道轰炸淡红预警区
+    if (state.bossBombPending && state.time < state.bossBombPending.warnUntil) {
+      var pb = state.bossBombPending;
+      var alpha = 0.25 + 0.2 * Math.sin(state.time * 20);
+      ctx.fillStyle = 'rgba(255, 80, 90, ' + alpha.toFixed(3) + ')';
+      ctx.strokeStyle = 'rgba(255, 80, 90, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(pb.x, pb.y, pb.width, pb.height);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
+  }
+
+  /** P3：Boss 加成徽章名称表 */
+  function bossBuffNames() {
+    return {
+      physResist80: '物抗80%',
+      magicResist80: '魔抗80%',
+      resist50: '双抗50%',
+      extraSplit: '增殖',
+      resistAura50: '光环抗性50%',
+      gather: '集结',
+      speedUp50: '加速光环',
+      bombardment: '轨道轰炸',
+      lockProtect: '护卫屏障',
+      lifeDrain: '生命诅咒',
+      singleShot: '弹道封锁'
+    };
+  }
+
+  /** 圆角矩形路径 */
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
   }
 
   // ==================== HUD ====================
@@ -4568,6 +5253,84 @@
 
   // ==================== 蓄力炮预览 ====================
 
+  /** P3：火焰喷射锥形灼烧场（多弹道多束） */
+  function drawFlameZones() {
+    var wcfg = GameCore.DEFAULT_CONFIG.weapons.flamethrower;
+    var p = state.player;
+    var count = GameCore.getBulletCount(state);
+    ctx.save();
+    for (var i = 0; i < count; i++) {
+      var offset = (i - (count - 1) / 2) * GameCore.DEFAULT_CONFIG.bulletSpread * 1.4;
+      var cx = p.x + p.width / 2 + offset;
+      var topY = p.y - wcfg.flameRange;
+      var flick = 0.8 + 0.2 * Math.sin(state.time * 40 + i * 2);
+      var grad = ctx.createLinearGradient(cx, topY, cx, p.y);
+      grad.addColorStop(0, 'rgba(255, 120, 40, 0)');
+      grad.addColorStop(0.4, 'rgba(255, 150, 50, ' + (0.28 * flick).toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(255, 230, 120, ' + (0.5 * flick).toFixed(3) + ')');
+      ctx.fillStyle = grad;
+      ctx.shadowColor = '#ff9f43';
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.moveTo(cx - wcfg.flameWidth / 2, topY);
+      ctx.lineTo(cx + wcfg.flameWidth / 2, topY);
+      ctx.lineTo(cx + wcfg.flameWidth * 0.16, p.y);
+      ctx.lineTo(cx - wcfg.flameWidth * 0.16, p.y);
+      ctx.closePath();
+      ctx.fill();
+      // 火舌粒子
+      for (var fp = 0; fp < 3; fp++) {
+        var fx = cx + (Math.random() - 0.5) * wcfg.flameWidth * 0.8;
+        var fy = topY + Math.random() * wcfg.flameRange;
+        var fr = 2 + Math.random() * 3;
+        ctx.fillStyle = 'rgba(255, 190, 90, ' + (0.5 * flick).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** P3：大招持续场渲染（激光全屏扫射 / 火焰火海） */
+  function drawUltFields() {
+    ctx.save();
+    // 全屏激光扫射：数道垂直光柱 + 顶部光带
+    if (state.ultLaserUntil > state.time) {
+      ctx.globalAlpha = 0.45;
+      var beams = 7;
+      for (var li = 0; li < beams; li++) {
+        var bx = ((state.time * 900 + li * (W / beams)) % (W + 120)) - 60;
+        var grad = ctx.createLinearGradient(bx, 0, bx, H);
+        grad.addColorStop(0, 'rgba(125, 255, 240, 0.9)');
+        grad.addColorStop(1, 'rgba(125, 255, 240, 0.05)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(bx - 3, 0, 6, H);
+      }
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = 'rgba(125, 255, 240, 1)';
+      ctx.fillRect(0, 0, W, 40);
+    }
+    // 火海：全屏底部灼烧浪
+    if (state.ultFlameUntil > state.time) {
+      ctx.globalAlpha = 0.5;
+      var fg = ctx.createLinearGradient(0, H * 0.35, 0, H);
+      fg.addColorStop(0, 'rgba(255, 140, 40, 0.05)');
+      fg.addColorStop(1, 'rgba(255, 110, 30, 0.45)');
+      ctx.fillStyle = fg;
+      ctx.fillRect(0, H * 0.35, W, H * 0.65);
+      ctx.fillStyle = 'rgba(255, 190, 90, ' + (0.25 + 0.15 * Math.sin(state.time * 30)) + ')';
+      for (var wf = 0; wf < 10; wf++) {
+        var wx = (wf * 137 + Math.sin(state.time * 8 + wf) * 30) % W;
+        var wy = H * 0.92 + Math.sin(state.time * 5 + wf * 2) * 10;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 14 + Math.sin(state.time * 12 + wf) * 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawChargePreview() {
     var wcfg = GameCore.getWeaponConfig(state);
     var charge = state.charge || 0;
@@ -4664,6 +5427,16 @@
     // 蓄力炮预览（飞机前方显示当前蓄力弹丸大小）
     if (state.status === 'playing' && chargeVisible && state.weapon === 'charge') {
       drawChargePreview();
+    }
+
+    // P3：火焰喷射锥形灼烧场
+    if (state.status === 'playing' && state.flameActive) {
+      drawFlameZones();
+    }
+
+    // P3：大招持续场（激光全屏扫射 / 火焰火海）
+    if (state.status === 'playing') {
+      drawUltFields();
     }
 
     drawParticles();
@@ -4926,8 +5699,12 @@
     if (!buffPanel) return;
     if (state.status !== 'playing') return;
     if (state.paused) return; // 暂停面板打开时不弹
-    if (state.waveState !== 'break') return;
-    if (state.buffOffered) return;
+    // P3：第 10 波起按分数触发（每 500 分一次）；第 1~9 波仍按波间休息触发
+    var scoreTrigger = state.nextBuffScore > 0 && state.score >= state.nextBuffScore;
+    if (!scoreTrigger) {
+      if (state.waveState !== 'break') return;
+      if (state.buffOffered) return;
+    }
     state.buffOffered = true;
     GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
     var pool = BUFF_POOL.filter(function (b) { return !b.maxed || !b.maxed(); });
@@ -4950,6 +5727,11 @@
         buffPanel.style.display = 'none';
         audio.powerup();
         showToast('强化：' + b.label);
+        // P3：分数触发模式 → 抬升下一次分数阈值，并允许再次触发
+        if (scoreTrigger) {
+          state.nextBuffScore += state.config.buffScoreInterval;
+          state.buffOffered = false;
+        }
       });
       box.appendChild(btn);
     });
@@ -4961,13 +5743,20 @@
   }
 
   function tryActivateUlt() {
-    if (GameCore.activateUlt(state)) {
+    var ret = GameCore.activateUlt(state);
+    if (ret) {
       soundEvents.ult = true;
+      soundEvents.ultWeapon = ret.weapon;
       track.ultCount++;
       addShake(12, 220);
       addHitStop(80);
       addFlash('255,255,255', 170);
-      showToast('能量大招！全屏清场');
+      // P3：专属大招横幅（按武器不同文案）
+      var ULT_NAMES = {
+        gun: '弹幕风暴', cannon: '地毯轰炸', laser: '全屏激光', boomerang: '超级回旋镖',
+        saber: '光刃风暴', homing: '导弹雨', charge: '巨型蓄力炮', flamethrower: '焚天之火', lightning: '雷暴降临'
+      };
+      showToast('大招·' + (ULT_NAMES[ret.weapon] || '能量爆发'));
       return true;
     }
     return false;
@@ -5103,7 +5892,8 @@
       // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
       if (waveBefore !== state.wave) {
         track.damagedInWave = false;
-        state.buffOffered = false; // 每波重置强化选择标记
+        // P3：第 10 波起强化改为按分数（每 500 分）触发，不再每波重置；1~9 波仍每波一次
+        if (!state.nextBuffScore) state.buffOffered = false;
         music.setIntensity(state.wave);
       }
       if (state.lives < livesBefore) {
@@ -5124,6 +5914,10 @@
         addHitStop(70);
       }
       checkAchievements();
+      // P3：关卡模式通关判定（抵达目标波次后进入休息即通关）
+      if (state.levelTarget && !state.levelDone && state.wave > state.levelTarget) {
+        completeLevel();
+      }
       // P2：波间强化三选一（进入 break 且未选择时弹出）
       offerBuffPanel();
 
@@ -5176,7 +5970,7 @@
       if (!bossBefore && state.boss) soundEvents.boss = true;
 
       for (var x = 0; x < state.explosions.length; x++) {
-        spawnExplosion(state.explosions[x].x, state.explosions[x].y, state.explosions[x].kind);
+        spawnExplosion(state.explosions[x].x, state.explosions[x].y, state.explosions[x].kind, state.explosions[x].fromX, state.explosions[x].fromY);
       }
 
       if (soundEvents.shoot) { audio.shoot(); soundEvents.shoot = false; }
@@ -5204,6 +5998,7 @@
   lastTime = performance.now();
   rafId = requestAnimationFrame(loop);
 })();
+
 </script>
 </body>
 </html>
