@@ -534,7 +534,7 @@
       cannon: { cooldown: 0.7, damage: 3, bulletSpeed: 420, bulletWidth: 16, bulletHeight: 26, label: '大炮' },
       laser: { cooldown: 0.12, damage: 1, bulletSpeed: 700, bulletWidth: 6, bulletHeight: 30, dps: 40, beamWidth: 6, label: '激光' },
       boomerang: { cooldown: 1.0, damage: 2, bulletSpeed: 420, bulletWidth: 18, bulletHeight: 18, bounceGrow: 1.18, bounceSpeedBoost: 1.06, maxBoomerangSize: 220, label: '回旋镖' },
-      saber: { cooldown: 0.25, damage: 1, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, meleeDps: 32, meleeRadius: 78, label: '光刃' },
+      saber: { cooldown: 0.25, damage: 5, bulletSpeed: 500, bulletWidth: 10, bulletHeight: 30, meleeDps: 32, meleeRadius: 78, bladeLengthStep: 8, label: '光刃' },
       homing: { cooldown: 0.34, damage: 1, bulletSpeed: 320, bulletWidth: 8, bulletHeight: 16, turnRate: 420, label: '追踪弹' },
       charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' }
     },
@@ -645,7 +645,6 @@
       laserWidthBonus: 0,      // 激光变粗等级（道具）
       paused: false,           // 暂停标志
       laserActive: false,      // 激光持续光束激活标志（由 fireBullet 置位，update 消费）
-      meleeActive: false,      // 近战光刃激活标志（同激光模式）
       charge: 0,               // 蓄力炮当前蓄力值 0~1
       player: {
         x: cfg.width / 2 - cfg.playerWidth / 2,
@@ -893,10 +892,6 @@
       state.laserActive = true;
       return true;
     }
-    if (state.weapon === 'saber') {
-      state.meleeActive = true;
-      return true;
-    }
     if (state.weapon === 'charge') {
       // 蓄力累积（满蓄力后自动攻击）
       state.charge = Math.min(1, state.charge + (dt || 0.016) / cfg.weapons.charge.chargeTime);
@@ -908,9 +903,35 @@
     }
     if (state.time < state.nextFireTime) return false;
     var wcfg = getWeaponConfig(state);
-    var count = getBulletCount(state);
-    var damage = wcfg.damage + state.damageBonus;
     var p = state.player;
+    var count = getBulletCount(state);
+
+    if (state.weapon === 'saber') {
+      // 光刃：发射式武器，离开飞机自行追踪攻击敌人
+      // 弹道+1 → 光刃数量+1；"增加激光"道具 → 光刃长度增加
+      var bladeW = Math.max(4, wcfg.bulletWidth);
+      var bladeH = Math.max(8, wcfg.bulletHeight + state.laserWidthBonus * wcfg.bladeLengthStep);
+      var dmg = wcfg.damage + state.damageBonus;
+      for (var s = 0; s < count; s++) {
+        var soff = (s - (count - 1) / 2) * cfg.bulletSpread * 0.8;
+        state.bullets.push({
+          id: newId(state),
+          type: 'saberblade',
+          x: p.x + p.width / 2 + soff - bladeW / 2,
+          y: p.y - bladeH,
+          width: bladeW,
+          height: bladeH,
+          vx: 0,
+          vy: -wcfg.bulletSpeed,
+          damage: dmg,
+          life: 0
+        });
+      }
+      state.nextFireTime = state.time + getFireCooldown(state);
+      return true;
+    }
+
+    var damage = wcfg.damage + state.damageBonus;
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
@@ -1303,48 +1324,6 @@
     }
   }
 
-  /** 近战光刃攻击场：对玩家周围半径内敌人持续伤害，并清除范围内敌弹 */
-  function updateMelee(state, dt) {
-    var cfg = state.config;
-    var wcfg = cfg.weapons.saber;
-    var p = state.player;
-    var cx = p.x + p.width / 2;
-    var cy = p.y + p.height / 2;
-    var radius = wcfg.meleeRadius;
-
-    // 敌人伤害
-    for (var ei = state.enemies.length - 1; ei >= 0; ei--) {
-      var e = state.enemies[ei];
-      var ecx = e.x + e.width / 2;
-      var ecy = e.y + e.height / 2;
-      var dist = Math.sqrt((ecx - cx) * (ecx - cx) + (ecy - cy) * (ecy - cy));
-      if (dist < radius + Math.max(e.width, e.height) / 2) {
-        hurtEnemy(state, e, wcfg.meleeDps * dt);
-      }
-    }
-
-    // BOSS 伤害
-    if (state.boss) {
-      var bcx = state.boss.x + state.boss.width / 2;
-      var bcy = state.boss.y + state.boss.height / 2;
-      var bdist = Math.sqrt((bcx - cx) * (bcx - cx) + (bcy - cy) * (bcy - cy));
-      if (bdist < radius + Math.max(state.boss.width, state.boss.height) / 2) {
-        hurtBoss(state, wcfg.meleeDps * dt);
-      }
-    }
-
-    // 近战挡弹：清除范围内敌弹
-    for (var ebi2 = state.enemyBullets.length - 1; ebi2 >= 0; ebi2--) {
-      var eb = state.enemyBullets[ebi2];
-      var ebcx = eb.x + eb.width / 2;
-      var ebcy = eb.y + eb.height / 2;
-      var ebdist = Math.sqrt((ebcx - cx) * (ebcx - cx) + (ebcy - cy) * (ebcy - cy));
-      if (ebdist < radius) {
-        state.enemyBullets.splice(ebi2, 1);
-      }
-    }
-  }
-
   /** 回旋镖移动：向上飞 + 左右反弹（越弹越大），飞出顶部消失 */
   function updateBoomerang(state, b, dt) {
     var cfg = state.config;
@@ -1492,18 +1471,12 @@
       state.laserActive = false; // 本帧消费
     }
 
-    // 近战光刃攻击场
-    if (state.meleeActive) {
-      updateMelee(state, dt);
-      state.meleeActive = false; // 本帧消费
-    }
-
     // 移动玩家子弹
     for (var j = state.bullets.length - 1; j >= 0; j--) {
       var b = state.bullets[j];
       if (b.type === 'boomerang') {
         updateBoomerang(state, b, dt);
-      } else if (b.type === 'homing') {
+      } else if (b.type === 'homing' || b.type === 'saberblade') {
         updateHoming(state, b, dt);
       } else {
         b.x += b.vx * dt;
@@ -1688,7 +1661,6 @@
     state.speedBoostUntil = 0;
     state.invincibleUntil = 0;
     state.laserActive = false;
-    state.meleeActive = false;
     state.charge = 0;
     state.paused = false;
     state.bulletSizeBonus = 0;
@@ -2339,7 +2311,6 @@
   var rafId = null;
   var firingRequested = false;
   var laserVisible = false;
-  var meleeVisible = false;
   var chargeVisible = false;
 
   // 音效事件
@@ -2901,6 +2872,32 @@
       ctx.lineTo(b.x + b.width / 2, b.y + b.height + 8 + Math.sin(state.time * 30) * 2);
       ctx.closePath();
       ctx.fill();
+    } else if (b.type === 'saberblade') {
+      // 光刃：离开飞机自行攻击的发光刀刃（长度随"增加激光"道具提升）
+      ctx.shadowColor = '#7df0ff';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = '#7df0ff';
+      var sx = b.x + b.width / 2;
+      var sy = b.y + b.height / 2;
+      ctx.beginPath();
+      ctx.moveTo(sx - b.width / 2, sy + b.height / 2);
+      ctx.lineTo(sx + b.width / 2, sy + b.height / 2);
+      ctx.lineTo(sx + b.width * 0.35, sy);
+      ctx.lineTo(sx + b.width / 2, sy - b.height / 2);
+      ctx.lineTo(sx - b.width / 2, sy - b.height / 2);
+      ctx.lineTo(sx - b.width * 0.35, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillRect(sx - b.width * 0.22, sy - b.height / 2 + 2, b.width * 0.44, b.height - 4);
+      // 光刃尾焰（拖尾）
+      ctx.fillStyle = 'rgba(125, 240, 255, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(sx - b.width * 0.28, sy + b.height / 2);
+      ctx.lineTo(sx + b.width * 0.28, sy + b.height / 2);
+      ctx.lineTo(sx, sy + b.height / 2 + 10 + Math.sin(state.time * 30) * 3);
+      ctx.closePath();
+      ctx.fill();
     } else if (b.type === 'chargebolt') {
       // 蓄力炮：蓄力越大弹丸越大越亮
       var charge = b.charge || 0;
@@ -3176,45 +3173,6 @@
         ctx.fillText('BOSS ' + remain.toFixed(1) + 's', W - 12, 60);
       }
     }
-  }
-
-  // ==================== 近战光刃 ====================
-
-  function drawMelee() {
-    if (state.weapon !== 'saber') return;
-    var wcfg = GameCore.getWeaponConfig(state);
-    var radius = wcfg.meleeRadius || 78;
-    var p = state.player;
-    var cx = p.x + p.width / 2;
-    var cy = p.y + p.height / 2;
-    var spin = state.time * 5;
-    ctx.save();
-    // 光环
-    ctx.strokeStyle = 'rgba(125, 240, 255, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    // 旋转光刃
-    for (var i = 0; i < 3; i++) {
-      var ang = spin + i * Math.PI * 2 / 3;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(ang);
-      ctx.shadowColor = '#7df0ff';
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = '#7df0ff';
-      ctx.beginPath();
-      ctx.moveTo(radius - 10, -4);
-      ctx.lineTo(radius + 10, 0);
-      ctx.lineTo(radius - 10, 4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore();
   }
 
   // ==================== 全息展示舱（主菜单场景） ====================
@@ -3676,11 +3634,6 @@
       drawLaserBeam();
     }
 
-    // 近战光刃
-    if (state.status === 'playing' && meleeVisible) {
-      drawMelee();
-    }
-
     for (var i = 0; i < state.powerups.length; i++) {
       drawPowerup(state.powerups[i]);
     }
@@ -3885,7 +3838,6 @@
         fired = GameCore.fireBullet(state, dt);
       }
       laserVisible = wantFire && state.weapon === 'laser';
-      meleeVisible = wantFire && state.weapon === 'saber';
       chargeVisible = wantFire && state.weapon === 'charge';
 
       var enemyBefore = state.enemies.length;
