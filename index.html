@@ -233,6 +233,13 @@
       width: 100%;
       height: 100%;
       display: block;
+      /* P12：图片不拦截触摸，保证按钮始终可点（手机端修复） */
+      pointer-events: none;
+    }
+    /* P12：移动端触摸优化——消除点击延迟与高亮 */
+    #menu-bg .btn, #btn-rank, #btn-menu-codex, #btn-start, #btn-loadout, #btn-settings, #btn-upgrade-menu, #btn-level {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     /* 四个按钮：绝对定位于背景图容器内，用图片原坐标百分比 → 永远与图中按钮重合 */
     #menu-bg .btn {
@@ -761,7 +768,13 @@
   <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
   <div id="buff-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,460px);background:rgba(3,8,30,0.96);border:1px solid #4ee0ff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 0 30px rgba(78,224,255,0.35);">
     <div style="font-size:17px;color:#7df0ff;letter-spacing:3px;margin-bottom:4px;">波 间 强 化</div>
-    <div style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">三选一 · 立即生效</div>
+    <div id="buff-subtitle" style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">三选一 · 立即生效</div>
+    <!-- P12：升级三选一合并到波间强化（等级提升与强化一起出现） -->
+    <div id="buff-skill-zone" style="display:none;margin-bottom:8px;">
+      <div style="font-size:14px;color:#c9a7e8;letter-spacing:2px;margin-bottom:4px;">⚡ 能 力 升 级</div>
+      <div id="buff-skill-options" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="border-top:1px solid rgba(78,224,255,0.25);margin:10px 0;"></div>
+    </div>
     <div id="buff-options" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
 
@@ -2204,7 +2217,8 @@
     if (state.rageUntil > state.time) m *= 2; // 方案1-A：暴走
     var cu = state.coreUpgrade.cuFullDmg || 0;
     if (cu > 0 && state.lives >= state.maxLives) m *= 1 + cu * 0.15;
-    return m;
+    // P12：角色伤害减半（平衡调整；吞噬者 1:1 碰撞不受影响）
+    return m * 0.5;
   }
 
   /** 暴击：crit 每级 +10% 概率、+50% 暴伤 */
@@ -4723,13 +4737,19 @@
 
   // ===== 界面按钮事件 =====
 
-  document.getElementById('btn-start').addEventListener('click', function () {
+  function startBtnHandler() {
     audio.unlock();
     music.start();
     // P11：战前祝福——未购买且星币足够时先进入祝福商店
     if (maybeOpenBlessPanel()) return;
     startGame();
-  });
+  }
+  var btnStartEl = document.getElementById('btn-start');
+  if (btnStartEl) {
+    btnStartEl.addEventListener('click', startBtnHandler);
+    // P12：手机端触摸兼容——touchstart 立即响应开始游戏
+    btnStartEl.addEventListener('touchstart', function (e) { e.preventDefault(); startBtnHandler(); }, { passive: false });
+  }
   document.getElementById('btn-loadout').addEventListener('click', function () { showPanel('loadout'); });
   document.getElementById('btn-settings').addEventListener('click', function () { showPanel('settings'); });
   document.getElementById('btn-loadout-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
@@ -6116,6 +6136,106 @@
 
   // ==================== 星空背景 ====================
 
+  // P12：性能优化（方案4-A/B）——预烘焙精灵与背景缓存，消灭逐帧 createGradient / shadowBlur
+  var spriteCache = {};
+  function bakeSprite(key, size, painter) {
+    if (spriteCache[key]) return spriteCache[key];
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var g = c.getContext('2d');
+    painter(g, size);
+    spriteCache[key] = c;
+    return c;
+  }
+  function glowSprite(key, size, c0, c1) {
+    return bakeSprite(key, size, function (g, s) {
+      var gr = g.createRadialGradient(s / 2, s / 2, s * 0.06, s / 2, s / 2, s / 2);
+      gr.addColorStop(0, c0);
+      gr.addColorStop(0.45, c1);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, s, s);
+    });
+  }
+  // 敌弹光晕精灵（按弹种配色）
+  var EB_SPRITES = {
+    base: glowSprite('eb-base', 32, 'rgba(255,255,255,0.95)', 'rgba(255,107,107,0.85)'),
+    gold: glowSprite('eb-gold', 32, 'rgba(255,255,255,0.95)', 'rgba(255,209,102,0.85)'),
+    purple: glowSprite('eb-purple', 32, 'rgba(255,255,255,0.95)', 'rgba(155,123,255,0.85)'),
+    flame: glowSprite('eb-flame', 44, 'rgba(255,243,208,0.95)', 'rgba(255,140,43,0.9)'),
+    special: glowSprite('eb-special', 32, 'rgba(255,255,255,0.98)', 'rgba(255,82,82,0.9)'),
+    red: glowSprite('eb-red', 32, 'rgba(255,255,255,0.95)', 'rgba(255,43,77,0.9)'),
+    bolt: glowSprite('eb-bolt', 32, 'rgba(255,255,255,0.95)', 'rgba(191,233,255,0.9)'),
+    cyan: glowSprite('eb-cyan', 32, 'rgba(255,255,255,0.95)', 'rgba(125,240,255,0.9)')
+  };
+  // 玩家子弹拖尾渐变条（白→透明，绘制时拉伸；亮芯）
+  var TAIL_SPRITE = bakeSprite('tail', 16, function (g, s) {
+    var gr = g.createLinearGradient(0, 0, 0, s);
+    gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+    gr.addColorStop(0.35, 'rgba(255,224,102,0.55)');
+    gr.addColorStop(1, 'rgba(255,224,102,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, s, s);
+  });
+  var TAIL_HALO = bakeSprite('halo', 28, function (g, s) {
+    var gr = g.createLinearGradient(0, 0, 0, s);
+    gr.addColorStop(0, 'rgba(255,224,102,0.32)');
+    gr.addColorStop(1, 'rgba(255,224,102,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, s, s);
+  });
+  // 背景缓存：按主题 key 烘焙整张（渐变+星云），每帧只 drawImage
+  var bgCache = {};
+  function getBgCanvas(th) {
+    var k = th.key || (th.top + '|' + th.mid + '|' + th.bot);
+    if (bgCache[k]) return bgCache[k];
+    var c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    var g = c.getContext('2d');
+    var grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, th.top);
+    grad.addColorStop(0.55, th.mid);
+    grad.addColorStop(1, th.bot);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, H);
+    var neb = g.createRadialGradient(W * 0.25, H * 0.2, 10, W * 0.25, H * 0.2, 180);
+    neb.addColorStop(0, th.neb1);
+    neb.addColorStop(1, 'rgba(90, 80, 220, 0)');
+    g.fillStyle = neb;
+    g.fillRect(0, 0, W, H);
+    var neb2 = g.createRadialGradient(W * 0.8, H * 0.75, 10, W * 0.8, H * 0.75, 150);
+    neb2.addColorStop(0, th.neb2);
+    neb2.addColorStop(1, 'rgba(220, 60, 160, 0)');
+    g.fillStyle = neb2;
+    g.fillRect(0, 0, W, H);
+    bgCache[k] = c;
+    return c;
+  }
+  // P12：画质自适应（方案4-E）——帧率监控自动降档
+  var qualityLevel = 2; // 2=高 1=中 0=低
+  var _fpsAccum = 0, _fpsCount = 0, _fpsLastCheck = 0;
+  function fxBudget() {
+    var q = qualityLevel;
+    return {
+      maxParticles: q === 2 ? 320 : (q === 1 ? 160 : 80),
+      enemyGlow: q >= 1,
+      tail: q >= 1,
+      halfDensity: gameSpeed > 1 // P12-F：倍速联动
+    };
+  }
+  function checkFps(now) {
+    _fpsCount++;
+    _fpsAccum += 16.7;
+    if (now - _fpsLastCheck < 5000) return;
+    var avg = _fpsAccum / _fpsCount;
+    _fpsAccum = 0;
+    _fpsCount = 0;
+    _fpsLastCheck = now;
+    if (avg > 17.5 && qualityLevel < 2) qualityLevel++;
+    else if (avg > 21 && qualityLevel > 0) qualityLevel--;
+  }
+
   var stars = [];
   (function initStars() {
     for (var i = 0; i < 80; i++) {
@@ -6148,23 +6268,8 @@
 
   function drawBackground(dt) {
     var th = themeForWave(state.wave || 1);
-    var grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, th.top);
-    grad.addColorStop(0.55, th.mid);
-    grad.addColorStop(1, th.bot);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    var neb = ctx.createRadialGradient(W * 0.25, H * 0.2, 10, W * 0.25, H * 0.2, 180);
-    neb.addColorStop(0, th.neb1);
-    neb.addColorStop(1, 'rgba(90, 80, 220, 0)');
-    ctx.fillStyle = neb;
-    ctx.fillRect(0, 0, W, H);
-    var neb2 = ctx.createRadialGradient(W * 0.8, H * 0.75, 10, W * 0.8, H * 0.75, 150);
-    neb2.addColorStop(0, th.neb2);
-    neb2.addColorStop(1, 'rgba(220, 60, 160, 0)');
-    ctx.fillStyle = neb2;
-    ctx.fillRect(0, 0, W, H);
+    // P12-B：背景离屏缓存——整张烘焙（渐变+星云），每帧仅一次 drawImage
+    ctx.drawImage(getBgCanvas(th), 0, 0);
 
     // 素材套图：第 5 章（波次 41+）战场背景图片叠加（构建时内联）
     if (state.wave >= 41 && levelImg.complete && levelImg.naturalWidth > 0) {
@@ -6690,9 +6795,9 @@
       ctx.restore();
     }
     ctx.save();
-    // 外发光
+    // 外发光（P12-E：中低画质关闭敌人发光）
     ctx.shadowColor = defending ? '#fff8dc' : col;
-    ctx.shadowBlur = (defending ? 22 : 10 + r * 0.25);
+    ctx.shadowBlur = (!fxBudget().enemyGlow && !defending) ? 0 : (defending ? 22 : 10 + r * 0.25);
     // 球体径向渐变
     var g = ctx.createRadialGradient(cx - r * 0.32, cy - r * 0.32, r * 0.15, cx, cy, r);
     g.addColorStop(0, defending ? '#ffffff' : '#ffffff');
@@ -6976,24 +7081,26 @@
       return;
     }
     if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt') {
+      // P12-A：拖尾精灵化——预烘焙渐变条 drawImage（消灭逐帧 createLinearGradient）
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
       var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166' : '#ffe066';
-      // 外层光晕拖尾
-      var tgO = ctx.createLinearGradient(0, b.y + b.height, 0, b.y + b.height + tailLen * 1.25);
-      tgO.addColorStop(0, tc);
-      tgO.addColorStop(1, 'rgba(255,224,102,0)');
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = tgO;
-      ctx.fillRect(b.x + b.width * 0.06, b.y + b.height, Math.max(1, b.width * 0.88), tailLen * 1.25);
-      // 亮芯拖尾
-      var tgI = ctx.createLinearGradient(0, b.y + b.height, 0, b.y + b.height + tailLen);
-      tgI.addColorStop(0, '#ffffff');
-      tgI.addColorStop(0.25, tc);
-      tgI.addColorStop(1, 'rgba(255,224,102,0)');
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = tgI;
-      ctx.fillRect(b.x + b.width * 0.3, b.y + b.height, Math.max(1, b.width * 0.4), tailLen);
-      ctx.globalAlpha = 1;
+      if (fxBudget().tail) {
+        // 外层光晕拖尾
+        ctx.globalAlpha = 0.22;
+        ctx.drawImage(TAIL_HALO, b.x - b.width * 0.75, b.y + b.height, Math.max(1, b.width * 2.2), tailLen * 1.25);
+        // 亮芯：武器色带 + 白渐变条
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = tc;
+        ctx.fillRect(b.x + b.width * 0.3, b.y + b.height, Math.max(1, b.width * 0.4), tailLen);
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(TAIL_SPRITE, b.x + b.width * 0.3, b.y + b.height, Math.max(1, b.width * 0.4), tailLen);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = tc;
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(b.x + b.width * 0.3, b.y + b.height, Math.max(1, b.width * 0.4), tailLen);
+        ctx.globalAlpha = 1;
+      }
     }
     if (b.type === 'cannon') {
       ctx.shadowColor = '#ff9f43';
@@ -7188,25 +7295,22 @@
 
   function drawEnemyBullet(eb) {
     ctx.save();
+    // P12-A：敌弹精灵化——光晕精灵 drawImage（消灭逐帧 shadowBlur / 渐变）
     // P4：火焰冲击波（火焰兵）——橙色火焰柱
     if (eb.flame) {
-      ctx.shadowColor = '#ff8c2b';
-      ctx.shadowBlur = 18;
-      var fg = ctx.createLinearGradient(0, eb.y, 0, eb.y + eb.height);
-      fg.addColorStop(0, '#fff3d0');
-      fg.addColorStop(0.25, '#ffb04d');
-      fg.addColorStop(1, '#ff4d1f');
-      ctx.fillStyle = fg;
+      ctx.drawImage(EB_SPRITES.flame, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
+      ctx.fillStyle = '#ff8c2b';
+      ctx.globalAlpha = 0.85;
       ctx.beginPath();
-      ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2, eb.height / 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.38, eb.height * 0.38, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.restore();
       return;
     }
-    // P4：特殊弹幕（自爆兵转化）——白色核心红色壳，不可抵消
+    // P4：特殊弹幕（自爆兵转化）——红色壳，不可抵消
     if (eb.special) {
-      ctx.shadowColor = '#ff5252';
-      ctx.shadowBlur = 14;
+      ctx.drawImage(EB_SPRITES.special, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
       ctx.strokeStyle = '#ff6b6b';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -7221,28 +7325,32 @@
     }
     // P4：克隆体红色攻击弹
     if (eb.red) {
-      ctx.shadowColor = '#ff2b4d';
-      ctx.shadowBlur = 12;
+      ctx.drawImage(EB_SPRITES.red, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
       ctx.fillStyle = '#ff3b5e';
       ctx.beginPath();
-      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2, 0, Math.PI * 2);
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.35, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.beginPath();
-      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.3, 0, Math.PI * 2);
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       return;
     }
-    ctx.shadowColor = '#ff6b6b';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#ff6b6b';
+    // 普通敌弹：按颜色选精灵（红/金/紫/电青/青）
+    var spr2 = EB_SPRITES.base;
+    if (eb.color === '#ffd166' || eb.color === '#ffd700') spr2 = EB_SPRITES.gold;
+    else if (eb.color === '#9b7bff' || eb.color === '#a05bff') spr2 = EB_SPRITES.purple;
+    else if (eb.color === '#bfe9ff') spr2 = EB_SPRITES.bolt;
+    else if (eb.color === '#7df0ff' || eb.color === '#4ee0ff') spr2 = EB_SPRITES.cyan;
+    ctx.drawImage(spr2, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
+    ctx.fillStyle = eb.color || '#ff6b6b';
     ctx.beginPath();
-    ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width / 2, eb.height / 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1.5, eb.width * 0.3), Math.max(1.5, eb.height * 0.3), 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.beginPath();
-    ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.25, 0, Math.PI * 2);
+    ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1, eb.width * 0.14), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -8270,7 +8378,11 @@
 
     if (state.status === 'playing' || state.status === 'gameover') {
       // P8：引擎推进粒子（飞机尾部持续细粒子；吞噬者模式为球体尾迹）
-      if (state.status === 'playing' && particles.length < 300) {
+      // P12-C/F：粒子上限画质自适应 + 倍速减密
+      var fb = fxBudget();
+      var wantParticle = state.status === 'playing' && particles.length < fb.maxParticles;
+      if (fb.halfDensity) wantParticle = wantParticle && Math.random() < 0.5;
+      if (wantParticle) {
         var shipCol = (GameCore.DEFAULT_CONFIG.ships[state.ship] || GameCore.DEFAULT_CONFIG.ships.star).color;
         var exhX = state.player.x + state.player.width / 2 + (Math.random() - 0.5) * 10;
         var exhY = state.player.y + state.player.height + 2;
@@ -8567,6 +8679,27 @@
     }
     state.buffOffered = true;
     GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
+    // P12：升级三选一合并——若有待选升级，先渲染升级区（选完不关面板，继续选强化）
+    var buffSkillZone = document.getElementById('buff-skill-zone');
+    var buffSkillBox = document.getElementById('buff-skill-options');
+    var buffSubtitle = document.getElementById('buff-subtitle');
+    var needSkill = state.pendingSkillChoices && state.pendingSkillChoices.length > 0;
+    if (needSkill) {
+      if (buffSkillZone) buffSkillZone.style.display = 'block';
+      if (buffSubtitle) buffSubtitle.textContent = '先选能力，再选强化';
+      if (buffSkillBox) {
+        buffSkillBox.innerHTML = '';
+        state.pendingSkillChoices.forEach(function (ch) {
+          buffSkillBox.appendChild(buildSkillChoiceButton(ch, function () {
+            state.pendingSkillChoices = [];
+            if (buffSkillZone) buffSkillZone.style.display = 'none';
+            if (buffSubtitle) buffSubtitle.textContent = '三选一 · 立即生效';
+          }));
+        });
+      }
+    } else if (buffSkillZone) {
+      buffSkillZone.style.display = 'none';
+    }
     var pool = BUFF_POOL.filter(function (b) {
       if (b.maxed && b.maxed()) return false;
       // P6：雷电专属强化仅雷电武器可选；其它武器不刷出
@@ -8627,6 +8760,47 @@
   var revivePanel = document.getElementById('revive-panel');
   var btnCrystal = document.getElementById('btn-crystal');
 
+  /** 能力选项按钮（三选一卡牌，供升级面板与波间强化升级区共用） */
+  function buildSkillChoiceButton(ch, afterPick) {
+    var cfg = GameCore.DEFAULT_CONFIG;
+    var btn = document.createElement('button');
+    btn.className = 'btn primary';
+    btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+    var title = '', desc = '', icon = '◆';
+    if (ch.kind === 'fusion') {
+      var fdef = null;
+      for (var fi = 0; fi < cfg.fusionTable.length; fi++) {
+        if (cfg.fusionTable[fi].id === ch.id) fdef = cfg.fusionTable[fi];
+      }
+      title = '🌟 融合 · ' + (fdef ? fdef.name : ch.id);
+      desc = (fdef ? fdef.desc : '双技能满级融合成超武');
+      icon = '🔥';
+    } else if (ch.kind === 'active') {
+      if (cfg.rogueNewSkills[ch.id]) {
+        title = (cfg.rogueNewSkills[ch.id].label || ch.id) + ' ★' + ch.level;
+        desc = cfg.rogueNewSkills[ch.id].desc || '';
+      } else {
+        title = '武器技 · ' + ((cfg.weapons[ch.id] && cfg.weapons[ch.id].label) || ch.id) + ' ★' + ch.level;
+        // P11B：附加预览——选中后挂到当前主武器上的复合效果
+        var mainLabel = (cfg.weapons[state.weapon] && cfg.weapons[state.weapon].label) || state.weapon;
+        var encDesc = getEnchantDesc(ch.id, ch.level);
+        desc = '附加到「' + mainLabel + '」→ ' + encDesc;
+      }
+    } else {
+      var pdef = cfg.roguePassives[ch.id];
+      title = '被动 · ' + (pdef ? pdef.label : ch.id) + ' ★' + ch.level;
+      desc = pdef ? pdef.desc : '';
+    }
+    btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + icon + '</span>' + title + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + desc + '</span>';
+    btn.addEventListener('click', function () {
+      GameCore.applySkillChoice(state, ch);
+      audio.powerup();
+      if (ch.kind === 'fusion') { addFlash('255,90,122', 240); addShake(10, 260); showToast('🌟 超武融合成功！'); }
+      if (afterPick) afterPick();
+    });
+    return btn;
+  }
+
   /** 升级三选一：弹出卡池面板（选择后应用，恢复游戏） */
   function openSkillPanel() {
     if (!skillPanel) return;
@@ -8636,46 +8810,12 @@
     GameCore.togglePause(state);
     if (skillPanelLv) skillPanelLv.textContent = 'Lv ' + state.expLevel + ' · 选择一项能力';
     skillBox.innerHTML = '';
-    var cfg = GameCore.DEFAULT_CONFIG;
     choices.forEach(function (ch) {
-      var btn = document.createElement('button');
-      btn.className = 'btn primary';
-      btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
-      var title = '', desc = '', icon = '◆';
-      if (ch.kind === 'fusion') {
-        var fdef = null;
-        for (var fi = 0; fi < cfg.fusionTable.length; fi++) {
-          if (cfg.fusionTable[fi].id === ch.id) fdef = cfg.fusionTable[fi];
-        }
-        title = '🌟 融合 · ' + (fdef ? fdef.name : ch.id);
-        desc = (fdef ? fdef.desc : '双技能满级融合成超武');
-        icon = '🔥';
-      } else if (ch.kind === 'active') {
-        if (cfg.rogueNewSkills[ch.id]) {
-          title = (cfg.rogueNewSkills[ch.id].label || ch.id) + ' ★' + ch.level;
-          desc = cfg.rogueNewSkills[ch.id].desc || '';
-        } else {
-          title = '武器技 · ' + ((cfg.weapons[ch.id] && cfg.weapons[ch.id].label) || ch.id) + ' ★' + ch.level;
-          // P11B：附加预览——选中后挂到当前主武器上的复合效果
-          var mainLabel = (cfg.weapons[state.weapon] && cfg.weapons[state.weapon].label) || state.weapon;
-          var encDesc = getEnchantDesc(ch.id, ch.level);
-          desc = '附加到「' + mainLabel + '」→ ' + encDesc;
-        }
-      } else {
-        var pdef = cfg.roguePassives[ch.id];
-        title = '被动 · ' + (pdef ? pdef.label : ch.id) + ' ★' + ch.level;
-        desc = pdef ? pdef.desc : '';
-      }
-      btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + icon + '</span>' + title + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + desc + '</span>';
-      btn.addEventListener('click', function () {
-        GameCore.applySkillChoice(state, ch);
+      skillBox.appendChild(buildSkillChoiceButton(ch, function () {
         state.pendingSkillChoices = [];
         GameCore.togglePause(state);
         skillPanel.style.display = 'none';
-        audio.powerup();
-        if (ch.kind === 'fusion') { addFlash('255,90,122', 240); addShake(10, 260); showToast('🌟 超武融合成功！'); }
-      });
-      skillBox.appendChild(btn);
+      }));
     });
     skillPanel.style.display = 'block';
   }
@@ -8882,6 +9022,8 @@
   }
 
   function loop(now) {
+    // P12-E：帧率监控（画质自适应）
+    checkFps(now);
     var dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
     dt *= gameSpeed; // P7：游戏倍速（2x / 4x 时时间流速加倍，上限单帧 0.05*4）
@@ -8984,10 +9126,7 @@
       }
       // P2：波间强化三选一（进入 break 且未选择时弹出）
       offerBuffPanel();
-      // P11：升级三选一（经验升级触发，暂停等待选择）
-      if (state.pendingSkillChoices && state.pendingSkillChoices.length > 0 && state.status === 'playing' && !state.paused) {
-        openSkillPanel();
-      }
+      // P12：升级三选一已合并到波间强化一起出现（不再单独弹窗）
 
       // 蓄力炮满蓄力自动发射：播放音效并消费标志
       if (state.chargeAutoFired) {
@@ -9114,7 +9253,9 @@
         if (splashProgText) splashProgText.textContent = '正在加载 ' + Math.floor(p) + '%';
       }, 36);
     }
+    // P12：手机端触摸兼容——splash 点击/触摸均立即开始加载（消除移动端 300ms 延迟）
     splashEl.addEventListener('click', startSplashLoad);
+    splashEl.addEventListener('touchstart', function (e) { e.preventDefault(); startSplashLoad(); }, { passive: false });
     document.addEventListener('keydown', function handlerKey(e) {
       if (splashEl.style.display === 'none') return;
       startSplashLoad();
