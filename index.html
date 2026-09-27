@@ -645,13 +645,11 @@
       <div id="menu-stars" style="position:fixed;top:42px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
-    <!-- 装备选择（主武器 + 副武器） -->
+    <!-- 装备选择（P15：只保留主武器，删除副武器） -->
     <div id="loadout" class="overlay">
       <div class="panel-title">选 择 装 备</div>
-      <div class="loadout-label">主武器</div>
+      <div class="loadout-label">选择主武器</div>
       <div class="loadout-grid" id="loadout-grid"></div>
-      <div class="loadout-label">副武器 · 游戏内随时切换</div>
-      <div class="loadout-grid" id="loadout-grid-sub"></div>
       <button class="btn small" id="btn-loadout-back">返 回</button>
     </div>
 
@@ -885,7 +883,7 @@
     <!-- 游戏内设置（暂停）：手机无键盘时点击左上角 ⚙ 打开 -->
     <div id="game-panel" class="overlay">
       <div class="panel-title">设 置 · 已 暂 停</div>
-      <div class="game-panel-label" style="font-size:13px;color:#8aa0c8;margin-bottom:10px;letter-spacing:1px;">切换武器（立即生效）</div>
+      <div class="game-panel-label" style="font-size:13px;color:#8aa0c8;margin-bottom:10px;letter-spacing:1px;">切换武器</div>
       <div class="game-weapon-grid" id="game-weapon-grid"></div>      <div class="game-panel-btns">
         <button class="btn primary" id="btn-game-resume">继续游戏</button>
         <button class="btn danger" id="btn-game-menu">返回初始界面</button>
@@ -991,11 +989,11 @@
       hswarm: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, wingmanStart: 1, wingmanMax: 10, label: '蜂巢' },
       // P5：吞噬者（球形血量 50，碰撞固定 1:1 不可修正，击杀吞噬敌人初始血量与能力）
       devour: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 0, label: '吞噬者' },
-      // P13-4：新武器（冰冻炮/电弧枪/黑洞枪/毒雾喷射）
-      icecannon: { cooldown: 0.6, damage: 3, bulletSpeed: 420, bulletWidth: 14, bulletHeight: 24, freezeTime: 0.9, freezeChance: 0.6, frostBurst: 0.35, label: '冰冻炮' },
+      // P13-4：新武器（冰霜炮/电弧枪/漩涡枪/毒气喷射）
+      icecannon: { cooldown: 0.6, damage: 3, bulletSpeed: 420, bulletWidth: 14, bulletHeight: 24, freezeTime: 0.9, freezeChance: 0.6, frostBurst: 0.35, label: '冰霜炮' },
       arc: { cooldown: 0.42, damage: 2, bulletSpeed: 560, bulletWidth: 8, bulletHeight: 20, chainCount: 3, chainRadius: 240, chainFalloff: 0.55, label: '电弧枪' },
-      vortexgun: { cooldown: 0.5, damage: 1, bulletSpeed: 380, bulletWidth: 18, bulletHeight: 18, vortexDps: 9, vortexRadius: 120, label: '黑洞枪' },
-      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒雾' }
+      vortexgun: { cooldown: 0.5, damage: 1, bulletSpeed: 380, bulletWidth: 18, bulletHeight: 18, vortexDps: 9, vortexRadius: 120, label: '漩涡枪' },
+      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒气喷射' }
     },
     // P8：局内遗物（波间强化可选，双刃剑效果，同一遗物不可重复拥有）
     relics: [
@@ -3030,11 +3028,11 @@
       if (vd2 < (r + ve.width / 2) * (r + ve.width / 2)) {
         state._killWeapon = b.weapon || 'vortexgun';
         hurtEnemy(state, ve, Math.max(1, Math.round(dps * dt)), 'phys', b.weapon || 'vortexgun');
-        // 牵引：向黑洞中心靠近
+        // 牵引：向黑洞中心靠近（P15：修复方向相反导致推离敌人）
         var vd = Math.sqrt(vd2) || 1;
         var pull = 260 * dt;
-        ve.x += (vdx / vd) * pull;
-        ve.y += (vdy / vd) * pull;
+        ve.x -= (vdx / vd) * pull;
+        ve.y -= (vdy / vd) * pull;
         ve.freezeUntil = Math.max(ve.freezeUntil || 0, state.time + 0.1);
       }
     }
@@ -3090,7 +3088,38 @@
       zone._zoneT = 2.2;
       zone._zoneR = 85;
     }
+    // P15：范围光圈整体限制在游戏区域内——圆心越界时贴边收缩，避免边缘渲染撕裂（穿模）
+    var zr = zone._zoneR || 85;
+    var zx = clamp(cx, zr, cfg.width - zr);
+    var zy = clamp(cy, zr, cfg.height - zr);
+    zone.x = zx - 0.5;
+    zone.y = zy - 0.5;
     state.bullets.push(zone);
+  }
+
+  /** P15：冰霜炮击杀敌人后释放冰锥——向四周散射 6 枚冰锥弹（命中冻结 + 魔法伤害） */
+  function spawnIceCone(state, cx, cy) {
+    var n = 6;
+    for (var ic = 0; ic < n; ic++) {
+      var a = (ic / n) * Math.PI * 2 + Math.random() * 0.35;
+      state.bullets.push({
+        id: newId(state),
+        type: 'icecone',
+        x: cx - 4,
+        y: cy - 4,
+        width: 8,
+        height: 8,
+        vx: Math.sin(a) * 200,
+        vy: Math.cos(a) * 200,
+        damage: Math.max(1, Math.round(2 * getRogueDmgMult(state))),
+        life: 0,
+        bounceCount: 0,
+        dmgType: 'magic',
+        weapon: 'icecannon',
+        _freeze: 1.0,
+        _freezeChance: 1
+      });
+    }
   }
 
   /** 地面范围区逐帧结算（吸附/持续伤害/冻结，到期移除或引爆） */
@@ -3111,9 +3140,10 @@
           state._killWeapon = 'vortexgun';
           hurtEnemy(state, ve, Math.max(1, Math.round(dps * dt)), b.dmgType, 'vortexgun');
           var vd = Math.sqrt(vd2) || 1;
-          var pull = 300 * dt;
-          ve.x += (vdx / vd) * pull;
-          ve.y += (vdy / vd) * pull;
+          // P15：向漩涡中心聚拢，越靠近中心吸附越强（修复原方向相反导致"推离"敌人）
+          var pull = Math.min(560, 140 + 840 * Math.max(0, 1 - vd / r)) * dt;
+          ve.x -= (vdx / vd) * pull;
+          ve.y -= (vdy / vd) * pull;
           ve.freezeUntil = Math.max(ve.freezeUntil || 0, state.time + 0.12);
         }
       }
@@ -3854,6 +3884,10 @@
       // P5：吞噬者武器——吞噬被自己杀死的敌人（全部初始血量 + 能力）
       if (state.weapon === 'devour') {
         devourFeed(state, enemy);
+      }
+      // P15：冰霜炮击杀敌人——敌人爆裂释放冰锥（向四周散射，命中冻结+伤害）
+      if (state._killWeapon === 'icecannon') {
+        spawnIceCone(state, enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
       }
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
@@ -5130,6 +5164,7 @@
     var sub = document.getElementById('loadout-grid-sub');
     if (!grid) return;
     grid.innerHTML = '';
+    // P15：只保留主武器（删除副武器机制）
     if (sub) sub.innerHTML = '';
     WEAPONS.forEach(function (w) {
       var card = document.createElement('div');
@@ -5139,33 +5174,11 @@
         '<div class="name">' + w.name + '</div>' +
         '<div class="desc">' + w.desc.replace(/\n/g, '<br>') + '</div>';
       card.addEventListener('click', function () {
-        if (settings.secondaryWeapon === w.id) {
-          // 主副不重复：自动把副武器换成原主武器之外的一把
-          settings.secondaryWeapon = (w.id === 'laser') ? 'gun' : 'laser';
-        }
         settings.weapon = w.id;
+        settings.secondaryWeapon = null; // 旧存档兼容：清掉副武器
         renderWeaponGrid();
       });
       grid.appendChild(card);
-    });
-    if (!sub) return;
-    WEAPONS.forEach(function (w) {
-      var card = document.createElement('div');
-      card.className = 'weapon-card' + (settings.secondaryWeapon === w.id ? ' selected' : '');
-      card.innerHTML =
-        '<span class="icon">' + w.icon + '</span>' +
-        '<div class="name">' + w.name + '</div>' +
-        '<div class="desc">' + w.desc.replace(/\n/g, '<br>') + '</div>';
-      card.addEventListener('click', function () {
-        if (w.id === settings.weapon) {
-          // 与主武器相同则不设副武器（避免重复）
-          showToast('副武器不能与主武器相同');
-          return;
-        }
-        settings.secondaryWeapon = w.id;
-        renderWeaponGrid();
-      });
-      sub.appendChild(card);
     });
   }
 
@@ -5698,7 +5711,6 @@
     var shipCfg = GameCore.DEFAULT_CONFIG.ships[settings.ship] || GameCore.DEFAULT_CONFIG.ships.star;
     state = GameCore.createGame({
       initialWeapon: settings.weapon,
-      initialSecondaryWeapon: settings.secondaryWeapon === settings.weapon ? null : settings.secondaryWeapon,
       initialShip: settings.ship,
       initialMultishot: Math.min(5, settings.multishot + (p.upgrades.multishot || 0)),
       initialFireSpeed: settings.fireSpeed,
@@ -6112,17 +6124,9 @@
     recordScoreToRank();
   }
 
-  /** P4：主副武器中取攻击伤害更高的武器（用于排行榜分类） */
+  /** P4：当前武器（主武器）用于排行榜分类 */
   function pickRankWeapon() {
-    function dmg(w) {
-      var c = state.config.weapons[w];
-      return (c ? c.damage : 0) + (state.damageBonus || 0);
-    }
-    var w = state.weapon || 'gun';
-    if (state.secondaryWeapon) {
-      w = dmg(state.secondaryWeapon) > dmg(state.weapon) ? state.secondaryWeapon : state.weapon;
-    }
-    return w;
+    return state.weapon || 'gun';
   }
 
   function addStars(n) {
@@ -7108,7 +7112,6 @@
     resetTracking();
     var opts = {
       initialWeapon: cfg.weapon,
-      initialSecondaryWeapon: dailyMode === 'limited' ? null : cfg.secondary,
       initialShip: cfg.ship,
       initialMultishot: cfg.multishot,
       initialFireSpeed: cfg.fireSpeed,
@@ -7140,7 +7143,6 @@
     head.innerHTML =
       '<div class="dc-title">📅 今日挑战 · ' + today + '</div>' +
       '<div class="dc-info">主武器：' + (WEAPON_NAMES[cfg.weapon] || cfg.weapon) +
-      ' · 副武器：' + (WEAPON_NAMES[cfg.secondary] || cfg.secondary) +
       '<br>战机：' + (GameCore.DEFAULT_CONFIG.ships[cfg.ship] || {}).label +
       ' · 弹道 ' + cfg.multishot + ' · 攻速 ' + Math.round(cfg.fireSpeed * 100) + '% · 伤害+' + cfg.damage +
       '<br>难度 8（固定） · 每人每日同一配置，比谁分高！</div>';
@@ -8612,7 +8614,7 @@
       ctx.restore();
       return;
     }
-    if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt') {
+    if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt' && b.type !== 'icecone') {
       // P12-A：拖尾精灵化——预烘焙渐变条 drawImage（消灭逐帧 createLinearGradient）
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
       // P15：新武器专属拖尾色（毒气绿/漩涡青紫/冰霜冰蓝），替代默认黄色柱条
@@ -8837,6 +8839,30 @@
       ctx.beginPath();
       ctx.arc(icx, icy, b.width * 0.62, state.time * 4, state.time * 4 + 1.9);
       ctx.stroke();
+    } else if (b.type === 'icecone') {
+      // P15：冰霜炮击杀释放的冰锥——锋利冰晶（细长菱形 + 寒光）
+      var ic2x = b.x + b.width / 2, ic2y = b.y + b.height / 2;
+      var icAng = Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.translate(ic2x, ic2y);
+      ctx.rotate(icAng);
+      ctx.shadowColor = '#a8e8ff';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#dff6ff';
+      ctx.beginPath();
+      ctx.moveTo(b.height / 2, 0);
+      ctx.lineTo(-b.height / 2, b.width / 2);
+      ctx.lineTo(-b.height / 2, -b.width / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(b.height * 0.28, 0);
+      ctx.lineTo(-b.height * 0.18, b.width * 0.16);
+      ctx.lineTo(-b.height * 0.18, -b.width * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     } else if (b.type === 'vortexgun') {
       // P14：漩涡枪子弹——青紫引力球（旋转内核 + 引力弧环）
       var vcx2 = b.x + b.width / 2, vcy2 = b.y + b.height / 2;
@@ -10116,12 +10142,7 @@
       audio.powerup();
       if (wasPanelOpen) hideGamePanel();
     }
-    // 实时双武器切换：Q 键（无需暂停）
-    if (e.code === 'KeyQ' && state.status === 'playing' && !state.paused) {
-      GameCore.switchWeapon(state);
-      audio.powerup();
-    }
-    // 游戏中数字键切换武器
+    // 游戏中数字键切换武器（P15：副武器已删除，数字键直接切换主武器）
     if (state.status === 'playing') {
       var weaponMap = { Digit1: 'gun', Digit2: 'cannon', Digit3: 'laser', Digit4: 'boomerang', Digit5: 'saber', Digit6: 'homing', Digit7: 'charge' };
       var wp = weaponMap[e.code];
@@ -10252,14 +10273,16 @@
     flashUntil = performance.now() + durMs;
   }
 
-  // ==================== 实时双武器切换 ====================
+  // ==================== 实时双武器切换（P15：副武器已删除，按钮隐藏） ====================
 
   var btnSwap = document.getElementById('btn-swap');
   if (btnSwap) {
     btnSwap.addEventListener('click', function () {
       audio.unlock();
-      GameCore.switchWeapon(state);
-      audio.powerup();
+      // 无副武器：点击后打开暂停面板换武器（保持手机端入口可用）
+      if (state && state.status === 'playing' && !state.paused) {
+        openGamePanel();
+      }
     });
   }
 
@@ -10702,14 +10725,10 @@
     // 实时双武器：显示当前主武器与副武器，副武器存在时显示切换按钮
     var wc = document.getElementById('hud-weapon-cur');
     if (wc) {
-      if (state.secondaryWeapon) {
-        wc.textContent = '主：' + (WEAPON_NAMES[state.weapon] || state.weapon) + ' · 副：' + (WEAPON_NAMES[state.secondaryWeapon] || state.secondaryWeapon);
-      } else {
-        wc.textContent = (WEAPON_NAMES[state.weapon] || state.weapon);
-      }
+      wc.textContent = (WEAPON_NAMES[state.weapon] || state.weapon);
     }
     var swapBtn = document.getElementById('btn-swap');
-    if (swapBtn) swapBtn.style.display = state.secondaryWeapon ? 'block' : 'none';
+    if (swapBtn) swapBtn.style.display = 'none'; // P15：副武器已删除，隐藏交换按钮
     var comboEl = document.getElementById('hud-combo');
     if (comboEl) {
       if (state.combo >= 2) {
