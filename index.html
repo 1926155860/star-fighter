@@ -10788,10 +10788,10 @@
     // 红色外发光
     ctx.shadowColor = '#ff3b6b';
     ctx.shadowBlur = 18;
-    // Boss 形象优先级：用户上传的自定义图 > 主题形象（内置 10 款图 / Canvas 程序化）
-    // P25：默认恶魔立绘不再覆盖所有主题（此前 bossImg 默认值导致所有 Boss 都显示恶魔）
+    // Boss 形象优先级：用户上传的自定义图（仅作用于「恶魔领主」主题）> 主题形象（内置 10 款主题图 / 20 主题程序化造型）
+    // P25c：上传过的自定义图不再全局覆盖——否则所有主题都显示同一张上传图（常为恶魔），其余 19 主题各自独立形象
     var _useCustom = false;
-    try { _useCustom = localStorage.getItem('bossImage') !== null; } catch (errC) { _useCustom = false; }
+    try { _useCustom = localStorage.getItem('bossImage') !== null && boss.theme === 'demon'; } catch (errC) { _useCustom = false; }
     if (_useCustom && bossImg.complete && bossImg.naturalWidth > 0) {
       var iw = bossImg.naturalWidth, ih = bossImg.naturalHeight;
       var k2 = Math.min(boxW / iw, boxH / ih);
