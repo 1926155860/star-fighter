@@ -1501,6 +1501,39 @@
   };
 
   /** 创建初始游戏状态 */
+  // P22-②：敌人行为模板注册表——移动模式 + 参数，spawnEnemy 按类型分配、update 按模板驱动
+  var ENEMY_TEMPLATES = {
+    drift:  { move: 'drift', amp: 30, freq: 2.2 },   // 默认：向下缓速 + 随机水平漂移
+    sine:   { move: 'sine', amp: 42, freq: 1.8 },    // 正弦横摆下移（普通球交替）
+    orbit:  { move: 'orbit', radius: 90, speed: 1.6 }, // 环绕下落（机动型）
+    dive:   { move: 'dive', accel: 70 },             // 俯冲加速（压迫型）
+    static: { move: 'static', bob: 3 }               // 悬浮微摆（治疗/防御）
+  };
+  // P22-②：敌人类型 → 行为模板映射
+  var ENEMY_TPL_MAP = {
+    healer: 'static', defender: 'static', armored: 'drift', tank: 'drift',
+    spreader: 'drift', devourer: 'drift', flamer: 'drift', stormer: 'drift',
+    suicider: 'dive', chaser: 'chase', charger: 'drift', assassin: 'dive'
+  };
+
+  // P22-④：武器羁绊协同——主武器 × 已解锁武器组合被动加成（弹壳特工队式融合的轻量版本）
+  var WEAPON_BONDS = {
+    gun:          { partner: 'homing',     effect: 'homing' },      // 机枪+追踪：子弹自动追踪
+    cannon:       { partner: 'icecannon',  effect: 'freezeAoe' },   // 大炮+冰霜：命中生成冰霜圈
+    laser:        { partner: 'lightning',  effect: 'chain' },       // 激光+雷电：光束命中触发连锁闪电
+    saber:        { partner: 'poison',     effect: 'poisonBlade' }, // 光刃+毒气：挥砍中毒
+    charge:       { partner: 'boomerang',  effect: 'bounce' },      // 蓄力+回旋镖：蓄力弹命中弹射一次
+    flamethrower: { partner: 'vortexgun',  effect: 'vortex' },      // 火焰+漩涡：灼烧区向心吸附
+    hswarm:       { partner: 'devour',     effect: 'leech' },       // 蜂巢+吞噬：僚机命中吸血
+    icecannon:    { partner: 'laser',      effect: 'iceLaser' }     // 冰霜+激光：冻结翻倍+伤害+1
+  };
+  function getBondEffects(state) {
+    var b = WEAPON_BONDS[state.weapon];
+    if (!b) return null;
+    if (!state.unlockedWeapons || !state.unlockedWeapons[b.partner]) return null;
+    return b;
+  }
+
   function createGame(config) {
     var cfg = merge({}, DEFAULT_CONFIG, config || {});
     var shipCfg = cfg.ships[cfg.initialShip] || cfg.ships.star;
@@ -1517,6 +1550,7 @@
       secondaryWeapon: cfg.initialSecondaryWeapon || null, // 副武器（实时双武器）
       ship: (cfg.ships[cfg.initialShip] ? cfg.initialShip : 'star'), // 战机皮肤
       mastery: cfg.mastery || {}, // P8：武器专精（局外成长，重置时保留）
+      unlockedWeapons: cfg.unlockedWeapons || {}, // P22-④：已解锁武器集合（羁绊判定）
       multishotLevel: clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1),
       fireSpeedFactor: clamp(cfg.initialFireSpeed || 1, cfg.fireSpeedMin, 1),
       damageBonus: clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax), // 武器成长初始攻击加成（局外）
@@ -1866,8 +1900,15 @@
       invulnUntil: 0,          // 防御型：无敌截止时间
       invulnTimer: cfg.defenderInvulnCycle, // 防御型：无敌周期计时
       healTimer: cfg.healInterval,          // 治疗型：治疗计时
-      healTarget: null          // 治疗型：当前治疗目标 id（用于画连接线）
+      healTarget: null,          // 治疗型：当前治疗目标 id（用于画连接线）
+      tpl: { move: 'drift' }    // P22-②：行为模板（创建后按类型覆盖）
     };
+    // P22-②：按敌人类型分配行为模板（特殊行为类型保留其专属状态机，仅标记）
+    if (ENEMY_TPL_MAP[enemy.special]) {
+      enemy.tpl = { move: ENEMY_TPL_MAP[enemy.special] };
+    } else if (Math.random() < 0.5) {
+      enemy.tpl = { move: 'sine' };
+    }
     // P8：精英词缀——分裂球继承母球词缀；直接创建默认无词缀（野外 spawnEnemy 再抽取）
     enemy.affix = (parentAffix !== undefined && parentAffix !== null) ? parentAffix : 'none';
     if (enemy.affix === 'shielded') enemy.shieldHits = cfg.shieldedHits; // 护盾：剩余护盾次数
@@ -2127,6 +2168,8 @@
         if (state.bullets[eix].type === 'saberblade') existing++;
       }
       var toFire = Math.max(0, count - existing);
+      // P22-④：光刃+毒气羁绊——挥砍命中附加中毒
+      var _saberBond = getBondEffects(state);
       for (var s = 0; s < toFire; s++) {
         var soff = (s - (toFire - 1) / 2) * cfg.bulletSpread * 0.8;
         state.bullets.push({
@@ -2141,7 +2184,8 @@
           damage: dmg,
           life: 0,
           dmgType: 'magic',
-          weapon: 'saber'
+          weapon: 'saber',
+          _bondPoison: (_saberBond && _saberBond.effect === 'poisonBlade') ? true : false
         });
       }
       state.nextFireTime = state.time + getFireCooldown(state);
@@ -2197,6 +2241,13 @@
         blt.enchants = enchants;
         if (pierce > 0) { blt.pierceLeft = pierce; blt.pierced = {}; }
       }
+      // P22-④：武器羁绊注入（机枪追踪 / 大炮冰霜圈 / 冰霜激光强化）
+      var _bondNow = getBondEffects(state);
+      if (_bondNow) {
+        if (_bondNow.effect === 'homing') blt._bondHoming = true;
+        if (_bondNow.effect === 'freezeAoe') { blt._zone = 'frost'; blt._freeze = 1.2; blt._freezeChance = 1; }
+        if (_bondNow.effect === 'iceLaser') { blt._freeze = (wcfg.freezeTime || 1) * 2; blt.damage += 1; }
+      }
       state.bullets.push(blt);
     }
 
@@ -2245,7 +2296,9 @@
         weapon: 'charge',
         enchants: enchants.length > 0 ? enchants : undefined,
         pierceLeft: pierce > 0 ? pierce : undefined,
-        pierced: pierce > 0 ? {} : undefined
+        pierced: pierce > 0 ? {} : undefined,
+        // P22-④：蓄力+回旋镖羁绊——命中后向玩家方向弹射一次
+        _bondBounce: (function () { var _bd = getBondEffects(state); return (_bd && _bd.effect === 'bounce') ? 1 : 0; })()
       });
     }
     return true;
@@ -4248,6 +4301,11 @@
         if (rectsOverlap(beams[bi], state.enemies[ei])) {
           state._killWeapon = 'laser';
           hurtEnemy(state, state.enemies[ei], dps * dt, 'magic', 'laser');
+          // P22-④：激光+雷电羁绊——光束命中触发连锁闪电
+          var _lBond = getBondEffects(state);
+          if (_lBond && _lBond.effect === 'chain') {
+            chainLightning(state, { x: state.enemies[ei].x + state.enemies[ei].width / 2, y: state.enemies[ei].y + state.enemies[ei].height / 2, width: 0, height: 0, damage: dps * dt });
+          }
           break;
         }
       }
@@ -4317,6 +4375,23 @@
         if (rectsOverlap(zones[zk], state.enemyBullets[ebi2])) {
           state.enemyBullets.splice(ebi2, 1);
           break;
+        }
+      }
+    }
+    // P22-④：火焰+漩涡羁绊——灼烧区对范围内敌人施加向心吸附（向玩家方向拉扯）
+    var _fBond = getBondEffects(state);
+    if (_fBond && _fBond.effect === 'vortex') {
+      for (var vi = state.enemies.length - 1; vi >= 0; vi--) {
+        var ve2 = state.enemies[vi];
+        for (var vz = 0; vz < zones.length; vz++) {
+          if (rectsOverlap(zones[vz], ve2)) {
+            var vpx = p.x + p.width / 2 - (ve2.x + ve2.width / 2);
+            var vpy = p.y - (ve2.y + ve2.height / 2);
+            var vpd = Math.sqrt(vpx * vpx + vpy * vpy) || 1;
+            ve2.vx = (ve2.vx || 0) + vpx / vpd * 120 * dt;
+            ve2.vy = (ve2.vy !== undefined ? ve2.vy : ve2.speed) + vpy / vpd * 160 * dt;
+            break;
+          }
         }
       }
     }
@@ -4580,6 +4655,23 @@
         e.vx = (e.vx || 0) + gx / gd * e.speed * 0.35 * dt * 10;
         e.vy = (e.vy !== undefined ? e.vy : e.speed) + gy / gd * e.speed * 0.35 * dt * 10;
       }
+      // P22-②：行为模板驱动（sine/orbit/dive/static）——覆盖无专属状态机敌人的移动模式
+      if (e.tpl && e.tpl.move && e.special !== 'chaser' && e.special !== 'charger' && e.special !== 'assassin') {
+        var tplC = ENEMY_TEMPLATES[e.tpl.move];
+        if (tplC && tplC.move === 'sine') {
+          e._sinPhase = (e._sinPhase === undefined ? Math.random() * 6.28 : e._sinPhase + tplC.freq * dt);
+          e.vx = Math.sin(e._sinPhase) * tplC.amp;
+        } else if (tplC && tplC.move === 'orbit') {
+          e._orbA = (e._orbA === undefined ? Math.random() * 6.28 : e._orbA + tplC.speed * dt);
+          e.vx = Math.cos(e._orbA) * tplC.radius * 0.6;
+          e.vy = (e.vy !== undefined ? e.vy : e.speed) + Math.sin(e._orbA) * 46;
+        } else if (tplC && tplC.move === 'dive') {
+          e.vy = (e.vy !== undefined ? e.vy : e.speed) + tplC.accel * dt;
+        } else if (tplC && tplC.move === 'static') {
+          e.vx = Math.sin(state.time * 1.2 + (e.id || 0)) * 6;
+          e.vy = Math.cos(state.time * 0.8 + (e.id || 0)) * 3;
+        }
+      }
       // P8：毒化词缀——移动速度降至 55%
       var mv = (e.affix === 'toxic') ? cfg.toxicSlow : 1;
       // P13-1：冰霜领域——敌人进入冰环减速 40%
@@ -4627,6 +4719,8 @@
         var wcx = wp.x + wp.width / 2;
         var wcy = wp.y + wp.height / 2;
         var wdmg = getWingmanDamage(state);
+        // P22-④：蜂巢+吞噬羁绊——僚机命中吸血
+        var _wLeech = (getBondEffects(state) || {}).effect === 'leech';
         for (var wm = 0; wm < state.wingman; wm++) {
           var wOff = (wm - (state.wingman - 1) / 2) * 30;
           state.bullets.push({
@@ -4640,7 +4734,8 @@
             vy: -440,
             damage: wdmg,
             life: 0,
-            weapon: state.weapon // P5：武器伤害统计（僚机伤害归当前主武器）
+            weapon: state.weapon, // P5：武器伤害统计（僚机伤害归当前主武器）
+            _bondLeech: _wLeech
           });
         }
       }
@@ -4700,6 +4795,8 @@
             if (sdist < sradius + Math.max(se.width, se.height) / 2) {
               state._killWeapon = 'saber';
               hurtEnemy(state, se, sdps * dt, 'magic', 'saber');
+              // P22-④：光刃+毒气羁绊——挥砍附加中毒
+              if (b._bondPoison && !se.poison) se.poison = { dps: 3, until: state.time + 2.5 };
             }
           }
           // 挥砍 BOSS
@@ -4727,6 +4824,9 @@
           updateHoming(state, b, dt);
         } else if (b.type === 'icecone') {
           // P17：冰锥自带追踪（击杀释放的追踪冰锥）
+          updateHoming(state, b, dt);
+        } else if (b._bondHoming && state.enemies.length > 0) {
+          // P22-④：机枪+追踪羁绊——子弹自动追踪最近敌人
           updateHoming(state, b, dt);
         } else {
           b.x += b.vx * dt;
@@ -4783,6 +4883,11 @@
           }
           state._killWeapon = bullet.type === 'chargebolt' ? 'charge' : bullet.type;
           hurtEnemy(state, tgt, bullet.damage, bullet.dmgType || 'phys', bullet.weapon);
+          // P22-④：蜂巢+吞噬羁绊——僚机命中吸血（累积 2 次命中回 1 血，上限为最大生命）
+          if (bullet._bondLeech && state.lives < state.maxLives) {
+            state._leechAcc = (state._leechAcc || 0) + 0.5;
+            if (state._leechAcc >= 1) { state._leechAcc -= 1; state.lives = Math.min(state.maxLives, state.lives + 1); }
+          }
           hit = true;
           // P14：新武器命中后生成地面范围区（漩涡/毒圈/冰霜圈）
           if (bullet._zone) {
@@ -4824,6 +4929,17 @@
           }
           // 蓄力弹：记录已伤害目标并继续穿透
           if (bullet.type === 'chargebolt') {
+            // P22-④：蓄力+回旋镖羁绊——命中后朝玩家方向弹射一次
+            if (bullet._bondBounce && bullet._bondBounce > 0) {
+              bullet._bondBounce = 0;
+              var bpx = state.player.x + state.player.width / 2;
+              var bpy = state.player.y + state.player.height / 2;
+              var bdx = bpx - bullet.x, bdy = bpy - bullet.y;
+              var bdd = Math.sqrt(bdx * bdx + bdy * bdy) || 1;
+              var bspd2 = Math.max(300, Math.sqrt(bullet.vx * bullet.vx + bullet.vy * bullet.vy));
+              bullet.vx = bdx / bdd * bspd2;
+              bullet.vy = bdy / bdd * bspd2;
+            }
             bullet.pierced = bullet.pierced || {};
             bullet.pierced[tgt.id] = true;
             continue;
@@ -5462,6 +5578,15 @@
     if (pp.unlockAll) return true;
     if (!LOCKED_WEAPONS[id]) return true;
     return (pp.maxWave || 0) >= LOCKED_WEAPONS[id];
+  }
+
+  // P22-④：已解锁武器集合（武器羁绊判定）
+  function getUnlockedSet() {
+    var s = {};
+    for (var wi = 0; wi < WEAPONS.length; wi++) {
+      if (isWeaponUnlocked(WEAPONS[wi].id)) s[WEAPONS[wi].id] = true;
+    }
+    return s;
   }
 
   function weaponLockInfo(id) {
@@ -6112,7 +6237,8 @@
       lives: Math.max(1, Math.round((GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)) * shipCfg.hp)),
       mastery: p.mastery || {}, // P8：武器专精
       coreUpgrade: p.coreUpgrade || {}, // P11：局外核心强化（暴走延脉/拾取回血/满血增伤/双倍道具）
-      talentLevel: getTalents() // P13-10：局外天赋（暴击/吸血/穿透/经验）
+      talentLevel: getTalents(), // P13-10：局外天赋（暴击/吸血/穿透/经验）
+      unlockedWeapons: getUnlockedSet() // P22-④：武器羁绊（主武器×已解锁组合）
     });
     GameCore.start(state);
     // P11：战前祝福应用（方案1-C）
