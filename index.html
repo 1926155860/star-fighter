@@ -4319,6 +4319,7 @@
         if (Math.sqrt(d2x * d2x + d2y * d2y) <= cfg.devourerRadius + 60) {
           var gain2 = Math.max(1, Math.round(boss.maxHp * cfg.devourerBossAbsorbPct));
           dev2.hp = Math.min(dev2.maxHp * 3, dev2.hp + gain2);
+          state._devouredBoss = true; // P22-⑮：吞噬 Boss 成就标记
           dev2.maxHp = Math.max(dev2.maxHp, dev2.hp);
         }
       }
@@ -6169,8 +6170,8 @@
       // P22-⑥：生成战绩分享卡（Canvas 科幻风卡片）
       var shareCardDataURL = null;
       try { shareCardDataURL = drawShareCard(state.score || 0, state.wave || 1, state.weapon || 'gun', track.totalKills || 0); } catch (e) {}
-      var url = location.href.split('?')[0] + '?share=1';
-      var shareText = '我在星际战机打出 ' + (state.score || 0) + ' 分，撑到第 ' + (state.wave || 1) + ' 波！';
+      var url = location.href.split('?')[0] + '?share=1' + (getPlayerName() ? '&ref=' + encodeURIComponent(getPlayerName()) : ''); // P22-⑯：分享链接带 ?ref= 邀请好友
+      var shareText = '我在星际战机打出 ' + (state.score || 0) + ' 分，撑到第 ' + (state.wave || 1) + ' 波！' + (getPlayerName() ? ' 点链接和我做好友：' + url : '');
       if (navigator.share && shareCardDataURL) {
         try {
           var b64 = shareCardDataURL.split(',')[1];
@@ -6322,6 +6323,51 @@
   // 主菜单按钮精确对齐背景图；窗口变化时重新对齐
   placeMenuButtons();
   window.addEventListener('resize', placeMenuButtons);
+  // P22-⑯⑰：启动时——解析 ?ref= 好友邀请（自动加好友，上限 50）+ 发放离线收益（30min=1★，上限 100★/天；离线≥7天回归后 3 天收益双倍）
+  (function bootSocial() {
+    try {
+      var qs = (window.location.search || '').replace(/^\?/, '').split('&');
+      var refName = '';
+      for (var qi = 0; qi < qs.length; qi++) {
+        var kv = qs[qi].split('=');
+        if (kv[0] === 'ref' && kv[1]) { try { refName = decodeURIComponent(kv[1]); } catch (e) { refName = kv[1]; } }
+      }
+      if (refName) {
+        var fp = getProfile();
+        fp.friends = fp.friends || [];
+        if (refName !== (getPlayerName() || '') && fp.friends.indexOf(refName) === -1) {
+          fp.friends.push(refName);
+          if (fp.friends.length > 50) fp.friends = fp.friends.slice(-50);
+          saveProfile(fp);
+          setTimeout(function () { try { showToast('🤝 已与 ' + refName + ' 成为好友，可在排行榜「好友」页比拼！'); } catch (e) {} }, 1200);
+        }
+      }
+    } catch (e) {}
+    try {
+      var off = getProfile();
+      var now = Date.now();
+      var lastOn = off.lastOnline || now;
+      var gapMin = Math.floor((now - lastOn) / 60000);
+      if (gapMin >= 30) {
+        var boost = off.revivalBoostUntil && off.revivalBoostUntil > now;
+        var gained = Math.min(100, Math.floor(gapMin / 30));
+        if (boost) gained = Math.min(100, gained * 2);
+        // P22-⑰：离线 ≥ 7 天回归 → 未来 3 天离线收益双倍
+        if (gapMin >= 7 * 24 * 60 && !(off.revivalBoostUntil && off.revivalBoostUntil > now)) {
+          off.revivalBoostUntil = now + 3 * 24 * 3600 * 1000;
+          boost = true;
+          gained = Math.min(100, gained * 2);
+        }
+        off.stars = (off.stars || 0) + gained;
+        off.lastOnline = now;
+        saveProfile(off);
+        if (gained > 0) setTimeout(function () { try { showToast('⏳ 离线收益 +★' + gained + (boost ? '（回归双倍）' : '')); } catch (e) {} }, 1800);
+      } else {
+        off.lastOnline = now;
+        saveProfile(off);
+      }
+    } catch (e) {}
+  })();
   // P18：画布按屏幕等比放大（contain），消除宽屏下"画面居中+按钮贴边"的错位感
   // 游戏内按钮（⚙/倍速/水晶）已移入 #wrap 内 absolute 定位，天然跟随画布，无需 JS 同步
   function fitCanvas() {
@@ -6814,7 +6860,7 @@
     var box = document.getElementById('rank-period-filter');
     if (!box) return;
     box.innerHTML = '';
-    var opts = [{ id: 'week', name: '本周' }, { id: 'month', name: '本月' }, { id: 'all', name: '全部' }];
+    var opts = [{ id: 'week', name: '本周' }, { id: 'month', name: '本月' }, { id: 'friend', name: '好友' }, { id: 'all', name: '全部' }];
     opts.forEach(function (o) {
       var b = document.createElement('button');
       b.className = rankPeriodFilter === o.id ? 'on' : '';
@@ -6835,7 +6881,11 @@
     var weekCut = Date.now() - 7 * 24 * 3600 * 1000;
     var monthCut = new Date(seasonKey() + '-01').getTime();
     var all = mergeRank(loadScores(), rankWeaponFilter);
-    if (rankPeriodFilter === 'week') {
+    // P22-⑯：好友榜——?ref=玩家名 分享邀请自动加好友（上限 50），好友筛选只显示自己与好友
+    if (rankPeriodFilter === 'friend') {
+      var fset = getProfile().friends || [];
+      all = all.filter(function (s) { return s.name === me || fset.indexOf(s.name) !== -1; });
+    } else if (rankPeriodFilter === 'week') {
       all = all.filter(function (s) { return s.ts && s.ts >= weekCut; });
     } else if (rankPeriodFilter === 'month') {
       all = all.filter(function (s) { return s.ts && s.ts >= monthCut; });
@@ -6844,7 +6894,7 @@
     var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
-      list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">' + (rankPeriodFilter === 'week' ? '本周暂无记录，快来抢占榜首！' : (rankPeriodFilter === 'month' ? '本月暂无记录，赛季奖励等你拿！' : '暂无记录，快去创造你的战绩吧！')) + '</div>';
+      list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">' + (rankPeriodFilter === 'week' ? '本周暂无记录，快来抢占榜首！' : (rankPeriodFilter === 'month' ? '本月暂无记录，赛季奖励等你拿！' : (rankPeriodFilter === 'friend' ? '暂无好友战绩，分享链接邀请好友一起玩吧！' : '暂无记录，快去创造你的战绩吧！'))) + '</div>';
       return;
     }
     var medal = ['🥇', '🥈', '🥉'];
@@ -6917,6 +6967,13 @@
       saveProfile(mp);
     } catch (e) {}
     pushProfileToCloud();
+    // P22-⑮：全局累计击杀（成就进度源），结算时并入
+    try {
+      var kp = getProfile();
+      kp.totalKills = (kp.totalKills || 0) + (track.totalKills || 0);
+      kp.bossKills = (kp.bossKills || 0) + (track.bossKills || 0);
+      saveProfile(kp);
+    } catch (e) {}
   }
 
   /** 把当前局成绩记入排行榜：已命名直接入榜返回 true；未命名暂存（pendingRankScore）返回 false。同时结算本局星币（★10 分 = 1 星币） */
@@ -6930,6 +6987,8 @@
       }
     }
     finishGameSettlement();
+    // P22-⑮：吞噬 Boss 成就标记（game-core 层 _devouredBoss 传导到 track）
+    if (state && state._devouredBoss) track.devouredBoss = true;
     // 每日挑战：不入普通排行榜，只记录当日最佳
     if (dailyActive) {
       dailyActive = false;
@@ -7127,7 +7186,13 @@
     { id: 'signin7', icon: '📆', name: '七日之约', desc: '累计签到 7 天', cat: '日常', reward: 40 },
     { id: 'talent_all', icon: '🌳', name: '天赋觉醒', desc: '解锁全部 4 系天赋', cat: '养成', reward: 30 },
     { id: 'weapon6', icon: '⚔', name: '武器大师', desc: '单局使用过 6 种不同武器', cat: '战斗', reward: 25 },
-    { id: 'kill1000', icon: '💀', name: '千人斩', desc: '累计击杀 1000 个敌人', cat: '战斗', reward: 50 }
+    { id: 'kill1000', icon: '💀', name: '千人斩', desc: '累计击杀 1000 个敌人', cat: '战斗', reward: 50 },
+    // P22-⑮：成就扩容（四阶奖励体系：青铜/白银/黄金/传说，解锁即发放星币）
+    { id: 'wave50', icon: '🌌', name: '深空远征', desc: '到达第 50 波（无尽深处）', cat: '挑战', reward: 120, tier: 3 },
+    { id: 'round2', icon: '♻️', name: '轮回者', desc: '通关 100 波进入周目 2', cat: '挑战', reward: 200, tier: 4 },
+    { id: 'boss20', icon: '👹', name: '屠神者', desc: '累计击杀 20 个 Boss', cat: '战斗', reward: 100, tier: 3 },
+    { id: 'kill5000', icon: '💀', name: '五万人屠', desc: '累计击杀 5000 个敌人', cat: '战斗', reward: 300, tier: 4 },
+    { id: 'devour_boss', icon: '🩸', name: '深渊吞噬者', desc: '吞噬者吞噬一个 Boss', cat: '战斗', reward: 80, tier: 2 }
   ];
 
   function loadAchievements() {
@@ -7143,9 +7208,17 @@
   }
 
   // 本局追踪数据（main.js 层，不进 game-core）
-  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false, hitsTaken: 0 };
+  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false, hitsTaken: 0, devouredBoss: false };
   function resetTracking() {
-    track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false };
+    track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false, hitsTaken: 0, devouredBoss: false };
+  }
+
+  // P22-⑮：全局累计击杀（用于 5000 杀 / 20 Boss 成就判定）
+  function profileKills(kind) {
+    try {
+      var p = getProfile();
+      return kind === 'boss' ? (p.bossKills || 0) : (p.totalKills || 0);
+    } catch (e) { return 0; }
   }
 
   function checkAchievements() {
@@ -7160,13 +7233,30 @@
       score10000: state.score >= 10000,
       combo50: state.combo >= 50,
       wave20: state.wave >= 20,
-      clone_seen: track.cloneSeen
+      clone_seen: track.cloneSeen,
+      wave50: state.wave >= 50,
+      round2: (state.round || 1) >= 2,
+      boss20: (profileKills('boss') || 0) + track.bossKills >= 20,
+      kill5000: (profileKills('kill') || 0) + track.totalKills >= 5000,
+      devour_boss: track.devouredBoss === true
     };
     ACHIEVEMENTS.forEach(function (a) {
       if (!ach[a.id] && cond[a.id]) {
         ach[a.id] = Date.now();
         any = true;
-        showToast('🎖 成就解锁：' + a.name);
+        // P22-⑮：解锁即发放星币奖励；传说级（tier4）全屏金闪 + 顿帧
+        var _tier = a.tier || 1;
+        addStars(a.reward || 0);
+        if (_tier >= 4) {
+          try {
+            addFlash('rgba(255,209,102,0.4)', 420);
+            addShake(4, 260);
+            slowUntil = state.time + 0.12;
+          } catch (e) {}
+          showToast('👑 传说成就：' + a.name + '  ★+' + a.reward);
+        } else {
+          showToast('🎖 成就解锁：' + a.name + '  ★+' + a.reward);
+        }
         audio.powerup();
         setTimeout(function () { audio.powerup(); }, 150);
       }
