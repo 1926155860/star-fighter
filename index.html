@@ -359,6 +359,30 @@
       border-color: #ffe28a;
       box-shadow: 0 0 18px rgba(255, 209, 102, 0.6);
     }
+    /* P13：主界面右侧功能按钮组（任务/天赋/成就） */
+    .menu-fx-btn {
+      position: fixed;
+      right: 14px;
+      z-index: 26;
+      padding: 6px 12px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      border: 1px solid #4ee0ff;
+      color: #9be8ff;
+      background: rgba(6, 20, 48, 0.72);
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(78, 224, 255, 0.25);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .menu-fx-btn:hover, .menu-fx-btn:active {
+      background: rgba(10, 34, 76, 0.85);
+      border-color: #7df0ff;
+    }
+    #btn-menu-tasks { top: 84px; }
+    #btn-menu-talent { top: 118px; }
+    #btn-menu-achievement { top: 152px; }
     /* 排行榜武器分类筛选条 */
     .rank-weapon-filter {
       display: flex;
@@ -615,6 +639,9 @@
       </div>
       <button type="button" class="btn" id="btn-rank">🏆 排行</button>
       <button type="button" id="btn-menu-codex">📖 图鉴</button>
+      <button type="button" class="menu-fx-btn" id="btn-menu-tasks">每日任务</button>
+      <button type="button" class="menu-fx-btn" id="btn-menu-talent">天赋树</button>
+      <button type="button" class="menu-fx-btn" id="btn-menu-achievement">成就</button>
       <div id="menu-stars" style="position:fixed;top:58px;right:16px;font-size:13px;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.7);white-space:nowrap;z-index:26;">★ 0</div>
     </div>
 
@@ -642,6 +669,49 @@
       <div class="diff-label">选定关卡后直接开局：抵达目标波次并清空战场即通关</div>
       <div class="difficulty-grid" id="level-grid"></div>
       <button class="btn small" id="btn-level-back">返 回</button>
+    </div>
+
+    <!-- P13-10：天赋树（4 系 × 5 点，星币解锁） -->
+    <div id="talent" class="overlay">
+      <div class="panel-title">天 赋 树</div>
+      <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin-bottom:10px;text-align:center;">暴击 · 吸血 · 弹射 · 经验 · 星币解锁，局外永久生效</div>
+      <div id="talent-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;width:min(96vw,760px);"></div>
+      <div style="margin-top:10px;"><button class="btn small" id="btn-talent-back">返 回</button></div>
+    </div>
+
+    <!-- P13-11：每日任务 + 7 日签到 -->
+    <div id="mission" class="overlay">
+      <div class="panel-title">每 日 任 务</div>
+      <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin-bottom:10px;text-align:center;">每日 3 任务 · 完成后得星币 · 次日重置</div>
+      <div id="mission-list" style="display:flex;flex-direction:column;gap:8px;width:min(96vw,520px);margin-bottom:14px;"></div>
+      <div style="font-size:13px;color:#ffd27d;letter-spacing:1px;margin:4px 0 8px;text-align:center;">七 日 签 到</div>
+      <div id="signin-row" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:min(96vw,560px);margin-bottom:12px;"></div>
+      <div style="margin-top:6px;"><button class="btn small" id="btn-mission-back">返 回</button></div>
+    </div>
+
+    <!-- P13-9：成就系统化（分类 + 进度条 + 奖励） -->
+    <div id="achievement" class="overlay">
+      <div class="panel-title">成 就</div>
+      <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin-bottom:10px;text-align:center;">达成条件自动解锁 · 奖励星币与专属称号</div>
+      <div id="achievement-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;width:min(96vw,820px);"></div>
+      <div style="margin-top:10px;"><button class="btn small" id="btn-achievement-back">返 回</button></div>
+    </div>
+
+    <!-- P13-15：结算报告（游戏结束后自动弹出，2 秒后返回主菜单） -->
+    <div id="gameover" class="overlay">
+      <div class="panel-title">本 局 结 算</div>
+      <div id="gameover-report" style="display:flex;flex-direction:column;gap:6px;width:min(94vw,480px);font-size:14px;color:#cfe6ff;letter-spacing:1px;"></div>
+      <div style="margin-top:12px;color:#7df0ff;font-size:12px;letter-spacing:2px;" id="gameover-hint">即将返回主菜单…</div>
+    </div>
+
+    <!-- P13-13：新手引导（前 3 波逐步提示，可跳过） -->
+    <div id="guide" class="overlay">
+      <div class="panel-title" id="guide-title">操 作 指 引</div>
+      <div id="guide-text" style="width:min(92vw,520px);font-size:15px;color:#e8f6ff;letter-spacing:1px;line-height:1.9;text-align:center;"></div>
+      <div style="margin-top:14px;display:flex;gap:14px;">
+        <button class="btn small" id="btn-guide-next">下一步</button>
+        <button class="btn small" id="btn-guide-skip">跳 过</button>
+      </div>
     </div>
 
     <!-- 设置 -->
@@ -863,17 +933,33 @@
       // P5：蜂巢（无武器，僚机自动攻击，最多 10 架，僚机不受弹道/攻击力加成）
       hswarm: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, wingmanStart: 1, wingmanMax: 10, label: '蜂巢' },
       // P5：吞噬者（球形血量 50，碰撞固定 1:1 不可修正，击杀吞噬敌人初始血量与能力）
-      devour: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 0, label: '吞噬者' }
+      devour: { cooldown: 0, damage: 0, bulletSpeed: 0, bulletWidth: 0, bulletHeight: 0, hp: 50, wingmanStart: 0, label: '吞噬者' },
+      // P13-4：新武器（冰冻炮/电弧枪/黑洞枪/毒雾喷射）
+      icecannon: { cooldown: 0.6, damage: 3, bulletSpeed: 420, bulletWidth: 14, bulletHeight: 24, freezeTime: 0.9, freezeChance: 0.6, frostBurst: 0.35, label: '冰冻炮' },
+      arc: { cooldown: 0.42, damage: 2, bulletSpeed: 560, bulletWidth: 8, bulletHeight: 20, chainCount: 3, chainRadius: 240, chainFalloff: 0.55, label: '电弧枪' },
+      vortexgun: { cooldown: 0.5, damage: 1, bulletSpeed: 380, bulletWidth: 18, bulletHeight: 18, vortexDps: 9, vortexRadius: 120, label: '黑洞枪' },
+      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒雾' }
     },
     // P8：局内遗物（波间强化可选，双刃剑效果，同一遗物不可重复拥有）
     relics: [
       { id: 'overclock', name: '超载芯片', desc: '攻速 +30%，弹道 -1', fx: { fireSpeed: 0.7, multishot: -1 } },
       { id: 'bigbore', name: '重炮核心', desc: '伤害 +50%，攻速 -15%', fx: { dmg: 0.5, fireSpeed: 1.15 } },
-      { id: 'reactor', name: '反应装甲', desc: '生命上限 +2，伤害 -20%', fx: { life: 2, dmg: -0.2 } }
+      { id: 'reactor', name: '反应装甲', desc: '生命上限 +2，伤害 -20%', fx: { life: 2, dmg: -0.2 } },
+      // P13-4b：遗物扩充 + 套装（relicSet：同套装集齐 2 件触发）
+      { id: 'starburst', name: '双倍星币', desc: '结算星币 ×2', fx: { }, relicSet: 'rich', tag: '遗物' },
+      { id: 'regenshield', name: '护盾再生', desc: '每波恢复 1 层护盾', fx: { }, relicSet: 'rich' },
+      { id: 'magnetcore', name: '弹幕吸附', desc: '自身弹道略微弯向最近敌人', fx: { }, relicSet: 'skill' },
+      { id: 'dodgeaura', name: '闪避光环', desc: '15% 概率免伤本次攻击', fx: { dodge: 0.15 }, relicSet: 'skill' },
+      { id: 'slowfield', name: '慢速领域', desc: '全屏敌人移速 -20%', fx: { slowAll: 0.2 }, relicSet: 'skill' }
+    ],
+    // P13-4b：遗物套装定义（集齐 2 件触发套装加成）
+    relicSets: [
+      { id: 'rich', name: '财富套装', desc: '击杀星币掉落 +50%', fx: { coinMult: 1.5 } },
+      { id: 'skill', name: '战术套装', desc: '所有伤害 +25%', fx: { dmg: 0.25 } }
     ],
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
-      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys',
+      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys', icecannon: 'phys', arc: 'phys', vortexgun: 'phys', poison: 'phys',
       laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
     },
     bulletSpread: 14,
@@ -903,13 +989,51 @@
     expLevelMax: 60,          // 最高等级
     rogueSkillMax: 5,         // 技能满级（5 星触发融合）
     // 三选一卡池（主动技能 id 与武器映射；被动技能独立）
-    rogueActivePool: ['gun', 'cannon', 'laser', 'boomerang', 'saber', 'homing', 'charge', 'flamethrower', 'lightning', 'energyball', 'drone', 'guardian'],
+    rogueActivePool: ['gun', 'cannon', 'laser', 'boomerang', 'saber', 'homing', 'charge', 'flamethrower', 'lightning', 'energyball', 'drone', 'guardian', 'frostfield', 'stormfield', 'shieldring', 'burnaura', 'vortex', 'photon', 'psyshield'],
     roguePassivePool: ['atk', 'speed', 'multi', 'range', 'dur', 'cdr', 'magnet', 'leech', 'pierce', 'crit'],
+    // P13-1：武器技扩充（7 个新主动技能，随强化池三选一出现，满级 5 可参与融合）
     rogueNewSkills: {
       energyball: { label: '能量球', desc: '弹跳光球，左右反弹伤害敌人' },
       drone: { label: '自动无人机', desc: '自动向最近敌人扫射' },
-      guardian: { label: '守卫者', desc: '环绕护盾球，触碰敌人造成伤害' }
+      guardian: { label: '守卫者', desc: '环绕护盾球，触碰敌人造成伤害' },
+      frostfield: { label: '冰霜领域', desc: '环绕冰环，敌人进入减速 40%' },
+      stormfield: { label: '闪电风暴', desc: '全屏随机落雷，魔法伤害' },
+      shieldring: { label: '回旋护盾', desc: '环绕盾牌，格挡敌弹并碰伤' },
+      burnaura: { label: '灼热光环', desc: '贴身持续灼烧周围敌人' },
+      vortex: { label: '虚空黑洞', desc: '周期生成黑洞，牵引敌人后爆炸' },
+      photon: { label: '光子加速', desc: '移速与攻速 +15%/级' },
+      psyshield: { label: '灵能护盾', desc: '每波抵挡 1 次伤害' }
     },
+    // P13-3：独立附魔词条（可附加到主武器，强化池附魔池并入）
+    enchantWords: [
+      { id: 'ewLifesteal', label: '吸血', desc: '造成伤害的 5% 转化为生命' },
+      { id: 'ewCrit', label: '暴击', desc: '暴击率 +10%，暴伤 +80%' },
+      { id: 'ewFrost', label: '冰霜', desc: '命中减速敌人 20%' },
+      { id: 'ewSplash', label: '溅射', desc: '命中后 30% 范围溅射' },
+      { id: 'ewPoison', label: '毒素', desc: '命中附加 3 秒持续伤害' },
+      { id: 'ewReflect', label: '反射', desc: '10% 概率反弹敌弹' }
+    ],
+    // P13-2：融合扩充 + 终极融合（需两融合前置）
+    fusionTable: [
+      { a: 'boomerang', b: 'magnet', id: 'fmagboomerang', name: '磁力回旋镖', desc: '环绕扩散·自动追踪' },
+      { a: 'lightning', b: 'cdr', id: 'fstorm', name: '狂雷电池', desc: '连锁 +3·全屏雷暴' },
+      { a: 'saber', b: 'leech', id: 'fbloodsaber', name: '血魔刃', desc: '斩杀回血·范围翻倍' },
+      { a: 'homing', b: 'pierce', id: 'fghost', name: '幽灵导弹', desc: '无限追踪·穿透全部' },
+      { a: 'gun', b: 'speed', id: 'fgatling', name: '加特林风暴', desc: '弹量×3·扇形扫射' },
+      { a: 'laser', b: 'range', id: 'flasermatrix', name: '激光矩阵', desc: '三道全屏光束交叉' },
+      { a: 'frostfield', b: 'lightning', id: 'ficesurge', name: '冰雪风暴', desc: '冻结全场·雷暴连击' },
+      { a: 'flamethrower', b: 'lightning', id: 'fdoomfire', name: '末日烈焰', desc: '灼烧+连锁爆炸' },
+      { a: 'laser', b: 'homing', id: 'fdivinelight', name: '神光追踪', desc: '追踪光束·锁定目标' },
+      { a: 'vortex', b: 'saber', id: 'fannihilate', name: '湮灭', desc: '黑洞吞并·光刃余波' },
+      { a: 'energyball', b: 'drone', id: 'forbital', name: '轨道打击', desc: '无人机+能量球齐射' },
+      { a: 'frostfield', b: 'guardian', id: 'ffrozenguard', name: '永冻守护', desc: '冻结光环·护盾环绕' }
+    ],
+    // P13-2b：终极融合（集齐 2 个超武后强化池出金卡）
+    fusionUltimates: [
+      { need: ['fghost', 'flasermatrix'], id: 'ufatetracer', name: '命运追踪矩阵', desc: '全屏追踪光束·穿透一切' },
+      { need: ['fstorm', 'fdoomfire'], id: 'uapocalypse', name: '末日天劫', desc: '雷火全屏轰炸·不可抵消' },
+      { need: ['fmagboomerang', 'forbital'], id: 'ugalaxyorbit', name: '银河轨道', desc: '环绕弹幕+轨道轰炸' }
+    ],
     roguePassives: {
       atk: { label: '攻击力', desc: '伤害 +25%/级' },
       speed: { label: '攻速', desc: '冷却 -12%/级' },
@@ -962,6 +1086,43 @@
       { id: 'cuHeal', name: '拾取回血', desc: '拾取任意道具回 1 点生命/级', cost: 100, max: 3 },
       { id: 'cuFullDmg', name: '满血增伤', desc: '满血时伤害 +15%/级', cost: 150, max: 3 },
       { id: 'cuDouble', name: '双倍道具', desc: '道具升级 30% 概率触发两次/级', cost: 160, max: 3 }
+    ],
+    // P13-10：天赋树（4 系 × 每系 5 点，星币解锁，局外永久）
+    talentTree: [
+      { id: 'tCrit', name: '暴击系', icon: '✸', desc: '暴击率 +4%/点', max: 5, costBase: 80 },
+      { id: 'tLeech', name: '吸血系', icon: '✚', desc: '击杀回血 +0.4 点/点', max: 5, costBase: 70 },
+      { id: 'tPierce', name: '弹射系', icon: '⇢', desc: '穿透 +1 层/点（第 3 点起）', max: 5, costBase: 90 },
+      { id: 'tExp', name: '经验系', icon: '✦', desc: '经验获取 +8%/点', max: 5, costBase: 75 }
+    ],
+    // P13-11：每日任务（每天 3 个随机任务，完成得星币）
+    dailyTaskPool: [
+      { id: 'kill', name: '击毁 {n} 个敌人', cond: 'kill', base: 120, step: 40 },
+      { id: 'wave', name: '到达第 {n} 波', cond: 'wave', base: 12, step: 3 },
+      { id: 'score', name: '单局得分 {n}', cond: 'score', base: 1500, step: 500 },
+      { id: 'weapon', name: '用「{w}」击杀 {n} 个敌人', cond: 'weaponKill', base: 60, step: 20 },
+      { id: 'boss', name: '击败 {n} 个 Boss', cond: 'boss', base: 1, step: 1 }
+    ],
+    dailyTaskCount: 3,
+    dailyTaskCoin: 60,          // 每个任务完成奖励星币
+    dailySigninDays: 7,         // 7 日签到
+    dailySigninRewards: [20, 25, 30, 35, 40, 50, 80],
+    // P13-8：关卡模式（固定闯关 10 关 + 每日挑战）
+    campaignLevels: 10,
+    campaignPerLevel: 4,        // 每关 4 小波 + 关底 Boss
+    dailyChallengePool: [
+      { id: 'speedUp', name: '急速领域', desc: '敌人移速 +40%', fx: { enemySpeed: 1.4 } },
+      { id: 'hpUp', name: '铁壁军团', desc: '敌人血量 ×1.6', fx: { enemyHp: 1.6 } },
+      { id: 'multishotDown', name: '弹药短缺', desc: '弹道 -1', fx: { multishot: -1 } },
+      { id: 'bulletStorm', name: '弹幕风暴', desc: 'Boss 弹幕密度 ×1.5', fx: { bossDensity: 1.5 } },
+      { id: 'frenzy', name: '狂暴增殖', desc: '敌人分裂概率 ×2', fx: { splitChance: 2 } }
+    ],
+    dailyChallengeCount: 2,     // 每次随机 2 个词缀
+    // P13-7：Boss 主题（不同主题独立弹幕偏好与形态名，图鉴按主题解锁）
+    bossThemes: [
+      { id: 'demon', name: '恶魔领主', desc: '火焰与弹幕风暴', palette: ['#ff5566', '#ff8833'], patternBias: 'barrage' },
+      { id: 'starlord', name: '星舰领主', desc: '光束与炮台阵列', palette: ['#4ee0ff', '#7df0ff'], patternBias: 'laser' },
+      { id: 'octopus', name: '机械章鱼', desc: '触手弹与墨雾', palette: ['#b98cff', '#8f5bff'], patternBias: 'ring' },
+      { id: 'voidlord', name: '虚空之主', desc: '传送与召唤弹幕', palette: ['#9d4edd', '#c77dff'], patternBias: 'vortex' }
     ],
     reviveCost: 500,          // 方案1-E：复活消耗星币
 
@@ -1248,10 +1409,25 @@
       coreUpgrade: (cfg.coreUpgrade) ? merge({}, cfg.coreUpgrade) : {}, // 局外核心强化等级 {cuId: 0~3}
       reviveUsed: false,            // 本局是否已复活
       // 三选一（升级时由 rollSkillChoices 填充，前端展示后 applySkillChoice）
-      pendingSkillChoices: [],      // [{kind:'active'|'passive'|'fusion', id, level}]
+      pendingSkillChoices: [],      // [{kind:'active'|'passive'|'fusion'|'ultimate', id, level}]
       fusionReadyIds: [],           // 当前可融合的超武 id（升级后重算）
+      ultimateReadyIds: [],         // P13-2b：当前可终极融合 id
       weaponDamage: {},             // P5：各武器累计伤害（右侧伤害面板数据源）
-      codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
+      codexEvents: [],              // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
+      // P13：新系统运行态
+      enchantWords: {},             // P13-3：词条附魔等级 {ewXxx: 1}
+      talents: (cfg.talentLevel) ? merge({}, cfg.talentLevel) : {}, // P13-10：局外天赋等级
+      psyCharges: 0,                // P13-1：灵能护盾剩余抵挡次数
+      _psyWave: -1,
+      shieldRings: [],              // P13-1：回旋护盾环绕位置
+      shieldAngle: 0,
+      frostActive: 0,
+      frostRadius: 0,
+      stormTimer: 0,
+      vortexTimer: 0,
+      campaignMode: false,          // P13-8：关卡模式
+      campaignLevel: 0,             // 当前关卡（闯关）
+      dailyMode: false              // P13-8：每日挑战
     };
     return state;
   }
@@ -1313,20 +1489,35 @@
     return dmg;
   }
 
-  /** P8：汇总局内遗物效果（fireSpeed 叠乘 / multishot / dmg / life） */
+  /** P8：汇总局内遗物效果（fireSpeed 叠乘 / multishot / dmg / life）+ P13-4b 套装与新增词条 */
   function getRelicFxs(state) {
-    var fx = { fireSpeed: 1, multishot: 0, dmg: 0, life: 0 };
+    var fx = { fireSpeed: 1, multishot: 0, dmg: 0, life: 0, dodge: 0, slowAll: 0, coinMult: 1, setDmg: 0, setCoin: 1 };
     var defs = state.config.relics || [];
+    var sets = {};
     for (var i = 0; i < (state.relics || []).length; i++) {
       var d = null;
       for (var j = 0; j < defs.length; j++) {
         if (defs[j].id === state.relics[i]) { d = defs[j]; break; }
       }
-      if (d && d.fx) {
-        if (d.fx.fireSpeed) fx.fireSpeed *= d.fx.fireSpeed;
-        if (d.fx.multishot) fx.multishot += d.fx.multishot;
-        if (d.fx.dmg) fx.dmg += d.fx.dmg;
-        if (d.fx.life) fx.life += d.fx.life;
+      if (d) {
+        if (d.relicSet) sets[d.relicSet] = (sets[d.relicSet] || 0) + 1;
+        if (d.fx) {
+          if (d.fx.fireSpeed) fx.fireSpeed *= d.fx.fireSpeed;
+          if (d.fx.multishot) fx.multishot += d.fx.multishot;
+          if (d.fx.dmg) fx.dmg += d.fx.dmg;
+          if (d.fx.life) fx.life += d.fx.life;
+          if (d.fx.dodge) fx.dodge = Math.min(0.6, fx.dodge + d.fx.dodge);
+          if (d.fx.slowAll) fx.slowAll = Math.min(0.6, fx.slowAll + d.fx.slowAll);
+          if (d.fx.coinMult) fx.coinMult *= d.fx.coinMult;
+        }
+      }
+    }
+    // P13-4b：套装加成（集齐 2 件触发）
+    var setDefs = state.config.relicSets || [];
+    for (var s = 0; s < setDefs.length; s++) {
+      if ((sets[setDefs[s].id] || 0) >= 2 && setDefs[s].fx) {
+        if (setDefs[s].fx.dmg) fx.setDmg += setDefs[s].fx.dmg;
+        if (setDefs[s].fx.coinMult) fx.setCoin *= setDefs[s].fx.coinMult;
       }
     }
     return fx;
@@ -1570,6 +1761,10 @@
     if (enemy.affix === 'shielded') enemy.shieldHits = cfg.shieldedHits;
     // P4：图鉴解锁事件（普通球按等级记录，特殊敌人按能力记录）
     state.codexEvents.push(enemy.special === 'normal' ? 'sphere:' + enemy.type : enemy.special);
+    // P13-8：每日挑战词缀应用（速度/血量）
+    var dfx = state.dailyFx || {};
+    if (dfx.enemySpeed) enemy.speed *= dfx.enemySpeed;
+    if (dfx.enemyHp) { enemy.hp = Math.max(1, Math.round(enemy.hp * dfx.enemyHp)); enemy.maxHp = enemy.hp; }
     state.enemies.push(enemy);
     return enemy;
   }
@@ -1584,6 +1779,8 @@
     var names = ['small', 'medium', 'large', 'xlarge'];
     var childName = names[level - 1];
     var n = 2 + Math.floor(Math.random() * 2); // 2~3 个
+    // P13-8：狂暴增殖词缀——分裂数量 +1
+    if ((state.dailyFx || {}).splitChance > 1) n += 1;
     var cx = parent.x + parent.width / 2;
     var cy = parent.y + parent.height / 2;
     var space = Math.max(0, cfg.maxEnemies - state.enemies.length);
@@ -1655,7 +1852,10 @@
     // P11B：机枪附魔——攻速 +5%/星（任意主武器拿到机枪技生效）
     var gunEnchant = getSkillLevel(state, 'gun');
     var gunFactor = (gunEnchant > 0 && state.weapon !== 'hswarm') ? (1 - gunEnchant * 0.05) : 1;
-    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor * gunFactor;
+    // P13-1：光子加速——攻速 +15%/级
+    var photon = getSkillLevel(state, 'photon');
+    var photonFactor = photon > 0 ? (1 - photon * 0.15) : 1;
+    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor * gunFactor * Math.max(0.1, photonFactor);
   }
 
   /** 激光当前 DPS（含伤害加成与武器升级；P8 专精：加长 +20%/级、穿透 +25%/级；P11：被动伤害 + 超武矩阵） */
@@ -1762,13 +1962,16 @@
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
-    var pierce = getEnchantPierce(enchants);
+    var pierce = getEnchantPierce(enchants) + getTalentBonus(state).pierce;
+
+    // P13-4：新武器——电弧枪走雷电连锁弹（伤害来源标注 arc）
+    var isArc = (state.weapon === 'arc');
+    var btype = isArc ? 'lightningbolt' : (state.weapon === 'lightning') ? 'lightningbolt' : state.weapon;
 
     for (var i = 0; i < count; i++) {
       var offset = (i - (count - 1) / 2) * cfg.bulletSpread;
       var bx = p.x + p.width / 2 + offset - bw / 2;
       var by = p.y - bh;
-      var btype = (state.weapon === 'lightning') ? 'lightningbolt' : state.weapon;
       // P11：超武「磁力回旋镖」（回旋镖+磁铁）自动追踪最近敌人
       var bvx = 0;
       if (state.weapon === 'boomerang') {
@@ -1789,6 +1992,13 @@
         dmgType: cfg.weaponDamageType[state.weapon] || 'phys',
         weapon: state.weapon // P5：武器伤害统计来源
       };
+      // P13-4：冰冻炮冻结标记 / 毒雾毒素标记 / 黑洞枪黑洞标记
+      if (state.weapon === 'icecannon') blt._freeze = wcfg.freezeTime;
+      if (state.weapon === 'icecannon') blt._freezeChance = wcfg.freezeChance;
+      if (state.weapon === 'poison') blt._poison = { dps: wcfg.poisonDps, dur: wcfg.poisonDur };
+      if (state.weapon === 'vortexgun') blt._vortex = true;
+      if (state.weapon === 'vortexgun') blt._vortexR = wcfg.vortexRadius;
+      if (state.weapon === 'vortexgun') blt._vortexDps = wcfg.vortexDps;
       // P11B：武器技附魔——特性标记 + 穿透层数（激光/蓄力）
       if (enchants.length > 0) {
         blt.enchants = enchants;
@@ -1818,7 +2028,7 @@
     var speed = wcfg.bulletSpeed + 260 * charge;
     // P12b：蓄力弹同样携带武器技附魔（穿透/弹射/连锁/灼烧等）
     var enchants = getEnchants(state);
-    var pierce = getEnchantPierce(enchants);
+    var pierce = getEnchantPierce(enchants) + getTalentBonus(state).pierce;
     // 按初始弹道数量平行发射多颗蓄力弹（弹丸宽，间隔按弹丸尺寸自适应避免重叠）
     var count = getBulletCount(state);
     var gap = Math.max(cfg.bulletSpread * 2, bw * 1.1);
@@ -1868,9 +2078,12 @@
   function getPlayerSpeed(state) {
     var cfg = state.config;
     var shipCfg = cfg.ships[state.ship] || cfg.ships.star;
-    return state.time < state.speedBoostUntil
+    // P13-1：光子加速——移速 +15%/级
+    var photon = getSkillLevel(state, 'photon');
+    var photonMul = photon > 0 ? (1 + photon * 0.15) : 1;
+    return (state.time < state.speedBoostUntil
       ? cfg.playerSpeed * cfg.speedBoostMultiplier * shipCfg.speed
-      : cfg.playerSpeed * shipCfg.speed;
+      : cfg.playerSpeed * shipCfg.speed) * photonMul;
   }
 
   /** 当前战机火力系数（皮肤加成） */
@@ -1919,6 +2132,18 @@
    *  常规武器扣命，吞噬者扣球形血（归零即死亡）。 */
   function damagePlayer(state) {
     var cfg = state.config;
+    // P13-1：灵能护盾——每波抵挡 pyl 次伤害（吞噬者同样适用）
+    if ((state.psyCharges || 0) > 0) {
+      state.psyCharges--;
+      state.affixFx.push({ kind: 'psyBlock', x: state.player.x + state.player.width / 2, y: state.player.y });
+      state.invincibleUntil = state.time + cfg.invincibleDuration;
+      return state.lives;
+    }
+    // P13-4b：闪避光环遗物——概率免伤
+    if (getRelicFxs(state).dodge > 0 && Math.random() < getRelicFxs(state).dodge) {
+      state.affixFx.push({ kind: 'dodgeFx', x: state.player.x + state.player.width / 2, y: state.player.y });
+      return state.lives;
+    }
     // 吞噬者模式：自身为球形血量（初始 50），扣血而非扣命
     if (state.weapon === 'devour') {
       state.devourHp = Math.max(0, state.devourHp - 1);
@@ -2247,21 +2472,44 @@
     if (state.rageUntil > state.time) m *= 2; // 方案1-A：暴走
     var cu = state.coreUpgrade.cuFullDmg || 0;
     if (cu > 0 && state.lives >= state.maxLives) m *= 1 + cu * 0.15;
+    // P13-4b：遗物战术套装——所有伤害 +25%
+    var relics = getRelicFxs(state);
+    if (relics.setDmg > 0) m *= 1 + relics.setDmg;
     // P12：角色伤害减半（平衡调整；吞噬者 1:1 碰撞不受影响）
     return m * 0.5;
   }
 
-  /** 暴击：crit 每级 +10% 概率、+50% 暴伤 */
+  /** P13-10：天赋加成汇总（crit 概率+4%/点；leech 击杀回血；pierce 穿透；exp 经验+8%/点） */
+  function getTalent(state, id) {
+    return (state.talents && state.talents[id]) || 0;
+  }
+  function getTalentBonus(state) {
+    return {
+      crit: getTalent(state, 'tCrit') * 0.04,
+      leech: getTalent(state, 'tLeech') * 0.4,
+      pierce: Math.max(0, getTalent(state, 'tPierce') - 2),
+      exp: getTalent(state, 'tExp') * 0.08
+    };
+  }
+
+  /** 暴击：crit 被动 +10%/级；P13-3 暴击附魔 +10%；P13-10 天赋暴击 */
   function rollCrit(state, baseDmg) {
     var cl = getPassiveLevel(state, 'crit');
-    if (cl <= 0) return baseDmg;
-    if (Math.random() < cl * 0.1) return Math.round(baseDmg * (1.5 + cl * 0.5));
+    var rate = cl * 0.1 + getTalentBonus(state).crit;
+    var ewCrit = (state.enchantWords && state.enchantWords.ewCrit) || 0;
+    if (ewCrit > 0) rate += 0.1;
+    if (rate <= 0) return baseDmg;
+    if (Math.random() < rate) {
+      var dmgMult = 1.5 + cl * 0.5 + (ewCrit > 0 ? 0.8 : 0);
+      return Math.round(baseDmg * dmgMult);
+    }
     return baseDmg;
   }
 
-  /** 击杀获得经验并升级（升级→填充三选一） */
+  /** 击杀获得经验并升级（升级→填充三选一；P13-10：天赋经验 +8%/点） */
   function addExp(state, amount) {
     if (state.status !== 'playing') return;
+    amount = Math.round(amount * (1 + getTalentBonus(state).exp));
     state.exp += amount;
     while (state.exp >= state.expNeed && state.expLevel < state.config.expLevelMax) {
       state.exp -= state.expNeed;
@@ -2272,7 +2520,7 @@
     }
   }
 
-  /** 刷新可融合列表（双满级即就绪） */
+  /** 刷新可融合列表（双满级即就绪）+ P13-2b：终极融合（集齐 2 个超武即就绪） */
   function refreshFusionReady(state) {
     state.fusionReadyIds = [];
     var ft = state.config.fusionTable;
@@ -2285,6 +2533,17 @@
         : getSkillLevel(state, f.b) >= state.config.rogueSkillMax;
       if (aOk && bOk) state.fusionReadyIds.push(f.id);
     }
+    state.ultimateReadyIds = [];
+    var ut = state.config.fusionUltimates || [];
+    for (var ui = 0; ui < ut.length; ui++) {
+      var u = ut[ui];
+      if (hasFusion(state, u.id)) continue;
+      var allHave = true;
+      for (var ni = 0; ni < u.need.length; ni++) {
+        if (state.fusions.indexOf(u.need[ni]) === -1) { allHave = false; break; }
+      }
+      if (allHave) state.ultimateReadyIds.push(u.id);
+    }
   }
 
   /** 升级三选一：主动新技能 / 主动升级 / 被动 / 可融合超武 */
@@ -2294,6 +2553,11 @@
     var push = function (kind, id, level) {
       if (choices.length < 3) choices.push({ kind: kind, id: id, level: level });
     };
+    // 0) P13-2b：终极融合金卡优先
+    var ults = state.ultimateReadyIds || [];
+    for (var ui2 = 0; ui2 < ults.length && choices.length < 3; ui2++) {
+      push('ultimate', ults[ui2], cfg.rogueSkillMax);
+    }
     // 1) 可融合超武优先
     var fusions = state.fusionReadyIds.slice();
     for (var fi = 0; fi < fusions.length && choices.length < 3; fi++) {
@@ -2348,11 +2612,14 @@
     return choices.slice(0, 3);
   }
 
-  /** 应用三选一选择（主动升级 / 被动升级 / 融合） */
+  /** 应用三选一选择（主动升级 / 被动升级 / 融合 / 终极融合） */
   function applySkillChoice(state, choice) {
     if (!choice) return false;
     if (choice.kind === 'fusion') {
       return applyFusion(state, choice.id);
+    }
+    if (choice.kind === 'ultimate') {
+      return applyUltimateFusion(state, choice.id);
     }
     if (choice.kind === 'active') {
       state.rogueSkills[choice.id] = Math.min(state.config.rogueSkillMax, choice.level || 1);
@@ -2378,6 +2645,27 @@
         delete state.rogueSkills[f.a];
         if (cfg.roguePassivePool.indexOf(f.b) !== -1) delete state.roguePassives[f.b];
         else delete state.rogueSkills[f.b];
+        refreshFusionReady(state);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** P13-2b：终极融合——集齐 2 个超武后合成（金卡），移除来源融合 */
+  function applyUltimateFusion(state, ultimateId) {
+    var cfg = state.config;
+    var ults = cfg.fusionUltimates || [];
+    for (var ui = 0; ui < ults.length; ui++) {
+      var u = ults[ui];
+      if (u.id === ultimateId) {
+        if (hasFusion(state, u.id)) return false;
+        for (var ni = 0; ni < u.need.length; ni++) {
+          var idx = state.fusions.indexOf(u.need[ni]);
+          if (idx === -1) return false;
+          state.fusions.splice(idx, 1);
+        }
+        state.fusions.push(u.id);
         refreshFusionReady(state);
         return true;
       }
@@ -2581,6 +2869,83 @@
         state.bullets.push({ id: newId(state), type: 'energyball', x: p.x + p.width / 2 - 10, y: p.y - 20, width: 20, height: 20, vx: 120 * (Math.random() < 0.5 ? -1 : 1), vy: -300, damage: Math.max(1, Math.round(3 * el * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'magic', weapon: 'energyball' });
       }
     }
+    // ==================== P13-1：新武器技（7 个） ====================
+    // 冰霜领域：冰环标记，敌人进入减速（在敌人更新处应用）
+    var fl = getSkillLevel(state, 'frostfield');
+    state.frostActive = fl;
+    if (fl > 0) state.frostRadius = 150 + fl * 20;
+    // 闪电风暴：全屏随机落雷（直接对落点附近敌人造成魔法伤害）
+    var sl = getSkillLevel(state, 'stormfield');
+    if (sl > 0) {
+      state.stormTimer = (state.stormTimer || 0) - dt;
+      if (state.stormTimer <= 0) {
+        state.stormTimer = Math.max(0.5, 1.5 - sl * 0.15);
+        var bolts = Math.min(6, 1 + sl);
+        for (var bi = 0; bi < bolts; bi++) {
+          var sx = Math.random() * (cfg.width - 100) + 50;
+          var sdmg = Math.max(1, Math.round((3 + sl * 2) * getRogueDmgMult(state)));
+          for (var sei = state.enemies.length - 1; sei >= 0; sei--) {
+            var se = state.enemies[sei];
+            if (se.special === 'clone') continue;
+            var sex = (se.x + se.width / 2) - sx;
+            if (sex * sex < 80 * 80) {
+              state._killWeapon = 'stormfield';
+              hurtEnemy(state, se, sdmg, 'magic', 'stormfield');
+            }
+          }
+          if (state.boss) {
+            var sbdx = (state.boss.x + state.boss.width / 2) - sx;
+            if (sbdx * sbdx < 80 * 80) hurtBoss(state, sdmg, 'magic', 'stormfield');
+          }
+          state.affixFx.push({ kind: 'strike', x: sx, y: 40 });
+        }
+      }
+    }
+    // 回旋护盾：环绕盾牌，格挡敌弹 + 碰伤
+    var shr = getSkillLevel(state, 'shieldring');
+    if (shr > 0) {
+      state.shieldAngle = (state.shieldAngle || 0) + dt * 3;
+      var shtotal = Math.min(4, 2 + shr);
+      var shdmg = Math.max(1, Math.round(3 * shr * getRogueDmgMult(state)));
+      state.shieldRings = [];
+      for (var shi = 0; shi < shtotal; shi++) {
+        var sha = state.shieldAngle + (shi / shtotal) * Math.PI * 2;
+        state.shieldRings.push({ x: p.x + p.width / 2 + Math.cos(sha) * 64, y: p.y + p.height / 2 + Math.sin(sha) * 64, r: 16 });
+      }
+    }
+    // 灼热光环：贴身持续灼烧
+    var bl = getSkillLevel(state, 'burnaura');
+    if (bl > 0) {
+      var br = 110 + bl * 12;
+      var bdmg = Math.max(1, Math.round((4 + bl * 2) * getRogueDmgMult(state) * dt));
+      for (var bei = state.enemies.length - 1; bei >= 0; bei--) {
+        var be = state.enemies[bei];
+        if (be.special === 'clone') continue;
+        var bdx = (be.x + be.width / 2) - (p.x + p.width / 2), bdy = (be.y + be.height / 2) - (p.y + p.height / 2);
+        if (bdx * bdx + bdy * bdy < (br + be.width / 2) * (br + be.width / 2)) {
+          state._killWeapon = 'burnaura';
+          hurtEnemy(state, be, bdmg, 'magic', 'burnaura');
+        }
+      }
+    }
+    // 虚空黑洞：周期生成黑洞，牵引敌人后爆炸
+    var vl = getSkillLevel(state, 'vortex');
+    if (vl > 0) {
+      state.vortexTimer = (state.vortexTimer || 0) - dt;
+      if (state.vortexTimer <= 0) {
+        state.vortexTimer = Math.max(2.5, 6 - vl * 0.5);
+        var vx = Math.random() * (cfg.width - 160) + 80;
+        var vy = Math.random() * (cfg.height * 0.5) + 40;
+        state.bullets.push({ id: newId(state), type: 'vortexhole', x: vx, y: vy, width: 20, height: 20, vx: 0, vy: 0, damage: Math.max(1, Math.round(2 * vl * getRogueDmgMult(state))), life: 2.2, bounceCount: 0, dmgType: 'magic', weapon: 'vortex', _vortex: true, _vortexR: 130 + vl * 15 });
+      }
+    }
+    // 光子加速：见 getPlayerSpeed / getFireCooldown（攻速与移速）
+    // 灵能护盾：每波抵挡 1 次伤害（damagePlayer 处消费 state.psyCharges）
+    var pyl = getSkillLevel(state, 'psyshield');
+    if (pyl > 0 && state._psyWave !== state.wave) {
+      state.psyCharges = Math.max(state.psyCharges || 0, pyl);
+      state._psyWave = state.wave;
+    }
   }
 
   /** 能量球弹墙反弹（子弹移动循环调用） */
@@ -2590,9 +2955,44 @@
     if (b.y <= 0) { b.vy = -b.vy; }
   }
 
+  /** P13-4：黑洞（虚空黑洞技能/黑洞枪弹）——对半径内敌人持续伤害并牵引 */
+  function vortexTick(state, b, dt) {
+    var cfg = state.config;
+    var cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    var r = b._vortexR || 120;
+    var dps = (b._vortexDps || 9) * getRogueDmgMult(state);
+    for (var vi = state.enemies.length - 1; vi >= 0; vi--) {
+      var ve = state.enemies[vi];
+      if (ve.special === 'clone') continue;
+      var vdx = (ve.x + ve.width / 2) - cx, vdy = (ve.y + ve.height / 2) - cy;
+      var vd2 = vdx * vdx + vdy * vdy;
+      if (vd2 < (r + ve.width / 2) * (r + ve.width / 2)) {
+        state._killWeapon = b.weapon || 'vortexgun';
+        hurtEnemy(state, ve, Math.max(1, Math.round(dps * dt)), 'phys', b.weapon || 'vortexgun');
+        // 牵引：向黑洞中心靠近
+        var vd = Math.sqrt(vd2) || 1;
+        var pull = 260 * dt;
+        ve.x += (vdx / vd) * pull;
+        ve.y += (vdy / vd) * pull;
+        ve.freezeUntil = Math.max(ve.freezeUntil || 0, state.time + 0.1);
+      }
+    }
+    if (state.boss) {
+      var bdx2 = (state.boss.x + state.boss.width / 2) - cx, bdy2 = (state.boss.y + state.boss.height / 2) - cy;
+      if (bdx2 * bdx2 + bdy2 * bdy2 < (r + state.boss.width / 2) * (r + state.boss.width / 2)) {
+        hurtBoss(state, Math.max(1, Math.round(dps * dt)), 'phys', b.weapon || 'vortexgun');
+      }
+    }
+    // 黑洞消失时爆炸
+    if (b._vortexBoom) {
+      b._vortexBoom = false;
+      state.affixFx.push({ kind: 'vortexBoom', x: cx, y: cy, r: r });
+    }
+  }
+
   // ==================== P11B：武器技附魔系统（方案 3） ====================
 
-  /** 附魔列表：所有已学武器技（排除新技能与吞噬者） */
+  /** 附魔列表：所有已学武器技（排除新技能与吞噬者）+ P13-3 词条附魔 */
   function getEnchants(state) {
     var list = [];
     var cfg = state.config;
@@ -2604,6 +3004,11 @@
       if (cfg.weapons[k] && state.rogueSkills[k] > 0) {
         list.push({ id: k, level: state.rogueSkills[k] });
       }
+    }
+    // P13-3：词条附魔（学到即附加到主武器子弹）
+    var ew = state.enchantWords || {};
+    for (var ewk in ew) {
+      if (ew[ewk] > 0) list.push({ id: ewk, level: ew[ewk] });
     }
     return list;
   }
@@ -2696,6 +3101,51 @@
         }
         state.explosions.push({ x: x, y: y, kind: 'large' });
       }
+      // ==================== P13-3：词条附魔 ====================
+      else if (e.id === 'ewLifesteal') {
+        // 吸血：造成伤害的 5% 转化为生命
+        var healAmt = Math.max(1, Math.round(bullet.damage * 0.05));
+        if (state.weapon === 'devour') state.devourHp = Math.min(state.config.devourHpMax || 100, (state.devourHp || 0) + healAmt);
+        else state.lives = Math.min(state.maxLives, state.lives + healAmt);
+        state.affixFx.push({ kind: 'healFx', x: x, y: y });
+      }
+      else if (e.id === 'ewFrost') {
+        // 冰霜：命中减速 20% 1 秒
+        enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, state.time + 1);
+      }
+      else if (e.id === 'ewPoison') {
+        // 毒素：3 秒持续伤害
+        enemy.poison = { dps: 4 + 2 * lv, until: state.time + 3 };
+      }
+      else if (e.id === 'ewSplash') {
+        // 溅射：30% 概率范围溅射
+        if (Math.random() < 0.3) {
+          var sprad = 70 + 10 * lv;
+          for (var spi = state.enemies.length - 1; spi >= 0; spi--) {
+            var spe = state.enemies[spi];
+            if (spe === enemy) continue;
+            var spdx = (spe.x + spe.width / 2) - x, spdy = (spe.y + spe.height / 2) - y;
+            if (spdx * spdx + spdy * spdy < sprad * sprad) {
+              state._killWeapon = bullet.weapon || state.weapon;
+              hurtEnemy(state, spe, Math.max(1, Math.round(bullet.damage * 0.6)), bullet.dmgType || 'phys', bullet.weapon);
+            }
+          }
+          state.explosions.push({ x: x, y: y, kind: 'small' });
+        }
+      }
+    }
+  }
+
+  /** P13-3：敌人持续毒伤结算（update 敌人循环调用） */
+  function tickEnemyPoison(state, enemy, dt) {
+    if (!enemy.poison) return;
+    if (state.time >= enemy.poison.until) { enemy.poison = null; return; }
+    var d = enemy.poison.dps * dt;
+    enemy.hp -= d;
+    state.hitFx.push({ x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2, weapon: 'poison', damage: d, dmgType: 'phys' });
+    if (enemy.hp <= 0 && state.enemies.indexOf(enemy) !== -1) {
+      state._killWeapon = 'poison';
+      hurtEnemy(state, enemy, 1, 'phys', 'poison');
     }
   }
 
@@ -2731,6 +3181,9 @@
       (cfg.bossBaseHp + (state.level - 1) * cfg.bossHpPerLevel) *
       (1 + (state.difficulty - 1) * cfg.bossHpDifficultyStep) * hpFactor
     );
+    // P13-7：Boss 主题（按波次轮换 4 主题：恶魔/星舰/章鱼/虚空）
+    var themes = cfg.bossThemes || [];
+    var theme = themes[Math.floor((state.wave - 1) / cfg.waveBossEvery) % themes.length] || themes[0];
     state.boss = {
       id: newId(state),
       x: cfg.width / 2 - cfg.bossWidth / 2,
@@ -2743,6 +3196,9 @@
       nextFire: cfg.bossFireInterval,
       mode: mode,
       name: cfg.bossNames[mode] || '恶魔',
+      theme: theme ? theme.id : 'demon',
+      themeName: theme ? theme.name : '恶魔领主',
+      palette: theme ? theme.palette : ['#ff5566', '#ff8833'],
       patternIdx: Math.floor(state.wave / cfg.waveBossEvery) - 1, // P7：20 种弹幕规律轮换起点（按波次定起点，逐轮循环）
       spiralAngle: Math.random() * Math.PI * 2, // 螺旋弹幕起始角
       fireSub: 0, // 部分模式连发计数器
@@ -2756,8 +3212,9 @@
     for (var pbi = 0; pbi < permanent.length; pbi++) {
       if (state.boss.buffs.indexOf(permanent[pbi]) === -1) state.boss.buffs.push(permanent[pbi]);
     }
-    // P4：Boss 图鉴事件（按加成组合记录形态）
+    // P4：Boss 图鉴事件（按加成组合记录形态）+ P13-7：按主题记录
     state.codexEvents.push('boss:' + (state.boss.buffs.slice().sort().join(',')));
+    state.codexEvents.push('bosstheme:' + state.boss.theme);
     return state.boss;
   }
 
@@ -3154,6 +3611,15 @@
     // P5：武器伤害统计（右侧伤害面板数据源）
     if (srcWeapon && damage > 0) {
       state.weaponDamage[srcWeapon] = (state.weaponDamage[srcWeapon] || 0) + damage;
+    }
+    // P13-10：天赋吸血系——击杀回血（不触发于吞噬者碰撞的 1:1 规则）
+    if (dmgType !== 'devour') {
+      var talentLeech = getTalentBonus(state).leech;
+      if (talentLeech > 0 && enemy.hp <= 0) {
+        if (state.weapon === 'devour') state.devourHp = Math.min(state.config.devourHpMax || 100, state.devourHp + Math.max(1, Math.round(talentLeech)));
+        else state.lives = Math.min(state.maxLives, state.lives + Math.max(1, Math.round(talentLeech)));
+        state.affixFx.push({ kind: 'leechHeal', x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2 });
+      }
     }
     if (enemy.hp <= 0) {
       var idx = state.enemies.indexOf(enemy);
@@ -3669,6 +4135,18 @@
       }
       // P8：毒化词缀——移动速度降至 55%
       var mv = (e.affix === 'toxic') ? cfg.toxicSlow : 1;
+      // P13-1：冰霜领域——敌人进入冰环减速 40%
+      if (state.frostActive > 0 && state.frostRadius) {
+        var fx2 = (e.x + e.width / 2) - (state.player.x + state.player.width / 2), fy2 = (e.y + e.height / 2) - (state.player.y + state.player.height / 2);
+        if (fx2 * fx2 + fy2 * fy2 < (state.frostRadius + e.width / 2) * (state.frostRadius + e.width / 2)) {
+          e.freezeUntil = Math.max(e.freezeUntil || 0, state.time + 0.25);
+        }
+      }
+      // P13-1：冰冻弹/词条冰霜/冰霜领域——减速 55%（冻结标记）
+      var frz = (e.freezeUntil !== undefined && state.time < e.freezeUntil) ? 0.55 : 1;
+      // P13-4b：慢速领域遗物——全屏敌人减速
+      var slowAll = 1 - getRelicFxs(state).slowAll;
+      mv *= frz * slowAll;
       e.x += (e.vx || 0) * dt * mv;
       e.y += (e.vy !== undefined ? e.vy : e.speed) * dt * mv;
       if (e.x < 0) { e.x = 0; e.vx = Math.abs(e.vx || 0); }
@@ -3676,9 +4154,13 @@
       if (e.y > cfg.height + 60) { e.y = -e.height - 20; }
       if (e.y + e.height < -80) { e.y = cfg.height + 40; }
     }
-    // P11B：敌人灼烧 DOT 结算（火焰附魔）
+    // P11B：敌人灼烧 DOT 结算（火焰附魔）+ P13-3：毒伤结算
     for (var di = state.enemies.length - 1; di >= 0; di--) {
-      tickEnemyDot(state, state.enemies[di], dt);
+      var dotEnemy = state.enemies[di];
+      if (!dotEnemy) continue;
+      tickEnemyDot(state, dotEnemy, dt);
+      if (!dotEnemy.poison) continue;
+      tickEnemyPoison(state, dotEnemy, dt);
     }
 
     // 特殊敌人逻辑：治疗型（给范围内敌人回血）与防御型（周期性无敌）
@@ -3799,6 +4281,8 @@
           b.y += b.vy * dt;
           // P11：能量球左右反弹；磁力回旋镖追踪最近敌人
           if (b.type === 'energyball') updateEnergyBall(state, b, dt);
+          // P13-4：黑洞弹/虚空黑洞——持续伤害与牵引
+          if (b._vortex) vortexTick(state, b, dt);
           if (b.type === 'boomerang' && hasFusion(state, 'fmagboomerang') && state.enemies.length > 0) {
             var ne = null, nb = 1e9;
             for (var nx = 0; nx < state.enemies.length; nx++) {
@@ -3844,6 +4328,9 @@
           state._killWeapon = bullet.type === 'chargebolt' ? 'charge' : bullet.type;
           hurtEnemy(state, tgt, bullet.damage, bullet.dmgType || 'phys', bullet.weapon);
           hit = true;
+          // P13-4：冰冻弹冻结减速 / 毒雾附加持续伤害
+          if (bullet._freeze && Math.random() < (bullet._freezeChance || 1)) tgt.freezeUntil = state.time + bullet._freeze;
+          if (bullet._poison) tgt.poison = { dps: bullet._poison.dps, until: state.time + bullet._poison.dur };
           // P11B：武器技附魔命中结算（弹射/连锁/灼烧/挥砍/爆裂 + 穿透）
           if (bullet.enchants && bullet.enchants.length > 0) {
             applyEnchantOnHit(state, bullet, tgt);
@@ -3919,6 +4406,20 @@
       var eb = state.enemyBullets[ebj];
       eb.x += eb.vx * dt;
       eb.y += eb.vy * dt;
+      // P13-1：回旋护盾——环绕盾牌格挡敌弹
+      var blocked = false;
+      if (state.shieldRings && state.shieldRings.length > 0) {
+        for (var shi2 = 0; shi2 < state.shieldRings.length; shi2++) {
+          var sr = state.shieldRings[shi2];
+          var sdx = eb.x + (eb.width || 6) / 2 - sr.x, sdy = eb.y + (eb.height || 6) / 2 - sr.y;
+          if (sdx * sdx + sdy * sdy < (sr.r + 8) * (sr.r + 8)) { blocked = true; break; }
+        }
+      }
+      if (blocked) {
+        state.enemyBullets.splice(ebj, 1);
+        state.affixFx.push({ kind: 'blockFx', x: eb.x, y: eb.y });
+        continue;
+      }
       if (eb.y > cfg.height || eb.x < -40 || eb.x > cfg.width + 40) {
         state.enemyBullets.splice(ebj, 1);
       }
@@ -3928,6 +4429,13 @@
     for (var ebi = state.enemyBullets.length - 1; ebi >= 0; ebi--) {
       var eb2 = state.enemyBullets[ebi];
       if (rectsOverlap(state.player, eb2)) {
+        // P13-3：反射附魔——10% 概率将敌弹反弹为玩家子弹
+        var ewR = (state.enchantWords && state.enchantWords.ewReflect) || 0;
+        if (ewR > 0 && !eb2.noCancel && Math.random() < 0.1) {
+          state.enemyBullets.splice(ebi, 1);
+          state.bullets.push({ id: newId(state), type: 'reflectbolt', x: state.player.x + state.player.width / 2, y: state.player.y - 8, width: 8, height: 14, vx: 0, vy: -480, damage: Math.max(1, Math.round(2 * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'phys', weapon: 'reflect' });
+          continue;
+        }
         state.enemyBullets.splice(ebi, 1);
         // P11：护盾层数优先抵消（不掉血，层数 -1）
         if (state.shieldStacks > 0) {
@@ -4346,7 +4854,12 @@
     ship: document.getElementById('ship'),
     rank: document.getElementById('rank'),
     level: document.getElementById('level'),
-    codex: document.getElementById('codex')
+    codex: document.getElementById('codex'),
+    talent: document.getElementById('talent'),
+    mission: document.getElementById('mission'),
+    achievement: document.getElementById('achievement'),
+    gameover: document.getElementById('gameover'),
+    guide: document.getElementById('guide')
   };
 
   function showPanel(name) {
@@ -4396,7 +4909,12 @@
     { id: 'flamethrower', icon: '🔥', name: '火焰喷射', desc: '持续灼烧\n烧毁弹幕' },
     { id: 'lightning', icon: '⚡', name: '雷电', desc: '连锁攻击\n跳跃伤害' },
     { id: 'hswarm', icon: '🐝', name: '蜂巢', desc: '无武器\n僚机自动攻击' },
-    { id: 'devour', icon: '🩸', name: '吞噬者', desc: '碰撞攻击\n吞噬成长' }
+    { id: 'devour', icon: '🩸', name: '吞噬者', desc: '碰撞攻击\n吞噬成长' },
+    // P13-4：新武器（冰霜炮 / 电弧枪 / 漩涡枪 / 毒气喷射）
+    { id: 'icecannon', icon: '❄', name: '冰霜炮', desc: '寒冰爆弹\n冻结减速敌人' },
+    { id: 'arc', icon: '☇', name: '电弧枪', desc: '雷电弹丸\n连锁传导伤害' },
+    { id: 'vortexgun', icon: '🌀', name: '漩涡枪', desc: '引力弹\n吸附拉扯敌人' },
+    { id: 'poison', icon: '☠', name: '毒气喷射', desc: '毒云持续\n中毒叠层掉血' }
   ];
 
   function renderWeaponGrid() {
@@ -4785,6 +5303,11 @@
   function startBtnHandler() {
     audio.unlock();
     music.start();
+    // P13-13：首次游玩先走新手引导
+    if (!guideDone()) {
+      openGuide();
+      return;
+    }
     // P11：战前祝福——未购买且星币足够时先进入祝福商店
     if (maybeOpenBlessPanel()) return;
     startGame();
@@ -4833,6 +5356,8 @@
   // 主菜单按钮精确对齐背景图；窗口变化时重新对齐
   placeMenuButtons();
   window.addEventListener('resize', placeMenuButtons);
+  // P13-12：进入主菜单时拉取云存档（成长/天赋/图鉴/成就/星币），延迟避免首帧争抢
+  setTimeout(syncProfileFromCloud, 1200);
 
   // 设置滑杆
   var setMultishot = document.getElementById('set-multishot');
@@ -4973,7 +5498,8 @@
       difficulty: settings.difficulty,
       lives: Math.max(1, Math.round((GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)) * shipCfg.hp)),
       mastery: p.mastery || {}, // P8：武器专精
-      coreUpgrade: p.coreUpgrade || {} // P11：局外核心强化（暴走延脉/拾取回血/满血增伤/双倍道具）
+      coreUpgrade: p.coreUpgrade || {}, // P11：局外核心强化（暴走延脉/拾取回血/满血增伤/双倍道具）
+      talentLevel: getTalents() // P13-10：局外天赋（暴击/吸血/穿透/经验）
     });
     GameCore.start(state);
     // P11：战前祝福应用（方案1-C）
@@ -5286,8 +5812,53 @@
     });
   }
 
+  /** P13：本局结算统一收尾——累计统计 / 成就 / 每日任务完成 / 云存档 */
+  function finishGameSettlement() {
+    if (!state || state.status !== 'gameover') return;
+    var st = loadStats();
+    st.killTotal = (st.killTotal || 0) + (track.totalKills || 0);
+    st.games = (st.games || 0) + 1;
+    st.bestScore = Math.max(st.bestScore || 0, state.score || 0);
+    saveStats(st);
+    // 成就检查
+    if (st.killTotal >= 1000) unlockAchievement('kill1000');
+    if (codexCountByPrefix('bosstheme:') >= 4) unlockAchievement('boss_theme_all');
+    if (codexCountByPrefix('') >= Math.ceil(CODEX.length / 2)) unlockAchievement('codex_half');
+    var ttAll = getTalents();
+    var treeIdsAll = (GameCore.DEFAULT_CONFIG.talentTree || []).map(function (b) { return b.id; });
+    if (treeIdsAll.every(function (i) { return ttAll[i] > 0; })) unlockAchievement('talent_all');
+    if (dailyActive) unlockAchievement('daily_win');
+    var used = Object.keys(state.weaponDamage || {});
+    if (used.length >= 6) unlockAchievement('weapon6');
+    // 每日任务完成检查
+    var tasks = todayTasks();
+    var tMap = dailyTaskDefs();
+    var anyTask = false;
+    tasks.forEach(function (t) {
+      if (t.done) return;
+      var def = tMap[t.id];
+      if (!def) return;
+      var done = false;
+      switch (def.cond) {
+        case 'kill': done = track.totalKills >= def.base; break;
+        case 'wave': done = state.wave >= def.base; break;
+        case 'score': done = state.score >= def.base; break;
+        case 'boss': done = track.bossKills >= def.base; break;
+        case 'weaponKill': done = (state.weaponKills && state.weaponKills[state.weapon] || 0) >= def.base; break;
+      }
+      if (done) {
+        t.done = true;
+        anyTask = true;
+        try { showToast('📋 任务完成：' + def.name.replace('{n}', def.base).replace('{w}', (WEAPON_NAMES[state.weapon] || '机枪'))); } catch (e) {}
+      }
+    });
+    if (anyTask) saveDailyTasks(loadDailyTasks());
+    pushProfileToCloud();
+  }
+
   /** 把当前局成绩记入排行榜：已命名直接入榜返回 true；未命名暂存（pendingRankScore）返回 false。同时结算本局星币（★10 分 = 1 星币） */
   function recordScoreToRank() {
+    finishGameSettlement();
     // 每日挑战：不入普通排行榜，只记录当日最佳
     if (dailyActive) {
       dailyActive = false;
@@ -5432,18 +6003,67 @@
     });
   }
 
+  // ==================== P13：新面板按钮绑定 ====================
+
+  var btnMenuTasks = document.getElementById('btn-menu-tasks');
+  if (btnMenuTasks) btnMenuTasks.addEventListener('click', function () { openMissionPanel(); });
+  var btnMenuTalent = document.getElementById('btn-menu-talent');
+  if (btnMenuTalent) btnMenuTalent.addEventListener('click', function () { openTalentPanel(); });
+  var btnMenuAchievement = document.getElementById('btn-menu-achievement');
+  if (btnMenuAchievement) {
+    btnMenuAchievement.addEventListener('click', function () {
+      showPanel('achievement');
+      renderAchievements();
+    });
+  }
+  var btnMissionBack = document.getElementById('btn-mission-back');
+  if (btnMissionBack) btnMissionBack.addEventListener('click', function () { showPanel('menu'); updateMenuStars(); });
+  var btnTalentBack = document.getElementById('btn-talent-back');
+  if (btnTalentBack) btnTalentBack.addEventListener('click', function () { showPanel('menu'); updateMenuStars(); });
+  var btnAchievementBack = document.getElementById('btn-achievement-back');
+  if (btnAchievementBack) btnAchievementBack.addEventListener('click', function () { showPanel('menu'); });
+  // 新手引导按钮
+  var btnGuideNext = document.getElementById('btn-guide-next');
+  if (btnGuideNext) {
+    btnGuideNext.addEventListener('click', function () {
+      guideIdx++;
+      if (guideIdx >= GUIDE_STEPS.length) {
+        skipGuide();
+        startGame();
+      } else {
+        renderGuideStep();
+      }
+    });
+  }
+  var btnGuideSkip = document.getElementById('btn-guide-skip');
+  if (btnGuideSkip) btnGuideSkip.addEventListener('click', function () { skipGuide(); startGame(); });
+  // 结算报告面板：点击任意处或 2 秒后自动返回主菜单
+  var gameoverPanel = document.getElementById('gameover');
+  if (gameoverPanel) {
+    gameoverPanel.addEventListener('click', function () {
+      if (state && state.status === 'gameover') backToMenu();
+    });
+  }
+
   // ==================== 成就系统 ====================
 
   var ACHIEVE_KEY = 'sf_achievements';
   var ACHIEVEMENTS = [
-    { id: 'first_kill', icon: '🎯', name: '初露锋芒', desc: '击杀第 1 个敌人' },
-    { id: 'wave5', icon: '🌊', name: '渐入佳境', desc: '到达第 5 波' },
-    { id: 'boss1', icon: '👹', name: '屠魔者', desc: '击杀第 1 个 Boss' },
-    { id: 'no_hit', icon: '🛡', name: '无伤先锋', desc: '第 1 波全程无伤通过' },
-    { id: 'score10000', icon: '💯', name: '万分战神', desc: '单局得分达到 10000' },
-    { id: 'combo50', icon: '🔥', name: '连击大师', desc: '连击达到 50 层' },
-    { id: 'wave20', icon: '🌌', name: '无尽勇者', desc: '到达第 20 波（无尽深处）' },
-    { id: 'clone_seen', icon: '🪞', name: '猜猜我是谁', desc: '遭遇一次克隆体敌人' }
+    { id: 'first_kill', icon: '🎯', name: '初露锋芒', desc: '击杀第 1 个敌人', cat: '战斗', reward: 10 },
+    { id: 'wave5', icon: '🌊', name: '渐入佳境', desc: '到达第 5 波', cat: '挑战', reward: 15 },
+    { id: 'boss1', icon: '👹', name: '屠魔者', desc: '击杀第 1 个 Boss', cat: '挑战', reward: 20 },
+    { id: 'no_hit', icon: '🛡', name: '无伤先锋', desc: '第 1 波全程无伤通过', cat: '技巧', reward: 15 },
+    { id: 'score10000', icon: '💯', name: '万分战神', desc: '单局得分达到 10000', cat: '战斗', reward: 30 },
+    { id: 'combo50', icon: '🔥', name: '连击大师', desc: '连击达到 50 层', cat: '技巧', reward: 20 },
+    { id: 'wave20', icon: '🌌', name: '无尽勇者', desc: '到达第 20 波（无尽深处）', cat: '挑战', reward: 40 },
+    { id: 'clone_seen', icon: '🪞', name: '猜猜我是谁', desc: '遭遇一次克隆体敌人', cat: '收藏', reward: 25 },
+    { id: 'boss_theme_all', icon: '🛸', name: '群星之主', desc: '集齐全部 4 种 Boss 主题形态', cat: '收藏', reward: 50 },
+    { id: 'codex_half', icon: '📖', name: '图鉴收藏家', desc: '图鉴解锁条目达到一半以上', cat: '收藏', reward: 35 },
+    { id: 'daily_win', icon: '📅', name: '每日挑战者', desc: '完成一次任意每日挑战', cat: '日常', reward: 20 },
+    { id: 'signin7', icon: '📆', name: '七日之约', desc: '累计签到 7 天', cat: '日常', reward: 40 },
+    { id: 'talent_all', icon: '🌳', name: '天赋觉醒', desc: '解锁全部 4 系天赋', cat: '养成', reward: 30 },
+    { id: 'weapon6', icon: '⚔', name: '武器大师', desc: '单局使用过 6 种不同武器', cat: '战斗', reward: 25 },
+    { id: 'kill1000', icon: '💀', name: '千人斩', desc: '累计击杀 1000 个敌人', cat: '战斗', reward: 50 }
   ];
 
   function loadAchievements() {
@@ -5512,6 +6132,534 @@
     body.insertBefore(head, body.firstChild);
   }
 
+  // ==================== P13-9：成就系统化（独立成就页） ====================
+
+  function achProgress(aid) {
+    var ach = loadAchievements();
+    if (ach[aid]) return { done: 1, total: 1 };
+    // 未解锁时根据当前局内/全局状态显示进度
+    switch (aid) {
+      case 'boss_theme_all': return { done: codexCountByPrefix('bosstheme:'), total: 4 };
+      case 'codex_half': return { done: codexCountByPrefix(''), total: CODEX.length };
+      case 'kill1000': return { done: (loadStats().killTotal || 0), total: 1000 };
+      case 'signin7': return { done: (loadSignin().days || 0), total: 7 };
+      case 'talent_all': {
+        var tt = getTalents();
+        var treeIds = (GameCore.DEFAULT_CONFIG.talentTree || []).map(function (b) { return b.id; });
+        return { done: treeIds.filter(function (i) { return tt[i] > 0; }).length, total: treeIds.length };
+      }
+      default: return { done: 0, total: 1 };
+    }
+  }
+
+  function renderAchievements() {
+    var list = document.getElementById('achievement-list');
+    if (!list) return;
+    var ach = loadAchievements();
+    var cats = ['战斗', '挑战', '技巧', '收藏', '日常', '养成'];
+    var unlocked = 0;
+    list.innerHTML = '';
+    cats.forEach(function (cat) {
+      var items = ACHIEVEMENTS.filter(function (a) { return a.cat === cat; });
+      var got = items.filter(function (a) { return ach[a.id]; }).length;
+      var catHead = document.createElement('div');
+      catHead.style.cssText = 'grid-column:1/-1;font-size:14px;color:#7df0ff;letter-spacing:2px;margin:4px 0 2px;';
+      catHead.textContent = '「' + cat + '」 ' + got + '/' + items.length;
+      list.appendChild(catHead);
+      items.forEach(function (a) {
+        var pg = achProgress(a.id);
+        var pct = pg.total > 0 ? Math.min(100, Math.round(pg.done / pg.total * 100)) : 0;
+        var item = document.createElement('div');
+        item.className = 'achieve-item' + (ach[a.id] ? '' : ' locked');
+        item.style.cssText = 'padding:10px 12px;border-radius:10px;background:rgba(10,24,52,0.75);border:1px solid ' + (ach[a.id] ? 'rgba(255,209,102,0.5)' : 'rgba(90,130,190,0.3)') + ';';
+        item.innerHTML =
+          '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">' + a.icon + '</span>' +
+          '<span style="font-size:14px;color:' + (ach[a.id] ? '#ffd166' : '#9fb6dd') + ';font-weight:600;">' + a.name + '</span>' +
+          '<span style="margin-left:auto;font-size:11px;color:#7df0ff;">★' + a.reward + '</span></div>' +
+          '<div style="font-size:12px;color:#8aa0c8;margin-top:3px;">' + a.desc + '</div>' +
+          (ach[a.id]
+            ? '<div style="font-size:11px;color:#7df0ff;margin-top:5px;">✓ 已解锁 · 奖励已发放</div>'
+            : '<div style="height:5px;background:rgba(40,70,120,0.6);border-radius:3px;margin-top:6px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#4ee0ff,#7df0ff);"></div></div>' +
+              '<div style="font-size:11px;color:#8aa0c8;margin-top:3px;">进度 ' + pg.done + ' / ' + pg.total + '</div>');
+        list.appendChild(item);
+      });
+    });
+  }
+
+  function unlockAchievement(aid) {
+    var ach = loadAchievements();
+    if (ach[aid]) return;
+    var def = null;
+    ACHIEVEMENTS.forEach(function (a) { if (a.id === aid) def = a; });
+    if (!def) return;
+    ach[aid] = Date.now();
+    saveAchievements(ach);
+    if (def.reward) {
+      var p = getProfile();
+      p.stars += def.reward;
+      saveProfile(p);
+      updateMenuStars();
+    }
+    try { showToast('🎖 成就解锁：' + def.name + '（★' + def.reward + '）'); } catch (e) {}
+    try { audio.powerup(); } catch (e) {}
+    pushProfileToCloud();
+  }
+
+  // ==================== P13-10：天赋树 ====================
+
+  var TALENT_KEY = 'sf_talents';
+
+  function getTalents() {
+    try {
+      var raw = localStorage.getItem(TALENT_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  }
+
+  function saveTalents(t) {
+    try { localStorage.setItem(TALENT_KEY, JSON.stringify(t)); } catch (err) {}
+  }
+
+  function renderTalent() {
+    var grid = document.getElementById('talent-grid');
+    if (!grid) return;
+    var tree = GameCore.DEFAULT_CONFIG.talentTree || [];
+    var t = getTalents();
+    var p = getProfile();
+    grid.innerHTML = '';
+    var gotAll = 0, totalAll = 0;
+    tree.forEach(function (br) {
+      totalAll += br.max;
+      var got = Math.min(br.max, t[br.id] || 0);
+      gotAll += got;
+      var card = document.createElement('div');
+      card.style.cssText = 'padding:12px;border-radius:12px;background:rgba(10,24,52,0.8);border:1px solid rgba(78,224,255,0.35);';
+      var headHtml = '<div style="font-size:15px;color:#7df0ff;font-weight:600;letter-spacing:1px;">' + (br.icon || '✦') + ' ' + br.name + '</div>' +
+        '<div style="font-size:11px;color:#8aa0c8;margin-top:2px;">' + br.desc + '</div>' +
+        '<div style="height:5px;background:rgba(40,70,120,0.6);border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;width:' + (got / br.max * 100) + '%;background:linear-gradient(90deg,#ffd166,#ff9f43);"></div></div>' +
+        '<div style="font-size:11px;color:#ffd27d;margin-top:3px;">' + got + ' / ' + br.max + ' 点</div>';
+      var bodyHtml = '';
+      for (var lv = 1; lv <= br.max; lv++) {
+        var owned = got >= lv;
+        var enabled = !owned && (lv === 1 || got >= lv - 1);
+        var cost = br.costBase + (lv - 1) * 20;
+        bodyHtml += '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(20,40,80,0.6);border:1px solid ' + (owned ? 'rgba(255,209,102,0.45)' : 'rgba(70,110,170,0.3)') + ';">' +
+          '<span style="font-size:13px;">' + (owned ? '✔' : (enabled ? '＋' : '·')) + '</span>' +
+          '<span style="font-size:12px;color:' + (owned ? '#ffd166' : '#b9cdee') + ';">Lv' + lv + '</span>' +
+          '<span style="font-size:11px;color:#9fb6dd;flex:1;">效果等级 ' + lv + '</span>' +
+          (owned
+            ? '<span style="font-size:10px;color:#7df0ff;">已解锁</span>'
+            : '<button class="btn small" style="font-size:11px;padding:2px 8px;' + (enabled ? '' : 'opacity:0.5;pointer-events:none;') + '" data-tid="' + br.id + '" data-lv="' + lv + '">★' + cost + '</button>');
+      }
+      card.innerHTML = headHtml + bodyHtml;
+      grid.appendChild(card);
+    });
+    var btns = grid.querySelectorAll('button[data-tid]');
+    for (var bi = 0; bi < btns.length; bi++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          buyTalent(btn.getAttribute('data-tid'), parseInt(btn.getAttribute('data-lv'), 10));
+        });
+      })(btns[bi]);
+    }
+  }
+
+  function buyTalent(id, lv) {
+    var tree = GameCore.DEFAULT_CONFIG.talentTree || [];
+    var br = null;
+    for (var i = 0; i < tree.length; i++) {
+      if (tree[i].id === id) br = tree[i];
+    }
+    if (!br) return;
+    var t = getTalents();
+    var cur = t[id] || 0;
+    if (cur >= lv) { showToast('该天赋已解锁'); return; }
+    if (lv > 1 && cur < lv - 1) { showToast('请先解锁上一级天赋'); return; }
+    var cost = br.costBase + (lv - 1) * 20;
+    var p = getProfile();
+    if (p.stars < cost) { showToast('星币不足：需要 ★' + cost); return; }
+    p.stars -= cost;
+    saveProfile(p);
+    t[id] = lv;
+    saveTalents(t);
+    updateMenuStars();
+    renderTalent();
+    showToast('天赋「' + br.name + ' Lv' + lv + '」已解锁');
+    audio.powerup();
+    pushProfileToCloud();
+  }
+
+  function openTalentPanel() {
+    showPanel('talent');
+    renderTalent();
+    pushProfileToCloud();
+  }
+
+  // ==================== P13-11：每日任务 + 7 日签到 ====================
+
+  var DAILY_TASK_KEY = 'sf_daily_tasks';
+  var SIGNIN_KEY = 'sf_signin';
+
+  function dailyDateStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function loadDailyTasks() {
+    try {
+      var raw = localStorage.getItem(DAILY_TASK_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  }
+
+  function saveDailyTasks(dt) {
+    try { localStorage.setItem(DAILY_TASK_KEY, JSON.stringify(dt)); } catch (err) {}
+  }
+
+  function loadSignin() {
+    try {
+      var raw = localStorage.getItem(SIGNIN_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return { last: '', days: 0 };
+  }
+
+  function saveSignin(s) {
+    try { localStorage.setItem(SIGNIN_KEY, JSON.stringify(s)); } catch (err) {}
+  }
+
+  // 每日 5 任务池（P13-11 配置，与 game-core dailyTaskPool 对应）
+  function dailyTaskDefs() {
+    var cfg = GameCore.DEFAULT_CONFIG;
+    var pool = cfg.dailyTaskPool || [];
+    var map = {};
+    pool.forEach(function (t) { map[t.id] = t; });
+    return map;
+  }
+
+  function todayTasks() {
+    var map = dailyTaskDefs();
+    var dt = loadDailyTasks();
+    var today = dailyDateStr();
+    var tasks = dt[today];
+    if (tasks) return tasks;
+    var ids = Object.keys(map);
+    // 随机取 3 个
+    for (var i = ids.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+    }
+    var picked = ids.slice(0, 3).map(function (id) { return { id: id, done: false, claimed: false }; });
+    dt[today] = picked;
+    saveDailyTasks(dt);
+    return picked;
+  }
+
+  function renderMission() {
+    var list = document.getElementById('mission-list');
+    if (!list) return;
+    var tasks = todayTasks();
+    var map = dailyTaskDefs();
+    list.innerHTML = '';
+    var stats = loadStats();
+    var pname = getPlayerName();
+    tasks.forEach(function (t) {
+      var def = map[t.id];
+      var label = '—';
+      if (def && def.name) {
+        label = def.name.replace('{n}', def.base).replace('{w}', (state && state.weapon && WEAPON_NAMES[state.weapon]) ? WEAPON_NAMES[state.weapon] : '机枪');
+      }
+      var reward = Math.max(5, Math.round((def ? def.base : 50) / 10));
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(10,24,52,0.8);border:1px solid ' + (t.done ? 'rgba(255,209,102,0.5)' : 'rgba(78,139,255,0.35)') + ';';
+      row.innerHTML =
+        '<span style="font-size:16px;">' + (t.done ? '✅' : '⬜') + '</span>' +
+        '<span style="flex:1;font-size:13px;color:#d5e6ff;">' + label + '</span>' +
+        (t.claimed
+          ? '<span style="font-size:11px;color:#7df0ff;">已领取 ★' + reward + '</span>'
+          : '<button class="btn small" data-task="' + t.id + '" style="font-size:12px;' + (t.done ? '' : 'opacity:0.5;pointer-events:none;') + '">领取 ★' + reward + '</button>');
+      list.appendChild(row);
+    });
+    var btns = list.querySelectorAll('button[data-task]');
+    for (var bi = 0; bi < btns.length; bi++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          var tid = btn.getAttribute('data-task');
+          var dt = loadDailyTasks();
+          var today = dailyDateStr();
+          var tasks = dt[today] || [];
+          for (var ti = 0; ti < tasks.length; ti++) {
+            if (tasks[ti].id === tid && tasks[ti].done && !tasks[ti].claimed) {
+              tasks[ti].claimed = true;
+              var def = dailyTaskDefs()[tid];
+              var reward = Math.max(5, Math.round((def ? def.base : 50) / 10));
+              var p = getProfile();
+              p.stars += reward;
+              saveProfile(p);
+              saveDailyTasks(dt);
+              updateMenuStars();
+              renderMission();
+              showToast('任务完成 · 获得 ★' + reward);
+              pushProfileToCloud();
+              return;
+            }
+          }
+        });
+      })(btns[bi]);
+    }
+    // 签到
+    renderSignin();
+  }
+
+  function renderSignin() {
+    var row = document.getElementById('signin-row');
+    if (!row) return;
+    var s = loadSignin();
+    var today = dailyDateStr();
+    row.innerHTML = '';
+    var rewards = [10, 15, 20, 25, 30, 40, 60];
+    for (var d = 1; d <= 7; d++) {
+      var idx = d - 1;
+      var claimed = s.days >= d;
+      var canClaim = !claimed && (s.days === d - 1) && (s.last !== today);
+      var cell = document.createElement('div');
+      cell.style.cssText = 'width:64px;padding:8px 4px;border-radius:10px;text-align:center;background:' + (claimed ? 'rgba(255,209,102,0.18)' : (canClaim ? 'rgba(125,240,255,0.14)' : 'rgba(20,40,80,0.55)')) + ';border:1px solid ' + (claimed ? 'rgba(255,209,102,0.5)' : (canClaim ? 'rgba(125,240,255,0.5)' : 'rgba(70,110,170,0.25)')) + ';';
+      cell.innerHTML = '<div style="font-size:16px;">' + (claimed ? '✔' : '📅') + '</div>' +
+        '<div style="font-size:11px;color:#d5e6ff;margin-top:2px;">第 ' + d + ' 天</div>' +
+        '<div style="font-size:11px;color:#ffd27d;">★' + rewards[idx] + '</div>' +
+        (claimed ? '<div style="font-size:10px;color:#7df0ff;margin-top:2px;">已领</div>' : '');
+      row.appendChild(cell);
+    }
+    var btn = document.createElement('button');
+    btn.className = 'btn small';
+    btn.style.cssText = 'margin:10px auto 0;font-size:13px;';
+    btn.textContent = '今日签到';
+    btn.addEventListener('click', function () { claimSignin(); });
+    row.appendChild(btn);
+  }
+
+  function claimSignin() {
+    var s = loadSignin();
+    var today = dailyDateStr();
+    if (s.last === today) { showToast('今天已经签到过啦'); return; }
+    if (s.last && s.last !== yesterdayStr()) {
+      s.days = 0; // 断签重置
+    }
+    s.days = Math.min(7, s.days + 1);
+    s.last = today;
+    saveSignin(s);
+    var rewards = [10, 15, 20, 25, 30, 40, 60];
+    var p = getProfile();
+    p.stars += rewards[s.days - 1];
+    saveProfile(p);
+    updateMenuStars();
+    renderMission();
+    showToast('签到成功 · 获得 ★' + rewards[s.days - 1]);
+    unlockAchievement('signin7');
+    audio.powerup();
+    pushProfileToCloud();
+  }
+
+  function yesterdayStr() {
+    var d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function openMissionPanel() {
+    showPanel('mission');
+    renderMission();
+  }
+
+  // ==================== P13：全局统计（累计击杀等） ====================
+
+  var STATS_KEY = 'sf_stats';
+  function loadStats() {
+    try {
+      var raw = localStorage.getItem(STATS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return { killTotal: 0, games: 0, bestScore: 0 };
+  }
+  function saveStats(st) {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(st)); } catch (err) {}
+  }
+
+  // ==================== P13-15：结算报告 ====================
+
+  function renderGameOverReport() {
+    var box = document.getElementById('gameover-report');
+    if (!box) return;
+    var dmg = state.weaponDamage || {};
+    var rows = [];
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>最终得分</span><b style="color:#ffd166;">' + state.score + ' 分</b></div>');
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>到达波次</span><b style="color:#7df0ff;">第 ' + state.wave + ' 波</b></div>');
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>存活时间</span><b>' + Math.floor(state.time) + ' 秒</b></div>');
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>击杀敌人</span><b>' + (state.enemiesKilled || track.totalKills || 0) + '</b></div>');
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>最高连击</span><b>' + (state.combo || 0) + '</b></div>');
+    rows.push('<div style="display:flex;justify-content:space-between;"><span>结算星币</span><b style="color:#ffd27d;">★' + Math.floor(state.score / 10) + '</b></div>');
+    var wNames = WEAPON_NAMES || {};
+    var weaponKeys = Object.keys(dmg);
+    if (weaponKeys.length) {
+      weaponKeys.sort(function (a, b) { return dmg[b] - dmg[a]; });
+      rows.push('<div style="margin-top:6px;font-size:12px;color:#9fb6dd;letter-spacing:1px;">— 武器伤害 —</div>');
+      weaponKeys.slice(0, 6).forEach(function (w) {
+        rows.push('<div style="display:flex;justify-content:space-between;font-size:12px;"><span>' + (wNames[w] || w) + '</span><b style="color:#cfe6ff;">' + dmg[w] + '</b></div>');
+      });
+    }
+    box.innerHTML = rows.join('');
+    var hint = document.getElementById('gameover-hint');
+    if (hint) hint.textContent = '即将返回主菜单…';
+  }
+
+  // ==================== P13-13：新手引导 ====================
+
+  var GUIDE_KEY = 'sf_guide_done';
+  var GUIDE_STEPS = [
+    { t: '移 动', c: '电脑：鼠标移动操控战机\n手机：手指拖动即可<br><br>战机全程跟随鼠标 / 手指自由移动' },
+    { t: '射 击', c: '自动开火，无需操作<br>靠近敌人即可命中<br><br>长按攻击键可蓄力（仅限蓄力炮）' },
+    { t: '强 化', c: '击杀敌人获得经验与星币<br>第 1~9 波每波结束可三选一强化<br><br>10~20 波改为每 5 波强化一次' }
+  ];
+
+  function guideDone() {
+    try { return localStorage.getItem(GUIDE_KEY) === '1'; } catch (err) { return true; }
+  }
+
+  var guideIdx = 0;
+  function openGuide() {
+    guideIdx = 0;
+    renderGuideStep();
+    showPanel('guide');
+  }
+
+  function renderGuideStep() {
+    var st = GUIDE_STEPS[guideIdx];
+    var title = document.getElementById('guide-title');
+    var text = document.getElementById('guide-text');
+    var next = document.getElementById('btn-guide-next');
+    if (title) title.textContent = st.t;
+    if (text) text.innerHTML = st.c;
+    if (next) next.textContent = guideIdx < GUIDE_STEPS.length - 1 ? '下一步' : '进入游戏';
+  }
+
+  function skipGuide() {
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch (err) {}
+    showPanel('menu');
+  }
+
+  // ==================== P13-12：云存档（成长 / 天赋 / 图鉴 / 成就 / 星币） ====================
+
+  function pushProfileToCloud() {
+    if (typeof fetch !== 'function') return;
+    var payload = {
+      key: 'profile',
+      profile: getProfile(),
+      talents: getTalents(),
+      codex: loadCodex(),
+      achievements: loadAchievements(),
+      signin: loadSignin(),
+      stats: loadStats()
+    };
+    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (cloud) {
+        var merged = payload;
+        if (Array.isArray(cloud)) {
+          var cp = null;
+          for (var i = 0; i < cloud.length; i++) {
+            if (cloud[i] && cloud[i].key === 'profile') cp = cloud[i];
+          }
+          if (cp) merged = mergeProfilePayload(payload, cp);
+        }
+        return fetch(CLOUD_RANK_URL, {
+          method: 'POST',
+          body: JSON.stringify(mergeCloudEntries(cloud, merged))
+        });
+      })
+      .catch(function () {});
+  }
+
+  function mergeProfilePayload(local, cloud) {
+    var out = JSON.parse(JSON.stringify(local));
+    var lp = local.profile || {}, cp = cloud.profile || {};
+    out.profile = { stars: Math.max(lp.stars || 0, cp.stars || 0), upgrades: {} };
+    var keys = ['hp', 'multishot', 'damage'];
+    keys.forEach(function (k) {
+      out.profile.upgrades[k] = Math.max((lp.upgrades || {})[k] || 0, (cp.upgrades || {})[k] || 0);
+    });
+    out.profile.blessing = lp.blessing || cp.blessing || null;
+    out.profile.coreUpgrade = {};
+    var ck = Object.keys((cp.coreUpgrade) || {});
+    var lk2 = Object.keys((lp.coreUpgrade) || {});
+    ck.concat(lk2).forEach(function (k) {
+      out.profile.coreUpgrade[k] = Math.max((lp.coreUpgrade || {})[k] || 0, (cp.coreUpgrade || {})[k] || 0);
+    });
+    // 天赋 / 图鉴 / 成就 / 签到取并集
+    out.talents = unionObj(local.talents, cloud.talents);
+    out.codex = unionObj(local.codex, cloud.codex);
+    out.achievements = unionObj(local.achievements, cloud.achievements);
+    out.signin = betterSignin(local.signin, cloud.signin);
+    out.stats = {
+      killTotal: Math.max((local.stats || {}).killTotal || 0, (cloud.stats || {}).killTotal || 0),
+      games: Math.max((local.stats || {}).games || 0, (cloud.stats || {}).games || 0),
+      bestScore: Math.max((local.stats || {}).bestScore || 0, (cloud.stats || {}).bestScore || 0)
+    };
+    return out;
+  }
+
+  function unionObj(a, b) {
+    var out = {};
+    a = a || {}; b = b || {};
+    Object.keys(a).forEach(function (k) { out[k] = a[k]; });
+    Object.keys(b).forEach(function (k) { out[k] = b[k]; });
+    return out;
+  }
+
+  function betterSignin(a, b) {
+    a = a || {}; b = b || {};
+    var days = Math.max(a.days || 0, b.days || 0);
+    return { last: (a.last || b.last || ''), days: days };
+  }
+
+  function mergeCloudEntries(cloud, merged) {
+    var entries = [];
+    if (Array.isArray(cloud)) {
+      entries = cloud.filter(function (e) { return e && e.key !== 'profile'; });
+    }
+    entries.push(merged);
+    return entries;
+  }
+
+  function syncProfileFromCloud() {
+    if (typeof fetch !== 'function') return;
+    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (cloud) {
+        if (!Array.isArray(cloud)) return;
+        var cp = null;
+        for (var i = 0; i < cloud.length; i++) {
+          if (cloud[i] && cloud[i].key === 'profile') cp = cloud[i];
+        }
+        if (!cp) return;
+        var merged = mergeProfilePayload({ profile: getProfile(), talents: getTalents(), codex: loadCodex(), achievements: loadAchievements(), signin: loadSignin(), stats: loadStats() }, cp);
+        saveProfile(merged.profile);
+        saveTalents(merged.talents);
+        saveCodex(merged.codex);
+        saveAchievements(merged.achievements);
+        saveSignin(merged.signin);
+        saveStats(merged.stats);
+        updateMenuStars();
+      })
+      .catch(function () {});
+  }
+
+  function codexCountByPrefix(prefix) {
+    var c = loadCodex();
+    return Object.keys(c).filter(function (k) { return k.indexOf(prefix) === 0; }).length;
+  }
+
   // ==================== 图鉴系统（P4） ====================
 
   var CODEX_KEY = 'sf_codex';
@@ -5534,7 +6682,12 @@
     { id: 'suicider', icon: '💥', name: '自爆兵', cat: '新敌人', desc: '出现后 2 秒无敌并记录受击次数，死亡后转化为无法抵消的特殊弹幕。' },
     { id: 'clone', icon: '🪞', name: '克隆体', cat: '新敌人', desc: '与玩家战机一模一样，拥有玩家武器，红色攻击，15 秒后消失，无法被攻击。' },
     { id: 'hswarm', icon: '🐝', name: '蜂巢武器', cat: '武器', desc: '没有武器，开局自带一个僚机，僚机自动攻击且最多 10 架，不受弹道与攻击力加成。' },
-    { id: 'devour', icon: '🩸', name: '吞噬者武器', cat: '武器', desc: '化身球形生命体，碰撞固定 1:1 伤害，击杀敌人后吞噬其全部初始血量与能力，连 Boss 能力也能继承。' }
+    { id: 'devour', icon: '🩸', name: '吞噬者武器', cat: '武器', desc: '化身球形生命体，碰撞固定 1:1 伤害，击杀敌人后吞噬其全部初始血量与能力，连 Boss 能力也能继承。' },
+    // P13-7：Boss 主题（不同主题独立形态与弹幕偏好，图鉴按主题解锁）
+    { id: 'bosstheme:demon', icon: '😈', name: '恶魔领航', cat: 'Boss主题', desc: '深红炼狱主题的 Boss，偏好直线与扇形弹幕，召唤型弹幕以红色为主。' },
+    { id: 'bosstheme:star', icon: '🚀', name: '星舰母舰', cat: 'Boss主题', desc: '蓝白舰体主题的 Boss，弹幕以高速直线与弧形为主，压迫感更强。' },
+    { id: 'bosstheme:octo', icon: '🐙', name: '章鱼要塞', cat: 'Boss主题', desc: '触手集群主题的 Boss，弹幕为扩散型弹幕墙，覆盖范围极大。' },
+    { id: 'bosstheme:void', icon: '🌑', name: '虚空尊者', cat: 'Boss主题', desc: '暗紫虚空主题的 Boss，弹幕不可抵消率最高，是最凶险的形态。' }
   ];
   var CODEX_IDS = {};
   CODEX.forEach(function (c) { CODEX_IDS[c.id] = c; });
@@ -5586,12 +6739,29 @@
       }
       return;
     }
+    // P13-7：Boss 主题图鉴（bosstheme:demon 等）
+    if (ev.indexOf('bosstheme:') === 0) {
+      var tkey = ev;
+      if (!c[tkey]) {
+        c[tkey] = Date.now();
+        saveCodex(c);
+        showToast('📖 图鉴解锁：' + bossThemeCodexName(tkey));
+        audio.powerup();
+      }
+      return;
+    }
     if (CODEX_IDS[ev] && !c[ev]) {
       c[ev] = Date.now();
       saveCodex(c);
       showToast('📖 图鉴解锁：' + CODEX_IDS[ev].name);
       audio.powerup();
     }
+  }
+
+  /** P13-7：Boss 主题图鉴名称 */
+  function bossThemeCodexName(key) {
+    var def = CODEX_IDS[key];
+    return def ? def.name : key;
   }
 
   /** 渲染图鉴面板：黑色卡片，未解锁为全黑锁定，解锁后点亮并显示介绍 */
@@ -5871,6 +7041,12 @@
       unlock: ensure,
       // P8：音效池——同一武器多音色随机变体，避免重复刺耳
       shoot: function () {
+        var w = (typeof state !== 'undefined' && state && state.weapon) || 'gun';
+        // P13-14：各武器独立柔和音色（新武器）
+        if (w === 'icecannon') { tone('sine', 980, 0.09, 0.025, 1500, 0.03); return; }
+        if (w === 'arc') { tone('sawtooth', 1400 + Math.random() * 300, 0.05, 0.018, 2100, 0.01); return; }
+        if (w === 'vortexgun') { tone('sine', 200, 0.22, 0.03, 80, 0.05); return; }
+        if (w === 'poison') { tone('sine', 300, 0.12, 0.02, 170, 0.04); return; }
         var variants = [
           function () { tone('square', 880 + Math.random() * 220, 0.06, 0.035, 1400 + Math.random() * 300); },
           function () { tone('triangle', 720 + Math.random() * 260, 0.07, 0.03, 1200); },
@@ -8434,7 +9610,10 @@
     }
 
     for (var ei = 0; ei < state.enemies.length; ei++) {
-      drawEnemy(state.enemies[ei]);
+      // P13-17：性能——离屏敌人跳过绘制（保留上下越界敌人；左右超界跳过）
+      var penemy = state.enemies[ei];
+      if (penemy && (penemy.x < -160 || penemy.x > W + 160)) continue;
+      drawEnemy(penemy);
     }
 
     for (var bj = 0; bj < state.bullets.length; bj++) {
@@ -8442,7 +9621,10 @@
     }
 
     for (var ebj = 0; ebj < state.enemyBullets.length; ebj++) {
-      drawEnemyBullet(state.enemyBullets[ebj]);
+      // P13-17：性能——离屏敌弹跳过绘制
+      var peb = state.enemyBullets[ebj];
+      if (peb && (peb.x < -80 || peb.x > W + 80 || peb.y < -80 || peb.y > H + 80)) continue;
+      drawEnemyBullet(peb);
     }
 
     if (state.status === 'playing' || state.status === 'gameover') {
@@ -8663,7 +9845,7 @@
 
   // ==================== 能量大招 / HUD ====================
 
-  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者' };
+  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者', icecannon: '冰霜炮', arc: '电弧枪', vortexgun: '漩涡枪', poison: '毒气喷射' };
 
   function fmtNum(n) {
     var v = Math.round(n);
@@ -8801,14 +9983,20 @@
     for (var ti = 0; ti < tradPicks.length; ti++) {
       poolAll.push({ kind: 'buff', b: tradPicks[ti] });
     }
-    // 3. 附魔卡：随机 1 项未满级武器技，附加到主武器（叠星）
+    // 3. 附魔卡：随机 1 项未满级武器技，附加到主武器（叠星）+ P13-3：词条附魔入池
     var encPool = ENCHANT_POOL.filter(function (en) {
       return (state.rogueSkills[en.id] || 0) < state.config.rogueSkillMax;
     });
+    var ewDefs = state.config.enchantWords || [];
+    for (var ewI = 0; ewI < ewDefs.length; ewI++) {
+      if (!(state.enchantWords || {})[ewDefs[ewI].id]) {
+        encPool.push({ id: ewDefs[ewI].id, icon: '✦', label: ewDefs[ewI].label, word: true });
+      }
+    }
     if (encPool.length > 0) {
       var encPick = encPool[Math.floor(Math.random() * encPool.length)];
-      var encLv = (state.rogueSkills[encPick.id] || 0) + 1;
-      poolAll.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label });
+      var encLv = encPick.word ? 1 : (state.rogueSkills[encPick.id] || 0) + 1;
+      poolAll.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label, word: !!encPick.word });
     }
     // 统一洗牌取 3 项
     for (var i2 = poolAll.length - 1; i2 > 0; i2--) {
@@ -8822,20 +10010,43 @@
       var btn = document.createElement('button');
       btn.className = 'btn primary';
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+      // P13-5：稀有度分级（白/蓝/金）——边框与光效
+      var rarity = 0; // 0白 1蓝 2金
+      if (b.kind === 'skill') {
+        rarity = (b.ch.kind === 'ultimate') ? 2 : (b.ch.kind === 'fusion' ? 1 : (b.ch.level > 1 ? 1 : 0));
+      } else if (b.kind === 'enchant') {
+        rarity = b.word ? 1 : 1;
+      } else {
+        var rr = Math.random();
+        rarity = rr < 0.62 ? 0 : (rr < 0.9 ? 1 : 2);
+      }
+      var rarStyle = rarity === 2
+        ? 'border:1px solid #ffd166;box-shadow:0 0 14px rgba(255,209,102,0.5);'
+        : rarity === 1
+          ? 'border:1px solid #4e8bff;box-shadow:0 0 10px rgba(78,139,255,0.35);'
+          : 'border:1px solid rgba(120,160,210,0.45);';
+      btn.style.cssText += rarStyle;
+      var rarTag = rarity === 2 ? '<span style="font-size:10px;color:#ffd166;margin-right:6px;">◆金</span>'
+        : rarity === 1 ? '<span style="font-size:10px;color:#7db0ff;margin-right:6px;">◇蓝</span>' : '';
       if (b.kind === 'skill') {
         // 能力卡：与强化/附魔同一池，选中即应用并恢复（一波一次）
         box.appendChild(buildSkillChoiceButton(b.ch, function () {
           state.pendingSkillChoices = [];
           GameCore.togglePause(state);
           buffPanel.style.display = 'none';
-        }));
+        }, rarTag));
         return;
       }
       if (b.kind === 'enchant') {
         // 附魔卡：选中 → 附加到当前主武器（getEnchants 自动带出，可叠星）
-        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>附魔 · ' + b.label + ' ★' + b.encLv + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">附加到主武器 → ' + getEnchantDesc(b.encId, b.encLv) + '</span>';
+        btn.innerHTML = rarTag + '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>附魔 · ' + b.label + ' ★' + b.encLv + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + (b.word ? (ewDesc(b.encId)) : getEnchantDesc(b.encId, b.encLv)) + '</span>';
         btn.addEventListener('click', function () {
-          GameCore.applySkillChoice(state, { kind: 'active', id: b.encId, level: b.encLv });
+          if (b.word) {
+            state.enchantWords = state.enchantWords || {};
+            state.enchantWords[b.encId] = 1;
+          } else {
+            GameCore.applySkillChoice(state, { kind: 'active', id: b.encId, level: b.encLv });
+          }
           GameCore.togglePause(state);
           buffPanel.style.display = 'none';
           audio.powerup();
@@ -8846,7 +10057,7 @@
       } else {
         // 传统强化（池内包装为 {kind:'buff', b: 原强化项}）
         var bb = b.b;
-        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + bb.icon + '</span>' + bb.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + bb.desc + '</span>';
+        btn.innerHTML = rarTag + '<span style="font-size:20px;margin-right:8px;">' + bb.icon + '</span>' + bb.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + bb.desc + '</span>';
         btn.addEventListener('click', function () {
           GameCore.applyPowerup(state, bb.type, bb.relicId ? { id: bb.relicId } : (bb.traitId ? { traitId: bb.traitId } : undefined));
           GameCore.togglePause(state);
@@ -8858,6 +10069,12 @@
       box.appendChild(btn);
     });
     buffPanel.style.display = 'block';
+  }
+
+  /** P13-3：词条附魔描述 */
+  function ewDesc(id) {
+    var d = (GameCore.DEFAULT_CONFIG.enchantWords || []).filter(function (w) { return w.id === id; })[0];
+    return d ? d.desc : '';
   }
 
   function hideBuffPanel() {
@@ -8874,14 +10091,18 @@
   var revivePanel = document.getElementById('revive-panel');
   var btnCrystal = document.getElementById('btn-crystal');
 
-  /** 能力选项按钮（三选一卡牌，供升级面板与波间强化升级区共用） */
-  function buildSkillChoiceButton(ch, afterPick) {
+  /** 能力选项按钮（三选一卡牌，供升级面板与波间强化升级区共用）；rarTag 为可选稀有度标签 */
+  function buildSkillChoiceButton(ch, afterPick, rarTag) {
     var cfg = GameCore.DEFAULT_CONFIG;
     var btn = document.createElement('button');
     btn.className = 'btn primary';
     btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
     var title = '', desc = '', icon = '◆';
-    if (ch.kind === 'fusion') {
+    if (ch.kind === 'ultimate') {
+      title = '✨ 终极融合 · ' + (ch.name || ch.id);
+      desc = ch.desc || '集齐两把超武后解锁的终极形态';
+      icon = '🌟';
+    } else if (ch.kind === 'fusion') {
       var fdef = null;
       for (var fi = 0; fi < cfg.fusionTable.length; fi++) {
         if (cfg.fusionTable[fi].id === ch.id) fdef = cfg.fusionTable[fi];
@@ -8905,7 +10126,7 @@
       title = '被动 · ' + (pdef ? pdef.label : ch.id) + ' ★' + ch.level;
       desc = pdef ? pdef.desc : '';
     }
-    btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + icon + '</span>' + title + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + desc + '</span>';
+    btn.innerHTML = (rarTag || '') + '<span style="font-size:20px;margin-right:8px;">' + icon + '</span>' + title + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + desc + '</span>';
     btn.addEventListener('click', function () {
       GameCore.applySkillChoice(state, ch);
       audio.powerup();
@@ -9302,7 +10523,10 @@
         if (maybeRevive()) {
           // 面板已弹出，本帧不结算
         } else if (recordScoreToRank()) {
+          // P13-15：先展示结算报告面板，2 秒后返回主菜单
           gameoverReturnScheduled = true;
+          renderGameOverReport();
+          showPanel('gameover');
           returnToMenuTimer = setTimeout(function () {
             gameoverReturnScheduled = false;
             backToMenu();
