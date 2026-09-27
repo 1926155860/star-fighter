@@ -714,8 +714,8 @@
         }
         .tl-row.owned { border-color: rgba(255,209,102,0.5); background: rgba(38,28,10,0.5); }
         .tl-lv {
-          flex: 0 0 34px; text-align: center;
-          font-size: 12px; font-weight: 600; color: #b9cdee;
+          flex: 0 0 46px; text-align: center;
+          font-size: 11px; font-weight: 600; color: #b9cdee;
           padding: 2px 0; border-radius: 6px;
           background: rgba(30,55,100,0.6);
         }
@@ -2028,7 +2028,8 @@
     for (var i = 0; i < count; i++) {
       var offset = (i - (count - 1) / 2) * cfg.bulletSpread;
       var bx = p.x + p.width / 2 + offset - bw / 2;
-      var by = p.y - bh;
+      // P15：战机建模图机头超出碰撞框上沿（约 27px），子弹出生点上移至机头正前方，避免从机身图片内穿出（穿模）
+      var by = p.y - bh - (cfg.bulletMuzzleLift || 30);
       // P11：超武「磁力回旋镖」（回旋镖+磁铁）自动追踪最近敌人
       var bvx = 0;
       if (state.weapon === 'boomerang') {
@@ -2097,7 +2098,8 @@
         id: newId(state),
         type: 'chargebolt',
         x: p.x + p.width / 2 + offset - bw / 2,
-        y: p.y - bh,
+        // P15：蓄力弹同样上移至机头正前方（避免穿出机身图片）
+        y: p.y - bh - (cfg.bulletMuzzleLift || 30),
         width: bw,
         height: bh,
         vx: 0,
@@ -2925,7 +2927,7 @@
       state.ebTimer = (state.ebTimer || 0) - dt;
       if (state.ebTimer <= 0) {
         state.ebTimer = Math.max(0.4, 1.0 - el * 0.1);
-        state.bullets.push({ id: newId(state), type: 'energyball', x: p.x + p.width / 2 - 10, y: p.y - 20, width: 20, height: 20, vx: 120 * (Math.random() < 0.5 ? -1 : 1), vy: -300, damage: Math.max(1, Math.round(3 * el * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'magic', weapon: 'energyball' });
+        state.bullets.push({ id: newId(state), type: 'energyball', x: p.x + p.width / 2 - 10, y: p.y - 42, width: 20, height: 20, vx: 120 * (Math.random() < 0.5 ? -1 : 1), vy: -300, damage: Math.max(1, Math.round(3 * el * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'magic', weapon: 'energyball' });
       }
     }
     // ==================== P13-1：新武器技（7 个） ====================
@@ -6450,18 +6452,18 @@
         '<div class="tl-desc">' + br.desc + '</div></div></div>' +
         '<div class="tl-dots">' + dotsHtml + '</div>' +
         '<div class="tl-count">' + got + ' / ' + br.max + ' 点</div>';
-      // 等级行：Lv 徽章 + 效果简述 + 右侧 购买按钮/已解锁
+      // 单面板升级：每系只展示一个"当前等级 + 升级按钮"（升级后 1→2、2→3），不再列 5 个等级行
       var bodyHtml = '';
-      for (var lv = 1; lv <= br.max; lv++) {
-        var owned = got >= lv;
-        var enabled = !owned && (lv === 1 || got >= lv - 1);
-        var cost = br.costBase + (lv - 1) * 20;
-        bodyHtml += '<div class="tl-row' + (owned ? ' owned' : '') + '">' +
-          '<span class="tl-lv">Lv' + lv + '</span>' +
-          '<span class="tl-effect"></span>' +
-          (owned
-            ? '<span class="tl-ok">已解锁</span>'
-            : '<button class="tl-btn"' + (enabled ? '' : ' disabled') + ' data-tid="' + br.id + '" data-lv="' + lv + '">★' + cost + '</button>');
+      if (got >= br.max) {
+        bodyHtml += '<div class="tl-row owned"><span class="tl-lv">Lv' + br.max + '</span>' +
+          '<span class="tl-effect"></span><span class="tl-ok">已满级</span></div>';
+      } else {
+        var nextLv = got + 1;
+        var cost = br.costBase + (nextLv - 1) * 20;
+        var curLabel = got === 0 ? '未解锁' : 'Lv' + got;
+        bodyHtml += '<div class="tl-row"><span class="tl-lv">' + curLabel + '</span>' +
+          '<span class="tl-effect">' + (got === 0 ? '点击右侧按钮解锁' : '下一级') + '</span>' +
+          '<button class="tl-btn" data-tid="' + br.id + '" data-lv="' + nextLv + '">升 Lv' + nextLv + ' · ★' + cost + '</button></div>';
       }
       card.innerHTML = headHtml + bodyHtml;
       grid.appendChild(card);
@@ -8613,7 +8615,9 @@
     if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt') {
       // P12-A：拖尾精灵化——预烘焙渐变条 drawImage（消灭逐帧 createLinearGradient）
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
-      var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166' : '#ffe066';
+      // P15：新武器专属拖尾色（毒气绿/漩涡青紫/冰霜冰蓝），替代默认黄色柱条
+      var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166'
+        : b.type === 'icecannon' ? '#a8e8ff' : b.type === 'vortexgun' ? '#9fe8ff' : b.type === 'poison' ? '#4ade80' : '#ffe066';
       if (fxBudget().tail) {
         // 外层光晕拖尾
         ctx.globalAlpha = 0.22;
@@ -8812,6 +8816,72 @@
       ctx.beginPath();
       ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.55, state.time * 5, state.time * 5 + 2.6);
       ctx.stroke();
+    } else if (b.type === 'icecannon') {
+      // P14：冰霜炮子弹——冰晶锥弹（蓝白寒芒 + 旋转六角光环）
+      var icx = b.x + b.width / 2, icy = b.y + b.height / 2;
+      ctx.shadowColor = '#a8e8ff';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = '#dff6ff';
+      ctx.beginPath();
+      ctx.moveTo(icx, icy - b.height / 2);
+      ctx.lineTo(icx + b.width / 2, icy + b.height / 2);
+      ctx.lineTo(icx - b.width / 2, icy + b.height / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(icx, icy - b.height * 0.1, b.width * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(168,232,255,0.8)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(icx, icy, b.width * 0.62, state.time * 4, state.time * 4 + 1.9);
+      ctx.stroke();
+    } else if (b.type === 'vortexgun') {
+      // P14：漩涡枪子弹——青紫引力球（旋转内核 + 引力弧环）
+      var vcx2 = b.x + b.width / 2, vcy2 = b.y + b.height / 2;
+      ctx.shadowColor = '#9fe8ff';
+      ctx.shadowBlur = 14;
+      var vg2 = ctx.createRadialGradient(vcx2, vcy2, 1, vcx2, vcy2, b.width / 2);
+      vg2.addColorStop(0, '#fff');
+      vg2.addColorStop(0.45, '#9fe8ff');
+      vg2.addColorStop(1, 'rgba(127,160,255,0.25)');
+      ctx.fillStyle = vg2;
+      ctx.beginPath();
+      ctx.arc(vcx2, vcy2, b.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(160,170,255,0.9)';
+      ctx.lineWidth = 1.5;
+      for (var vri = 0; vri < 2; vri++) {
+        ctx.beginPath();
+        ctx.arc(vcx2, vcy2, b.width * 0.32 + vri * 6, state.time * 7 + vri * 2.2, state.time * 7 + vri * 2.2 + 1.7);
+        ctx.stroke();
+      }
+    } else if (b.type === 'poison') {
+      // P14：毒气喷射子弹——绿色毒球（气泡内核 + 弥散毒雾拖尾）
+      var pxc = b.x + b.width / 2, pyc = b.y + b.height / 2;
+      ctx.shadowColor = '#7dffa0';
+      ctx.shadowBlur = 14;
+      var pg = ctx.createRadialGradient(pxc, pyc, 1, pxc, pyc, b.width / 2);
+      pg.addColorStop(0, '#eafff2');
+      pg.addColorStop(0.45, '#7dffa0');
+      pg.addColorStop(1, 'rgba(40,200,120,0.3)');
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.arc(pxc, pyc, b.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      // 气泡内核
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(pxc - b.width * 0.15, pyc - b.height * 0.15, b.width * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      // 弥散毒雾拖尾（绿色，取代默认黄色柱条）
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.ellipse(pxc, b.y + b.height, b.width * 0.34, b.height * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     } else {
       ctx.shadowColor = '#ffe066';
       ctx.shadowBlur = 9;
