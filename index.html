@@ -3645,9 +3645,9 @@
       (cfg.bossBaseHp + (state.level - 1) * cfg.bossHpPerLevel) *
       (1 + (state.difficulty - 1) * cfg.bossHpDifficultyStep) * hpFactor
     );
-    // P13-7：Boss 主题（按波次轮换 4 主题：恶魔/星舰/章鱼/虚空）
+    // P25e：Boss 主题每波随机抽取（20 款等概率，不再固定轮换）
     var themes = cfg.bossThemes || [];
-    var theme = themes[Math.floor((state.wave - 1) / cfg.waveBossEvery) % themes.length] || themes[0];
+    var theme = themes[Math.floor(Math.random() * themes.length)] || themes[0];
     // P24：Boss 显示名 = 主题名 + 模式简名（原实现 20 个模式名都叫"恶魔·XXX"，导致玩家以为只会遇到恶魔）
     var bossModeName = cfg.bossNames[mode] || '恶魔';
     var bossName = theme ? (theme.name + '·' + String(bossModeName).replace(/^恶魔·/, '')) : bossModeName;
