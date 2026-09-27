@@ -6002,9 +6002,41 @@
         showToast('📤 分享成功！★ +10（' + p.shareCount + '/3）');
         audio.powerup();
       };
+      // P22-⑥：生成战绩分享卡（Canvas 科幻风卡片）
+      var shareCardDataURL = null;
+      try { shareCardDataURL = drawShareCard(state.score || 0, state.wave || 1, state.weapon || 'gun', track.totalKills || 0); } catch (e) {}
       var url = location.href.split('?')[0] + '?share=1';
+      var shareText = '我在星际战机打出 ' + (state.score || 0) + ' 分，撑到第 ' + (state.wave || 1) + ' 波！';
+      if (navigator.share && shareCardDataURL) {
+        try {
+          var b64 = shareCardDataURL.split(',')[1];
+          var bin = atob(b64);
+          var ab = new ArrayBuffer(bin.length);
+          var ua = new Uint8Array(ab);
+          for (var si = 0; si < bin.length; si++) ua[si] = bin.charCodeAt(si);
+          var shareFile = new File([ab], '星际战机战绩.png', { type: 'image/png' });
+          navigator.share({ title: '星际战机', text: shareText, files: [shareFile] }).then(done).catch(function () { /* 取消不奖励 */ });
+          return;
+        } catch (e) { /* 降级到下方分支 */ }
+      }
+      if (shareCardDataURL) {
+        // 降级：下载战绩卡 + 复制分享链接
+        try {
+          var dl = document.createElement('a');
+          dl.href = shareCardDataURL;
+          dl.download = '星际战机战绩.png';
+          document.body.appendChild(dl);
+          dl.click();
+          dl.remove();
+        } catch (e) {}
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url + '\n' + shareText).then(done).catch(function () { showToast('复制失败'); });
+          showToast('已保存战绩卡并复制分享文案');
+        } else { done(); }
+        return;
+      }
       if (navigator.share) {
-        navigator.share({ title: '星际战机', text: '来玩星际战机，十四武器十 Boss，越战越强！', url: url }).then(done).catch(function () { /* 用户取消不奖励 */ });
+        navigator.share({ title: '星际战机', text: shareText, url: url }).then(done).catch(function () { /* 用户取消不奖励 */ });
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(done).catch(function () { showToast('复制失败'); });
         showToast('已复制分享链接');
@@ -6012,6 +6044,53 @@
         done();
       }
     });
+  }
+
+  /** P22-⑥：绘制科幻风战绩分享卡（Canvas → dataURL） */
+  function drawShareCard(score, wave, weapon, kills) {
+    var cvs = document.createElement('canvas');
+    cvs.width = 720; cvs.height = 420;
+    var ctx = cvs.getContext('2d');
+    // 背景：深空渐变 + 星点
+    var g = ctx.createLinearGradient(0, 0, 0, 420);
+    g.addColorStop(0, '#0a1228'); g.addColorStop(0.5, '#0d1f3f'); g.addColorStop(1, '#05101f');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 720, 420);
+    ctx.fillStyle = 'rgba(120,200,255,0.5)';
+    for (var i = 0; i < 60; i++) {
+      var sx = Math.random() * 720, sy = Math.random() * 420, sr = Math.random() * 1.6 + 0.3;
+      ctx.globalAlpha = Math.random() * 0.7 + 0.2;
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 青蓝发光描边框
+    ctx.strokeStyle = '#4ee0ff'; ctx.lineWidth = 3;
+    ctx.strokeRect(14, 14, 692, 392);
+    ctx.strokeStyle = 'rgba(78,224,255,0.35)'; ctx.lineWidth = 1;
+    ctx.strokeRect(24, 24, 672, 372);
+    // 标题
+    ctx.fillStyle = '#7df0ff'; ctx.font = 'bold 34px "Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('星 际 战 机', 360, 74);
+    ctx.fillStyle = 'rgba(160,220,255,0.7)'; ctx.font = '15px "Microsoft YaHei",sans-serif';
+    ctx.fillText('STAR FIGHTER · 弹幕射击', 360, 100);
+    // 得分（金色大字）
+    ctx.fillStyle = '#ffd166'; ctx.font = 'bold 64px "Microsoft YaHei",sans-serif';
+    ctx.fillText(String(score) + ' 分', 360, 190);
+    // 详情行
+    ctx.fillStyle = '#cfe6ff'; ctx.font = '22px "Microsoft YaHei",sans-serif';
+    ctx.fillText('第 ' + wave + ' 波 · ' + (WEAPON_NAMES[weapon] || '机枪') + ' · 击毁 ' + kills + ' 架', 360, 245);
+    // 段位
+    var rankTxt = score >= 40000 ? '王者' : score >= 15000 ? '钻石' : score >= 5000 ? '黄金' : score >= 1000 ? '白银' : '青铜';
+    ctx.fillStyle = '#4ee0ff'; ctx.font = 'bold 26px "Microsoft YaHei",sans-serif';
+    ctx.fillText('段位 · ' + rankTxt + '段', 360, 292);
+    // 日期
+    var d = new Date();
+    ctx.fillStyle = 'rgba(160,220,255,0.6)'; ctx.font = '16px "Microsoft YaHei",sans-serif';
+    ctx.fillText(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2), 360, 340);
+    // 水印
+    ctx.fillStyle = 'rgba(78,224,255,0.4)'; ctx.font = '13px "Microsoft YaHei",sans-serif';
+    ctx.fillText('来玩星际战机，十四武器十Boss，越战越强！', 360, 376);
+    return cvs.toDataURL('image/png');
   }
 
   // ===== P17：兑换码（060606 开启高级设置；010101 解锁全部武器）——图标位于设置面板内 =====
@@ -6446,21 +6525,40 @@
       .sort(function (a, b) { return b.score - a.score; });
   }
 
-  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（text/plain 避免 preflight；失败静默，本地不受影响） */
+  // P22-⑦：云服务降级——超时控制 + 失败标记 + 本地模式提示（云端不可用时排行榜照常显示本地成绩）
+  var cloudDown = false;
+  var cloudFailCount = 0;
+  function cloudFetch(url, opts) {
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 8000);
+    var p = fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {}));
+    return p.then(function (r) { clearTimeout(timer); return r; }, function (e) { clearTimeout(timer); throw e; });
+  }
+  function markCloudFail() {
+    cloudFailCount++;
+    cloudDown = cloudFailCount >= 2;
+    try {
+      if (cloudDown) showToast('云端服务暂不可用，已切换本地模式');
+    } catch (e) {}
+  }
+
+  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（text/plain 避免 preflight；失败降级本地，不影响游戏） */
   function pushRankToCloud() {
     if (typeof fetch !== 'function') return;
-    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+    if (cloudDown) return;
+    cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
         var local = loadScores();
         var merged = mergeRank((Array.isArray(cloud) ? local.concat(cloud) : local));
         saveScores(merged);
-        return fetch(CLOUD_RANK_URL, {
+        return cloudFetch(CLOUD_RANK_URL, {
           method: 'POST',
           body: JSON.stringify(merged)
         });
       })
       .catch(function () {
+        markCloudFail();
         // 本地 file:// 打开时浏览器安全限制会拒绝向第三方云写入：提示使用线上版
         try { showToast('排行榜同步失败：本地版无法上传成绩，请用线上版游玩'); } catch (e) {}
       });
@@ -6469,7 +6567,8 @@
   /** 拉取云端榜单并合并到本地（所有玩家成绩共享），成功后刷新当前面板 */
   function syncRankFromCloud() {
     if (typeof fetch !== 'function') return;
-    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+    if (cloudDown) return;
+    cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
         if (!Array.isArray(cloud) || !cloud.length) return;
@@ -6478,7 +6577,7 @@
         var panel = document.getElementById('rank');
         if (panel && panel.className.indexOf('active') >= 0) renderRankList();
       })
-      .catch(function () {});
+      .catch(function () { markCloudFail(); });
   }
 
   function getPlayerName() {
@@ -6502,12 +6601,52 @@
     });
   }
 
-  /** 渲染排行榜赛季筛选（本周 / 全部） */
+  /** P22-⑤：月度赛季 key（自然月为赛季周期） */
+  function seasonKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
+  /** P22-⑤：赛季结算——跨月首次进入时按上月成绩名次发放星币奖励，每赛季只结算一次 */
+  function checkSeasonReward() {
+    try {
+      var p = getProfile();
+      var cur = seasonKey();
+      if (p.seasonClaimed === cur) return;
+      var last = p.seasonKey;
+      if (!last) { p.seasonKey = cur; p.seasonClaimed = cur; saveProfile(p); return; }
+      // 有上一个赛季：按该月最佳名次发奖
+      var monthCut0 = new Date(cur + '-01').getTime() - 1;
+      var monthCut1 = new Date(last + '-01').getTime();
+      var all = mergeRank(loadScores(), null).filter(function (s) { return s.ts && s.ts >= monthCut1 && s.ts <= monthCut0; });
+      var me = getPlayerName();
+      var myBest = null, myRank = 0;
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].name === me) { myBest = all[i]; myRank = i + 1; break; }
+      }
+      var reward = 0;
+      if (myBest) {
+        if (myRank <= 3) reward = 50;
+        else if (myRank <= 10) reward = 20;
+        else if (myRank <= 50) reward = 10;
+        else reward = 3;
+      }
+      p.seasonKey = cur;
+      p.seasonClaimed = cur;
+      p.stars = (p.stars || 0) + reward;
+      saveProfile(p);
+      if (reward > 0) showToast('赛季结算：上月第 ' + myRank + ' 名，奖励 ' + reward + ' 星币');
+      else showToast('新赛季开始，冲榜赢星币奖励！');
+      updateMenuStars();
+    } catch (e) {}
+  }
+
+  /** 渲染排行榜赛季筛选（本周 / 本月 / 全部） */
   function renderRankPeriod() {
     var box = document.getElementById('rank-period-filter');
     if (!box) return;
     box.innerHTML = '';
-    var opts = [{ id: 'week', name: '本周' }, { id: 'all', name: '全部' }];
+    var opts = [{ id: 'week', name: '本周' }, { id: 'month', name: '本月' }, { id: 'all', name: '全部' }];
     opts.forEach(function (o) {
       var b = document.createElement('button');
       b.className = rankPeriodFilter === o.id ? 'on' : '';
@@ -6524,17 +6663,20 @@
   function renderRankList() {
     var list = document.getElementById('rank-list');
     if (!list) return;
-    // 同武器榜内同名玩家只取最高分，再按分数降序取前 10；P8：本周 = 近 7 天记录
+    // 同武器榜内同名玩家只取最高分，再按分数降序取前 10；P8：本周 = 近 7 天记录；P22-⑤：本月 = 当月记录
     var weekCut = Date.now() - 7 * 24 * 3600 * 1000;
+    var monthCut = new Date(seasonKey() + '-01').getTime();
     var all = mergeRank(loadScores(), rankWeaponFilter);
     if (rankPeriodFilter === 'week') {
       all = all.filter(function (s) { return s.ts && s.ts >= weekCut; });
+    } else if (rankPeriodFilter === 'month') {
+      all = all.filter(function (s) { return s.ts && s.ts >= monthCut; });
     }
     var arr = all.slice(0, 10);
     var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
-      list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">' + (rankPeriodFilter === 'week' ? '本周暂无记录，快来抢占榜首！' : '暂无记录，快去创造你的战绩吧！') + '</div>';
+      list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">' + (rankPeriodFilter === 'week' ? '本周暂无记录，快来抢占榜首！' : (rankPeriodFilter === 'month' ? '本月暂无记录，赛季奖励等你拿！' : '暂无记录，快去创造你的战绩吧！')) + '</div>';
       return;
     }
     var medal = ['🥇', '🥈', '🥉'];
@@ -6698,6 +6840,7 @@
   }
 
   function openRankPanel(focusInput) {
+    checkSeasonReward(); // P22-⑤：进榜触发赛季结算
     showPanel('rank');
     // P5：页面中断暂存的成绩自动带出（刷新/切后台后仍可输入名字入榜）
     if (!pendingRankScore) pendingRankScore = loadPendingScore();
@@ -7306,7 +7449,7 @@
       signin: loadSignin(),
       stats: loadStats()
     };
-    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+    cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
         var merged = payload;
@@ -7317,12 +7460,12 @@
           }
           if (cp) merged = mergeProfilePayload(payload, cp);
         }
-        return fetch(CLOUD_RANK_URL, {
+        return cloudFetch(CLOUD_RANK_URL, {
           method: 'POST',
           body: JSON.stringify(mergeCloudEntries(cloud, merged))
         });
       })
-      .catch(function () {});
+      .catch(function () { markCloudFail(); });
   }
 
   function mergeProfilePayload(local, cloud) {
@@ -7378,7 +7521,8 @@
 
   function syncProfileFromCloud() {
     if (typeof fetch !== 'function') return;
-    fetch(CLOUD_RANK_URL, { cache: 'no-store' })
+    if (cloudDown) return;
+    cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (cloud) {
         if (!Array.isArray(cloud)) return;
@@ -7396,7 +7540,7 @@
         saveStats(merged.stats);
         updateMenuStars();
       })
-      .catch(function () {});
+      .catch(function () { markCloudFail(); });
   }
 
   function codexCountByPrefix(prefix) {
