@@ -1544,16 +1544,22 @@
       time: 0,
       level: 1,
       difficulty: cfg.difficulty,
-      lives: Math.max(1, Math.round(cfg.lives * shipCfg.hp)),
-      maxLives: Math.max(1, Math.round(cfg.maxLives * shipCfg.hp)), // P3：血量上限（Boss 生命诅咒可扣）
+      lives: Math.max(1, Math.round(cfg.lives * shipCfg.hp) + ((cfg.roundUpgrades && cfg.roundUpgrades.rHp) || 0)),
+      maxLives: Math.max(1, Math.round(cfg.maxLives * shipCfg.hp) + ((cfg.roundUpgrades && cfg.roundUpgrades.rHp) || 0)), // P3：血量上限（Boss 生命诅咒可扣）
       weapon: cfg.initialWeapon || 'gun',
       secondaryWeapon: cfg.initialSecondaryWeapon || null, // 副武器（实时双武器）
       ship: (cfg.ships[cfg.initialShip] ? cfg.initialShip : 'star'), // 战机皮肤
       mastery: cfg.mastery || {}, // P8：武器专精（局外成长，重置时保留）
       unlockedWeapons: cfg.unlockedWeapons || {}, // P22-④：已解锁武器集合（羁绊判定）
+      round: 1, // P22-⑫：多周目（通关 100 波 → 周目 2，敌人血量×1.5、抗性+10%）
+      roundEntered: false,
+      roundUpgrades: cfg.roundUpgrades || {}, // P22-⑫：周目天赋（全局攻击/生命/攻速）
+      fieldEffect: null, // P22-⑭：波次场效（energywall/ice/boost/storm）
+      fieldStormTimer: 0,
+      fieldStormWarns: [],
       multishotLevel: clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1),
-      fireSpeedFactor: clamp(cfg.initialFireSpeed || 1, cfg.fireSpeedMin, 1),
-      damageBonus: clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax), // 武器成长初始攻击加成（局外）
+      fireSpeedFactor: clamp((cfg.initialFireSpeed || 1) * (1 + (((cfg.roundUpgrades && cfg.roundUpgrades.rSpd) || 0) * 0.01)), cfg.fireSpeedMin, 1), // P22-⑫：周目攻速天赋
+      damageBonus: clamp((cfg.initialDamage || 0), 0, cfg.damageBonusMax) + ((cfg.roundUpgrades && cfg.roundUpgrades.rAtk) || 0), // 武器成长初始攻击加成（上限内）+ 周目攻击天赋（无上限）
       buffAtkBonus: 0, // P12e：波间强化的攻击加成（独立叠加，不受道具上限 10 限制）
       bulletSizeBonus: 0,      // 子弹变大等级（道具）
       laserWidthBonus: 0,      // 激光变粗等级（道具）
@@ -1765,6 +1771,21 @@
     state.waveState = 'combat';
     state.waveRewarded = false;
     var cfg = state.config;
+    // P22-⑫：多周目循环——通关第 100 波进入周目 2（敌人血量×1.5 + 抗性+10%，奖励 1 周目天赋点）
+    if (n === 101 && state.round === 1) {
+      state.round = 2;
+      state.roundEntered = true;
+    }
+    // P22-⑭：每 10 波随机一种场效（持续本波；能量墙/冰面/加速带/雷暴区）
+    if (n % 10 === 0 && n >= 10) {
+      var fes = ['energywall', 'ice', 'boost', 'storm'];
+      state.fieldEffect = fes[Math.floor(Math.random() * fes.length)];
+      state.fieldStormTimer = 0;
+      state.fieldStormWarns = [];
+    } else if (state.fieldEffect) {
+      state.fieldEffect = null;
+      state.fieldStormWarns = [];
+    }
     var bossWave = (n % cfg.waveBossEvery === 0);
     state.pendingSpawns = Math.min(cfg.waveBaseSpawns + (n - 1) * cfg.waveSpawnsPerLevel, 80);
     if (bossWave) {
@@ -1792,13 +1813,15 @@
     return { min: cfg.enemyMinSpeed, max: cfg.enemyMaxSpeed };
   }
 
-  /** 当前敌机血量：基础 + 时间等级加成 + 难度选择加成（难度只加血量） */
+  /** 当前敌机血量：基础 + 时间等级加成 + 难度选择加成（难度只加血量）；P22-⑫：多周目每周目血量×1.5 */
   function getEnemyHp(state) {
     var cfg = state.config;
     return Math.max(
       1,
-      (cfg.enemyBaseHp + Math.floor((state.level - 1) / cfg.enemyHpPerLevels) * cfg.levelHpPerLevel) +
-      getDifficultyHpBonus(state)
+      Math.round(
+        (cfg.enemyBaseHp + Math.floor((state.level - 1) / cfg.enemyHpPerLevels) * cfg.levelHpPerLevel) +
+        getDifficultyHpBonus(state)
+      ) * (1 + ((state.round || 1) - 1) * 0.5)
     );
   }
 
@@ -1842,6 +1865,8 @@
     var cfg = state.config;
     var base = Math.min(cfg.enemyResistMax, Math.max(0, (state.wave - 1) * cfg.enemyResistPerWave));
     var r = base;
+    // P22-⑫：多周目——每周目敌人额外 +10% 抗性
+    r += ((state.round || 1) - 1) * 0.1;
     // 重甲型：额外 50% 物抗（魔法伤害不受其护甲影响）
     if (enemy.special === 'armored' && dmgType === 'phys') r += 0.5;
     // Boss 加成 e：在场其他敌人获得 50% 抗性（物/魔各）
@@ -2311,8 +2336,15 @@
    */
   function movePlayer(state, targetX, targetY) {
     var cfg = state.config;
-    state.player.x = clamp(targetX, 0, cfg.width - state.player.width);
-    state.player.y = clamp(targetY, 0, cfg.height - state.player.height);
+    // P22-⑭：冰面场效——移动带惯性滑移（追向目标位置，位置带 0.3 滑移余量）
+    if (state.fieldEffect === 'ice') {
+      var curX = state.player.x, curY = state.player.y;
+      state.player.x = clamp(curX + (targetX - curX) * 0.82, 0, cfg.width - state.player.width);
+      state.player.y = clamp(curY + (targetY - curY) * 0.82, 0, cfg.height - state.player.height);
+    } else {
+      state.player.x = clamp(targetX, 0, cfg.width - state.player.width);
+      state.player.y = clamp(targetY, 0, cfg.height - state.player.height);
+    }
     return state.player;
   }
 
@@ -5000,6 +5032,19 @@
       var eb = state.enemyBullets[ebj];
       eb.x += eb.vx * dt;
       eb.y += eb.vy * dt;
+      // P22-⑭：场效——能量墙（左右边界反弹敌弹 1 次）/ 加速带（下 1/3 横向气流加速）
+      if (state.fieldEffect === 'energywall') {
+        if ((eb.x < 0 || eb.x + (eb.width || 6) > cfg.width) && !eb._wallBounced) {
+          eb._wallBounced = true;
+          eb.vx = -eb.vx;
+          eb.x = Math.max(0, Math.min(cfg.width - (eb.width || 6), eb.x));
+        }
+      } else if (state.fieldEffect === 'boost') {
+        if (eb.y > cfg.height * 2 / 3) {
+          eb.vy = eb.vy > 0 ? eb.vy * (1 + 0.8 * dt) : eb.vy;
+          eb.vx = eb.vx + (eb.x > cfg.width / 2 ? 120 : -120) * dt;
+        }
+      }
       // P13-1：回旋护盾——环绕盾牌格挡敌弹
       var blocked = false;
       if (state.shieldRings && state.shieldRings.length > 0) {
@@ -5016,6 +5061,37 @@
       }
       if (eb.y > cfg.height || eb.x < -40 || eb.x > cfg.width + 40) {
         state.enemyBullets.splice(ebj, 1);
+      }
+    }
+
+    // P22-⑭：雷暴区场效——每 3s 落雷（深红预警 1s 后引爆，清敌弹伤敌人；玩家站在预警区外可得道具掉落）
+    if (state.fieldEffect === 'storm') {
+      state.fieldStormTimer -= dt;
+      if (state.fieldStormTimer <= 0) {
+        state.fieldStormTimer = 3;
+        state.fieldStormWarns.push({ x: 40 + Math.random() * (cfg.width - 80), until: state.time + 1, warn: true });
+      }
+      for (var sti = state.fieldStormWarns.length - 1; sti >= 0; sti--) {
+        var st = state.fieldStormWarns[sti];
+        if (st.warn && state.time >= st.until) {
+          st.warn = false;
+          for (var sebi = state.enemyBullets.length - 1; sebi >= 0; sebi--) {
+            var sebb = state.enemyBullets[sebi];
+            if (Math.abs(sebb.x - st.x) < 70 && Math.abs(sebb.y - st.y) < 70) state.enemyBullets.splice(sebi, 1);
+          }
+          for (var sei = state.enemies.length - 1; sei >= 0; sei--) {
+            var see = state.enemies[sei];
+            if (Math.abs(see.x + see.width / 2 - st.x) < 70 && Math.abs(see.y + see.height / 2 - st.y) < 70) hurtEnemy(state, see, 25, 'magic', 'storm');
+          }
+          if (state.boss && Math.abs(state.boss.x + state.boss.width / 2 - st.x) < 70 && Math.abs(state.boss.y + state.boss.height / 2 - st.y) < 70) hurtBoss(state, 25, 'magic', 'storm');
+          var inZone = Math.abs(state.player.x + state.player.width / 2 - st.x) < 60 && Math.abs(state.player.y + state.player.height / 2 - st.y) < 60;
+          if (inZone) {
+            damagePlayer(state);
+          } else if (Math.random() < 0.35) {
+            dropPowerupAt(state, st.x, st.y);
+          }
+          state.fieldStormWarns.splice(sti, 1);
+        }
       }
     }
 
@@ -5811,6 +5887,40 @@
         }
       }));
     });
+    // P22-⑫：周目天赋点（通关 100 波 +1，可点全局攻击/生命/攻速，无上限）
+    var rp = p.roundPoints || 0;
+    if (rp > 0) {
+      var roundRow = document.createElement('div');
+      roundRow.style.cssText = 'width:100%;border:1px solid rgba(255,209,102,0.5);border-radius:12px;padding:10px 14px;margin-top:10px;box-sizing:border-box;background:rgba(60,40,10,0.25);';
+      roundRow.innerHTML = '<div style="color:#ffd166;font-size:14px;letter-spacing:1px;">✦ 周目天赋点 × ' + rp + '</div>';
+      var rOpts = [
+        { id: 'rAtk', icon: '⚔', name: '全局攻击 +1' },
+        { id: 'rHp', icon: '❤', name: '全局生命 +1' },
+        { id: 'rSpd', icon: '⚡', name: '全局攻速 +1%' }
+      ];
+      var rBox = document.createElement('div');
+      rBox.style.cssText = 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;';
+      rOpts.forEach(function (ro) {
+        var rb = document.createElement('button');
+        rb.className = 'btn small';
+        rb.textContent = ro.icon + ' ' + ro.name;
+        rb.style.cssText = 'flex:1;min-width:96px;';
+        rb.addEventListener('click', function () {
+          var pp = getProfile();
+          if (!(pp.roundPoints || 0)) { showToast('暂无周目天赋点'); return; }
+          pp.roundPoints -= 1;
+          pp.roundUpgrades = pp.roundUpgrades || {};
+          pp.roundUpgrades[ro.id] = (pp.roundUpgrades[ro.id] || 0) + 1;
+          saveProfile(pp);
+          renderUpgradeList();
+          audio.powerup();
+          showToast('周目天赋：' + ro.name + '（累计 ' + pp.roundUpgrades[ro.id] + '）');
+        });
+        rBox.appendChild(rb);
+      });
+      roundRow.appendChild(rBox);
+      list.appendChild(roundRow);
+    }
     // P11：局外核心强化（方案1-D）——成长页第三栏
     renderCoreUpgrades(p);
   }
@@ -6333,7 +6443,8 @@
       mastery: p.mastery || {}, // P8：武器专精
       coreUpgrade: p.coreUpgrade || {}, // P11：局外核心强化（暴走延脉/拾取回血/满血增伤/双倍道具）
       talentLevel: getTalents(), // P13-10：局外天赋（暴击/吸血/穿透/经验）
-      unlockedWeapons: getUnlockedSet() // P22-④：武器羁绊（主武器×已解锁组合）
+      unlockedWeapons: getUnlockedSet(), // P22-④：武器羁绊（主武器×已解锁组合）
+      roundUpgrades: (p.roundUpgrades || {}) // P22-⑫：周目天赋（全局攻击/生命/攻速）
     });
     GameCore.start(state);
     // P11：战前祝福应用（方案1-C）
@@ -6349,6 +6460,9 @@
   }
 
   // ==================== 游戏内设置（手机无键盘：左上角 ⚙ 暂停换武器/返回） ====================
+
+  var FIELD_EFFECT_NAMES = { energywall: '能量墙', ice: '冰面', boost: '加速带', storm: '雷暴区' }; // P22-⑭
+  var lastFieldEffectShown = null;
 
   var inGameBtn = document.getElementById('in-game-btn');
   var gamePanel = document.getElementById('game-panel');
@@ -6604,8 +6718,8 @@
     try { localStorage.setItem(NAME_KEY, n); } catch (err) {}
   }
 
-  function addScoreEntry(name, score, level, timeSec, weapon) {
-    var merged = mergeRank(loadScores().concat([{ name: name, score: score, level: level, time: timeSec, weapon: weapon || 'classic', ts: Date.now() }]));
+  function addScoreEntry(name, score, level, timeSec, weapon, round) {
+    var merged = mergeRank(loadScores().concat([{ name: name, score: score, level: level, time: timeSec, weapon: weapon || 'classic', round: round || 1, ts: Date.now() }]));
     saveScores(merged);
     pushRankToCloud();
     return merged;
@@ -6702,7 +6816,7 @@
       row.innerHTML =
         '<span class="rank-no">' + (medal[i] || (i + 1)) + '</span>' +
         '<span class="rank-name">' + escHtml(s.name) + '</span>' +
-        '<span class="rank-lv">Lv.' + s.level + '</span>' +
+        '<span class="rank-lv">' + ((s.round || 1) > 1 ? 'R' + s.round + '·' : '') + 'Lv.' + s.level + '</span>' +
         '<span class="rank-w">' + (WEAPON_NAMES[s.weapon] || '经典') + '</span>' +
         '<span class="rank-score">' + s.score + ' 分</span>';
       list.appendChild(row);
@@ -6756,6 +6870,12 @@
       mp.mastery = mp.mastery || {};
       var mw = mp.mastery[state.weapon] = mp.mastery[state.weapon] || {};
       mw.xp = (mw.xp || 0) + (track.totalKills || 0) * 2 + 5;
+      // P22-⑫：周目天赋点（通关 100 波进入周目 2 时 +1，仅结算一次）
+      if (state.roundEntered) {
+        mp.roundPoints = (mp.roundPoints || 0) + 1;
+        state.roundEntered = false;
+        try { showToast('✦ 进入周目 ' + state.round + '，获得 1 点周目天赋！'); } catch (e) {}
+      }
       saveProfile(mp);
     } catch (e) {}
     pushProfileToCloud();
@@ -6796,11 +6916,11 @@
       recordScoreToRank._settled = true;
       addStars(Math.floor(state.score / 10));
     }
-    // P4：排行榜按武器分类——主副武器取攻击伤害更高的那个
+    // P4：排行榜按武器分类——主副武器取攻击伤害更高的那个；P22-⑫：记录周目数（R1/R2…）
     var rankWeapon = pickRankWeapon();
     var pname = getPlayerName();
     if (pname) {
-      addScoreEntry(pname, state.score, state.level, Math.floor(state.time), rankWeapon);
+      addScoreEntry(pname, state.score, state.level, Math.floor(state.time), rankWeapon, state.round || 1);
       savePendingScore(null); // 已入榜则清空中断暂存
       return true;
     }
@@ -12028,6 +12148,16 @@
         waveEl.textContent = '休 息 ' + Math.max(0, state.waveBreakTimer).toFixed(1) + 's';
       } else {
         waveEl.textContent = (state.wave % state.config.waveBossEvery === 0) ? '第 ' + state.wave + ' 波 · BOSS' : '第 ' + state.wave + ' 波';
+      }
+      // P22-⑫：多周目显示 R2/R3…；P22-⑭：波次场效名显示
+      if ((state.round || 1) > 1) waveEl.textContent += ' · R' + state.round;
+      if (FIELD_EFFECT_NAMES[state.fieldEffect]) waveEl.textContent += ' · ' + FIELD_EFFECT_NAMES[state.fieldEffect];
+    }
+    // P22-⑭：场效变更横幅提示
+    if (state.fieldEffect !== lastFieldEffectShown) {
+      lastFieldEffectShown = state.fieldEffect;
+      if (state.fieldEffect) {
+        try { showToast('场效：「' + FIELD_EFFECT_NAMES[state.fieldEffect] + '」降临！'); } catch (e) {}
       }
     }
     // P21-B3：无尽段位徽章（按波次分段位，10 阶段后进入无尽按层进位）
