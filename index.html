@@ -7831,7 +7831,7 @@
         if (!active) {
           // 恢复波次强度
           currentLevel = -1;
-          setIntensity(state.wave || 1);
+          music.setIntensity(state.wave || 1);
           return;
         }
         var rIdx = Math.min(1, Math.max(0, rage - 1));
