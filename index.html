@@ -8197,6 +8197,7 @@
   var rafId = null;
   var gameSpeed = 1;          // P7：游戏倍速（1x / 2x / 4x）
   var slowUntil = 0;          // P22-①：终结击杀慢动作（命中反馈分级）
+  var lastKillFxAt = 0;       // P22-bugfix：击杀全屏特效冷却时间戳（连杀不再每帧闪屏）
   var phaseTitle = null;      // P22-③：Boss 转阶段台词横幅 {text,color,until}
   var firingRequested = false;
   var laserVisible = false;
@@ -12756,22 +12757,26 @@
         if (lk.affix && lk.affix !== 'none') lkCol = '#ff5a7a';
         spawnFloatingText(lk.x, lk.y - 14, '+' + lk.score, lkCol, lk.level >= 2 ? 16 : 12);
         // P22-①：命中反馈分级——终结(连击≥30)/ 重(大球级) / 中(中球级) / 轻(小球级)
-        if (state.combo >= 30) {
-          // 终结：0.15s 慢动作 + 全屏金闪 + 金尘二次粒子 + 顿帧
-          slowUntil = state.time + 0.15;
-          addFlash('rgba(255,209,102,0.35)', 130);
+        // P22-bugfix：全屏特效（金闪/慢动作/震屏）1.2 秒冷却——连杀时不再每帧闪屏；强度同步降低
+        var canBigFx = state.time - (lastKillFxAt || 0) > 1.2;
+        if (state.combo >= 30 && canBigFx) {
+          // 终结：短暂慢动作 + 柔和金闪 + 金尘粒子（冷却限制，不随连杀密集触发）
+          lastKillFxAt = state.time;
+          slowUntil = state.time + 0.1;
+          addFlash('rgba(255,209,102,0.14)', 110);
           spawnFloatingText(lk.x, lk.y - 40, '终结！', '#ffd166', 22);
-          addHitStop(20);
-          addShake(3, 150);
+          addHitStop(15);
+          addShake(2, 120);
           if (fxBudget().secondParticles) spawnGoldenDust(lk.x, lk.y);
-        } else if (lk.level >= 2) {
-          // 重：强顿帧 + 震屏 + 红闪
-          addHitStop(45);
-          addShake(5, 200);
-          addFlash('rgba(255,80,120,0.18)', 90);
+        } else if (lk.level >= 2 && canBigFx) {
+          // 重：轻顿帧 + 震屏 + 低强度红闪（冷却限制）
+          lastKillFxAt = state.time;
+          addHitStop(35);
+          addShake(4, 170);
+          addFlash('rgba(255,80,120,0.10)', 70);
         } else if (lk.level >= 1) {
           // 中：轻顿帧
-          addHitStop(30);
+          addHitStop(25);
         }
       }
       if (state.affixFx && state.affixFx.length) {
