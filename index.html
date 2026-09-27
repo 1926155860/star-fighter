@@ -765,11 +765,12 @@
       <button class="btn small" id="btn-difficulty-back">返 回</button>
     </div>
 
-    <!-- P3：关卡模式（通关目标波次） -->
+    <!-- 关卡模式（5 章 × 20 波，通关解锁下一章，全通解锁无尽） -->
     <div id="level" class="overlay">
       <div class="panel-title">关 卡 模 式</div>
-      <div class="diff-label">选定关卡后直接开局：抵达目标波次并清空战场即通关</div>
+      <div class="diff-label">每章 20 波 · 通关解锁下一章 · 全部通关解锁无尽模式 · 已通关章节为金色</div>
       <div class="difficulty-grid" id="level-grid"></div>
+      <div style="display:flex;justify-content:center;"><div id="btn-endless" style="display:none;"></div></div>
       <button class="btn small" id="btn-level-back">返 回</button>
     </div>
 
@@ -5890,6 +5891,9 @@
     // P17：武器解锁进度（maxWave=历史最高到达波数；unlockAll=兑换码全解锁）
     if (typeof p.maxWave !== 'number' || p.maxWave < 0) p.maxWave = 0;
     if (p.unlockAll === undefined) p.unlockAll = false;
+    // 关卡模式进度：lvClear=已通关章数(0-5)；endless=无尽模式解锁
+    if (typeof p.lvClear !== 'number' || p.lvClear < 0) p.lvClear = 0;
+    if (p.endless === undefined) p.endless = false;
     return p;
   }
 
@@ -6308,34 +6312,61 @@
     });
   }
 
-  // ===== P3/P8：章节化关卡（每章 10 波，章节 Boss 在章末波次出现，通关奖励星币） =====
+  // ===== 章节化关卡（每章 20 波，5 章；每章固定难度；通关解锁下一章，通关全部 5 章解锁无尽模式） =====
   var LEVELS = [
-    { target: 10, name: '第一章 · 星港突围', bonus: 60 },
-    { target: 20, name: '第二章 · 深空遇袭', bonus: 120 },
-    { target: 30, name: '第三章 · 星云封锁', bonus: 200 },
-    { target: 40, name: '第四章 · 熔岩战线', bonus: 300 },
-    { target: 50, name: '第五章 · 深渊之眼', bonus: 450 }
+    { target: 20, name: '第一章 · 星港突围', bonus: 60, difficulty: 2 },
+    { target: 40, name: '第二章 · 深空遇袭', bonus: 120, difficulty: 5 },
+    { target: 60, name: '第三章 · 星云封锁', bonus: 200, difficulty: 6 },
+    { target: 80, name: '第四章 · 熔岩战线', bonus: 300, difficulty: 8 },
+    { target: 100, name: '第五章 · 深渊之眼', bonus: 450, difficulty: 10 }
   ];
   var btnLevel = document.getElementById('btn-level');
   var btnLevelBack = document.getElementById('btn-level-back');
-  if (btnLevel) btnLevel.addEventListener('click', function () { showPanel('level'); });
+  if (btnLevel) btnLevel.addEventListener('click', function () { renderLevelPanel(); showPanel('level'); });
   if (btnLevelBack) btnLevelBack.addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
-  var levelGrid = document.getElementById('level-grid');
-  if (levelGrid) {
-    LEVELS.forEach(function (lv) {
+  function renderLevelPanel() {
+    var levelGrid = document.getElementById('level-grid');
+    if (!levelGrid) return;
+    levelGrid.innerHTML = '';
+    var lvClear = getProfile().lvClear || 0;
+    LEVELS.forEach(function (lv, idx) {
       var b = document.createElement('div');
-      b.className = 'diff-btn' + (settings.levelTarget === lv.target ? ' selected' : '');
+      var unlocked = idx <= lvClear;
+      b.className = 'diff-btn' + (settings.levelTarget === lv.target && unlocked ? ' selected' : '');
       b.style.cssText = 'width:auto;min-width:76px;font-size:14px;padding:14px 6px;';
-      b.textContent = lv.name;
-      b.title = '目标：第 ' + lv.target + ' 波 · 通关奖励 ★' + lv.bonus;
+      if (!unlocked) b.style.cssText += 'opacity:.45;filter:grayscale(.7);';
+      if (idx < lvClear) b.style.cssText += 'color:#ffd166;border-color:#ffd166;text-shadow:0 0 8px rgba(255,209,102,0.6);';
+      b.textContent = idx < lvClear ? '★ ' + lv.name : (idx === lvClear ? lv.name : '🔒 ' + lv.name);
+      b.title = '目标：第 ' + lv.target + ' 波（难度 ' + lv.difficulty + '）· 通关奖励 ★' + lv.bonus + (idx < lvClear ? ' · 已通关' : (idx === lvClear ? ' · 可挑战' : ' · 需先通关上一章'));
       b.addEventListener('click', function () {
+        if (idx > lvClear) { showToast('🔒 需先通关「' + LEVELS[idx - 1].name + '」才能解锁'); return; }
         settings.levelTarget = lv.target;
+        settings.difficulty = lv.difficulty;
         updateMenuConfig();
         showPanel('menu');
-        showToast('已选 ' + lv.name + ' · 通关目标第 ' + lv.target + ' 波');
+        showToast('已选 ' + lv.name + ' · 通关目标第 ' + lv.target + ' 波（难度 ' + lv.difficulty + '）');
       });
       levelGrid.appendChild(b);
     });
+    // 无尽模式：通关全部 5 章后解锁
+    var endlessBtn = document.getElementById('btn-endless');
+    if (endlessBtn) {
+      var unlockedEndless = lvClear >= LEVELS.length;
+      endlessBtn.style.display = 'block';
+      endlessBtn.className = 'diff-btn' + (settings.levelTarget === 0 && unlockedEndless ? ' selected' : '');
+      endlessBtn.style.cssText = 'width:auto;min-width:160px;font-size:15px;padding:14px 10px;margin-top:12px;';
+      if (!unlockedEndless) endlessBtn.style.cssText += 'opacity:.45;filter:grayscale(.7);';
+      else endlessBtn.style.cssText += 'color:#ffd166;border-color:#ffd166;text-shadow:0 0 10px rgba(255,209,102,0.7);';
+      endlessBtn.textContent = unlockedEndless ? '♾ 无尽模式' : '🔒 无尽模式（通关第五章解锁）';
+      endlessBtn.onclick = function () {
+        if (!unlockedEndless) { showToast('🔒 通关第五章后解锁无尽模式'); return; }
+        settings.levelTarget = 0;
+        settings.difficulty = 10;
+        updateMenuConfig();
+        showPanel('menu');
+        showToast('♾ 无尽模式 · 每 30 秒 +1 层难度，挑战无上限');
+      };
+    }
   }
 
   // P22-⑱⑲：PWA——Service Worker 注册（离线包缓存）+ 安装提示（可安装到桌面/主屏）
@@ -6626,14 +6657,14 @@
     state = GameCore.createGame();
   }
 
-  /** P3/P8：章节模式通关结算：额外奖励分 + 章节星币奖励，2 秒后返回主菜单 */
+  /** 章节模式通关结算：额外奖励分 + 章节星币奖励 + 记录通关并自动选择下一关（通关第五章解锁无尽） */
   function completeLevel() {
     if (state.levelDone) return;
     state.levelDone = true;
     state.status = 'gameover'; // 复用结算通道（防止继续吃子弹/死亡重复结算）
-    var bonus = 500 * Math.round((settings.levelTarget || 10) / 10);
-    state.score += bonus;
     var lvMeta = LEVELS.filter(function (l) { return l.target === settings.levelTarget; })[0];
+    var bonus = lvMeta ? lvMeta.target * 10 : 500;
+    state.score += bonus;
     var starBonus = lvMeta ? lvMeta.bonus : 0;
     if (starBonus > 0) {
       var p = getProfile();
@@ -6641,7 +6672,25 @@
       saveProfile(p);
       updateMenuStars();
     }
-    showToast('🎉 章节通关！奖励 +' + bonus + ' 分 ★' + starBonus);
+    // 记录通关进度并自动选择下一关
+    var lvIdx = LEVELS.findIndex(function (l) { return l.target === settings.levelTarget; });
+    if (lvIdx >= 0) {
+      var prof = getProfile();
+      prof.lvClear = Math.max(prof.lvClear || 0, lvIdx + 1);
+      if (prof.lvClear >= LEVELS.length) prof.endless = true;
+      saveProfile(prof);
+      if (lvIdx + 1 < LEVELS.length) {
+        var next = LEVELS[lvIdx + 1];
+        settings.levelTarget = next.target;
+        settings.difficulty = next.difficulty;
+        showToast('🎉 章节通关！奖励 +' + bonus + ' 分 ★' + starBonus + ' · 已解锁并选好下一章：' + next.name);
+      } else {
+        settings.levelTarget = 0;
+        showToast('🎉 全章节通关！奖励 +' + bonus + ' 分 ★' + starBonus + ' · 无尽模式已解锁');
+      }
+    } else {
+      showToast('🎉 章节通关！奖励 +' + bonus + ' 分 ★' + starBonus);
+    }
     if (recordScoreToRank()) {
       gameoverReturnScheduled = false;
       renderGameOverReport();
@@ -8814,7 +8863,7 @@
 
   function themeForWave(wave) {
     if (settings.levelTarget && settings.levelTarget > 0) {
-      var ch = Math.max(1, Math.ceil((settings.levelTarget || 10) / 10));
+      var ch = Math.max(1, Math.ceil((settings.levelTarget || 20) / 20));
       return BG_THEMES[(ch - 1) % BG_THEMES.length];
     }
     return BG_THEMES[Math.min(BG_THEMES.length - 1, Math.floor((wave - 1) / 10))];
@@ -10870,64 +10919,121 @@
       ctx.fillStyle = '#ff5a7a';
       ctx.fillText('🌟 超武 ×' + state.fusions.length, W - 10, 52);
     }
-    // 道具状态（左下角竖排）
-    var bx = 10, by = H - 20;
+    // 道具状态（左下角竖排——精致胶囊：半透明底 + 道具色描边 + 图标发光）
+    var bx = 8, by = H - 22;
     ctx.textAlign = 'left';
-    ctx.font = '11px "Bahnschrift","Consolas","SF Mono",monospace';
+    var pills = [];
     if (state.rageUntil > state.time) {
       var rr = Math.max(0, (state.rageUntil - state.time) / 6);
-      ctx.fillStyle = 'rgba(255,120,40,0.85)';
-      ctx.fillText('🔥 暴走 ' + rr.toFixed(1) + 's', bx, by); by -= 16;
+      pills.push({ icon: '🔥', label: '暴走', val: rr.toFixed(1) + 's', color: '#ff7a3d' });
     }
     if (state.shieldStacks > 0) {
-      ctx.fillStyle = '#7df0ff';
-      ctx.fillText('🛡 护盾 ×' + state.shieldStacks, bx, by); by -= 16;
+      pills.push({ icon: '🛡', label: '护盾', val: '×' + state.shieldStacks, color: '#7df0ff' });
       if (btnCrystal) btnCrystal.style.display = 'block';
     } else if (btnCrystal) {
       btnCrystal.style.display = 'none';
     }
     if (state.magnetUntil > state.time) {
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText('🧲 磁铁 ' + Math.max(0, state.magnetUntil - state.time).toFixed(1) + 's', bx, by); by -= 16;
+      pills.push({ icon: '🧲', label: '磁铁', val: Math.max(0, state.magnetUntil - state.time).toFixed(1) + 's', color: '#ffd166' });
     }
     if (state.crystalUntil > state.time) {
-      ctx.fillStyle = '#b0e8ff';
-      ctx.fillText('❄ 水晶化 ' + Math.max(0, state.crystalUntil - state.time).toFixed(1) + 's', bx, by);
+      pills.push({ icon: '❄', label: '水晶化', val: Math.max(0, state.crystalUntil - state.time).toFixed(1) + 's', color: '#b0e8ff' });
+    }
+    var pillH = 21, pillGap = 6;
+    for (var pi = 0; pi < pills.length; pi++) {
+      var pill = pills[pi];
+      var py = by - pi * (pillH + pillGap);
+      var labelW = 34;
+      var valW = 44;
+      var pw = 14 + 20 + labelW + 6 + valW + 8;
+      ctx.fillStyle = 'rgba(6,14,28,0.72)';
+      ctx.shadowColor = pill.color;
+      ctx.shadowBlur = 6;
+      roundRect(ctx, bx, py - pillH + 3, pw, pillH, 10);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = pill.color;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1;
+      roundRect(ctx, bx, py - pillH + 3, pw, pillH, 10);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.font = '12px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText(pill.icon, bx + 6, py - 2);
+      ctx.font = 'bold 10px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
+      ctx.fillStyle = '#bfe9ff';
+      ctx.fillText(pill.label, bx + 25, py - 2);
+      ctx.fillStyle = pill.color;
+      ctx.shadowColor = pill.color;
+      ctx.shadowBlur = 5;
+      ctx.font = 'bold 10px "Bahnschrift","Consolas","SF Mono",monospace';
+      ctx.fillText(pill.val, bx + 25 + labelW + 4, py - 2);
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }
 
-  /** P5：武器伤害统计面板——右侧从上到下显示各武器累计伤害 */
+  /** P5：武器伤害统计面板——右侧从上到下显示各武器累计伤害（精致卡片：渐变底+发光+分隔线） */
   function drawWeaponDamage() {
     var wd = state.weaponDamage || {};
     var keys = Object.keys(wd).filter(function (k) { return wd[k] > 0; });
     if (keys.length === 0) return;
     keys.sort(function (a, b) { return wd[b] - wd[a]; }); // 累计伤害降序
-    var panelW = 128;
+    var panelW = 136;
     var px = W - panelW - 8;
-    var lineH = 17;
-    var pad = 7;
+    var lineH = 19;
+    var pad = 8;
+    var headH = 24;
     var top = 78; // 避开顶部 DOM HUD
     ctx.save();
-    ctx.fillStyle = 'rgba(6,14,28,0.62)';
-    ctx.strokeStyle = 'rgba(125,240,255,0.28)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, px, top, panelW, pad * 2 + 16 + keys.length * lineH, 8);
+    // 渐变底 + 发光描边
+    var bgGrad = ctx.createLinearGradient(0, top, 0, top + headH + pad * 2 + keys.length * lineH);
+    bgGrad.addColorStop(0, 'rgba(10,22,52,0.9)');
+    bgGrad.addColorStop(1, 'rgba(4,10,28,0.82)');
+    ctx.fillStyle = bgGrad;
+    ctx.shadowColor = 'rgba(78,224,255,0.35)';
+    ctx.shadowBlur = 12;
+    roundRect(ctx, px, top, panelW, pad * 2 + headH + keys.length * lineH, 10);
     ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(78,224,255,0.55)';
+    ctx.lineWidth = 1.2;
+    roundRect(ctx, px, top, panelW, pad * 2 + headH + keys.length * lineH, 10);
     ctx.stroke();
-    ctx.fillStyle = '#8fe9ff';
-    ctx.font = 'bold 11px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
+    // 标题（发光）
+    ctx.fillStyle = '#7df0ff';
+    ctx.shadowColor = 'rgba(125,240,255,0.8)';
+    ctx.shadowBlur = 8;
+    ctx.font = 'bold 12px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('武器伤害', px + pad, top + pad + 10);
-    ctx.font = '10px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
-    var ly = top + pad + 26;
+    ctx.fillText('⚔ 武器伤害', px + pad, top + pad + 11);
+    ctx.shadowBlur = 0;
+    // 表头分隔线
+    ctx.strokeStyle = 'rgba(125,240,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px + 6, top + pad + 16);
+    ctx.lineTo(px + panelW - 6, top + pad + 16);
+    ctx.stroke();
+    var ly = top + pad + headH - 2;
     for (var i = 0; i < keys.length; i++) {
       var nm = WEAPON_NAMES[keys[i]] || keys[i];
-      ctx.fillStyle = '#cfe6ff';
+      // 行背景（当前武器高亮）
+      if (state.weapon === keys[i]) {
+        ctx.fillStyle = 'rgba(78,224,255,0.10)';
+        roundRect(ctx, px + 3, ly - 12, panelW - 6, lineH, 5);
+        ctx.fill();
+      }
+      ctx.fillStyle = state.weapon === keys[i] ? '#ffffff' : '#cfe6ff';
+      ctx.font = '11px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.fillText(nm, px + pad, ly);
       ctx.fillStyle = '#ffd166';
+      ctx.shadowColor = 'rgba(255,209,102,0.75)';
+      ctx.shadowBlur = 6;
+      ctx.font = 'bold 11px "Bahnschrift","Consolas","SF Mono",monospace';
       ctx.textAlign = 'right';
       ctx.fillText(fmtNum(wd[keys[i]]), px + panelW - pad, ly);
+      ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
       ly += lineH;
     }
