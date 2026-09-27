@@ -10479,11 +10479,12 @@
     ctx.shadowColor = c1;
     ctx.shadowBlur = 16;
     var theme = boss.theme || 'demon';
-    // P25：Boss 主题形象图——命中内置 10 款主题图且已加载时直接渲染图片（contain 等比、不裁切、保留动态漂浮/抖动由外层 transform 承担）
+    // P25f：Boss 主题形象图——命中内置 20 款主题图且已加载时直接渲染图片
+    // 绘制放大 1.35 倍裁掉背景边（Boss 本体视觉更大，与高清原图观感一致；碰撞框仍用 boss.width/height 不受影响）
     var _tImg = BOSS_THEME_IMG[theme];
     if (_tImg && _tImg.complete && _tImg.naturalWidth > 0) {
       var _tw = _tImg.naturalWidth, _th = _tImg.naturalHeight;
-      var _tk = Math.min((w * 0.94) / _tw, (h * 0.94) / _th);
+      var _tk = Math.min((w * 1.35) / _tw, (h * 1.35) / _th);
       ctx.drawImage(_tImg, -(_tw * _tk) / 2, -(_th * _tk) / 2, _tw * _tk, _th * _tk);
       ctx.restore();
       return;
