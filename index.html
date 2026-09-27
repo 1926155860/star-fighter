@@ -4599,40 +4599,66 @@
     if (!list) return;
     list.innerHTML = '';
     var items = [
-      { id: 'hp', name: '生命上限 +1', desc: '开局生命 +1（最高 5 级，当前 ' + p.upgrades.hp + ' 级）', cost: UPGRADE_COSTS.hp, max: 5 },
-      { id: 'multishot', name: '初始弹道 +1', desc: '开局弹道 +1（总上限 5，当前 ' + p.upgrades.multishot + ' 级）', cost: UPGRADE_COSTS.multishot, max: 5 },
-      { id: 'damage', name: '初始攻击 +1', desc: '开局伤害加成 +1（最高 5 级，当前 ' + p.upgrades.damage + ' 级）', cost: UPGRADE_COSTS.damage, max: 5 }
+      { id: 'hp', icon: '❤', name: '生命上限 +1', desc: '开局生命 +1（最高 5 级，当前 ' + p.upgrades.hp + ' 级）', cost: UPGRADE_COSTS.hp, max: 5 },
+      { id: 'multishot', icon: '▮▮', name: '初始弹道 +1', desc: '开局弹道 +1（总上限 5，当前 ' + p.upgrades.multishot + ' 级）', cost: UPGRADE_COSTS.multishot, max: 5 },
+      { id: 'damage', icon: '⚔', name: '初始攻击 +1', desc: '开局伤害加成 +1（最高 5 级，当前 ' + p.upgrades.damage + ' 级）', cost: UPGRADE_COSTS.damage, max: 5 }
     ];
     items.forEach(function (it) {
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(10,24,52,0.85);border:1px solid #2b4a7d;border-radius:8px;';
-      row.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-size:14px;color:#dff1ff;">' + it.name + '</div><div style="font-size:11px;color:#8aa0c8;margin-top:2px;">' + it.desc + '</div></div>';
-      var btn = document.createElement('button');
-      btn.className = 'btn small';
+      var lv = p.upgrades[it.id] || 0;
       var canBuy = p.stars >= it.cost;
-      if (it.id === 'multishot' && p.upgrades.multishot + settings.multishot >= 5) { canBuy = false; btn.textContent = '弹道已满'; }
-      if (it.max && p.upgrades[it.id] >= it.max) { canBuy = false; btn.textContent = '已达上限'; }
-      if (canBuy) btn.textContent = '升级 ★' + it.cost;
-      else { btn.textContent = btn.textContent || ('★' + it.cost + ' 不足'); btn.style.opacity = '0.5'; }
-      btn.disabled = !canBuy;
-      btn.addEventListener('click', function () {
-        var pp = getProfile();
-        if (pp.stars < it.cost) { showToast('星币不足'); return; }
-        if (it.id === 'multishot' && pp.upgrades.multishot + settings.multishot >= 5) { showToast('弹道已达上限 5'); return; }
-        if (it.max && pp.upgrades[it.id] >= it.max) { showToast(it.name + ' 已达上限 ' + it.max); return; }
-        pp.stars -= it.cost;
-        pp.upgrades[it.id] = (pp.upgrades[it.id] || 0) + 1;
-        saveProfile(pp);
-        renderUpgradeList();
-        updateMenuStars();
-        audio.powerup();
-        showToast(it.name + ' 成功！');
-      });
-      row.appendChild(btn);
-      list.appendChild(row);
+      var extraFull = false;
+      if (it.id === 'multishot' && p.upgrades.multishot + settings.multishot >= 5) { canBuy = false; extraFull = true; }
+      if (it.max && lv >= it.max) { canBuy = false; extraFull = true; }
+      list.appendChild(buildUpgradeCard({
+        icon: it.icon, name: it.name, lv: lv, max: it.max, desc: it.desc,
+        cost: it.cost, canBuy: canBuy, full: extraFull,
+        onBuy: function () {
+          var pp = getProfile();
+          if (pp.stars < it.cost) { showToast('星币不足'); return; }
+          if (it.id === 'multishot' && pp.upgrades.multishot + settings.multishot >= 5) { showToast('弹道已达上限 5'); return; }
+          if (it.max && (pp.upgrades[it.id] || 0) >= it.max) { showToast(it.name + ' 已达上限 ' + it.max); return; }
+          pp.stars -= it.cost;
+          pp.upgrades[it.id] = (pp.upgrades[it.id] || 0) + 1;
+          saveProfile(pp);
+          renderUpgradeList();
+          updateMenuStars();
+          audio.powerup();
+          showToast(it.name + ' 成功！');
+        }
+      }));
     });
     // P11：局外核心强化（方案1-D）——成长页第三栏
     renderCoreUpgrades(p);
+  }
+
+  /** P12f：武器成长卡片（图标 + 等级进度条 + 状态高亮按钮，供通用/专精/核心共用） */
+  function buildUpgradeCard(o) {
+    var row = document.createElement('div');
+    var maxed = o.full || (o.lv >= o.max);
+    var accent = maxed ? '#3ddc84' : (o.canBuy ? '#4ee0ff' : '#2b4a7d');
+    var pct = o.max > 0 ? Math.min(100, Math.round((o.lv / o.max) * 100)) : 100;
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(135deg,rgba(16,34,68,0.92),rgba(8,18,42,0.92));border:1px solid ' + accent + ';border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,0.25),inset 0 0 22px rgba(30,90,180,0.06);';
+    // 图标徽章
+    var badge = document.createElement('div');
+    badge.style.cssText = 'flex:0 0 40px;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:' + (maxed ? 'rgba(61,220,132,0.16)' : o.canBuy ? 'rgba(78,224,255,0.16)' : 'rgba(43,74,125,0.35)') + ';border:1px solid ' + accent + ';';
+    badge.textContent = o.icon || '◆';
+    row.appendChild(badge);
+    // 信息区
+    var info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+    info.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;color:#eaf4ff;font-weight:600;">' + o.name + '</span><span style="font-size:10px;color:' + (maxed ? '#3ddc84' : '#8aa0c8') + ';background:rgba(255,255,255,0.06);padding:1px 7px;border-radius:8px;">' + (maxed ? 'MAX' : 'Lv.' + o.lv + ' / ' + o.max) + '</span></div>' +
+      '<div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin:6px 0 5px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,' + (maxed ? '#3ddc84' : '#4ee0ff') + ',#7df0ff);border-radius:3px;"></div></div>' +
+      '<div style="font-size:11px;color:#8aa0c8;line-height:1.5;">' + o.desc + '</div>';
+    row.appendChild(info);
+    // 按钮
+    var btn = document.createElement('button');
+    btn.className = 'btn small';
+    if (maxed) { btn.textContent = '已达上限'; btn.style.opacity = '0.55'; btn.disabled = true; }
+    else if (o.canBuy) { btn.textContent = '升 级 ★' + o.cost; btn.style.cssText += 'background:linear-gradient(135deg,#f5c543,#ff9f43);color:#1a1020;border:1px solid #ffd166;font-weight:700;'; }
+    else { btn.textContent = '★' + o.cost + ' 不足'; btn.style.opacity = '0.5'; btn.disabled = true; }
+    btn.addEventListener('click', function () { if (o.onBuy) o.onBuy(); });
+    row.appendChild(btn);
+    return row;
   }
 
   /** P11：局外核心强化渲染（暴走延脉/拾取回血/满血增伤/双倍道具） */
@@ -4642,32 +4668,25 @@
     list.innerHTML = '';
     (GameCore.DEFAULT_CONFIG.coreUpgrades || []).forEach(function (cu) {
       var lv = p.coreUpgrade && p.coreUpgrade[cu.id] || 0;
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(10,30,58,0.85);border:1px solid #2b5a8d;border-radius:8px;';
-      row.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-size:14px;color:#e6f7ff;">' + cu.name + ' <span style="color:#7df0ff;font-size:11px;">' + lv + '/' + cu.max + '级</span></div><div style="font-size:11px;color:#8aa0c8;margin-top:2px;">' + cu.desc + '</div></div>';
-      var btn = document.createElement('button');
-      btn.className = 'btn small';
       var canBuy = p.stars >= cu.cost && lv < cu.max;
-      if (lv >= cu.max) { btn.textContent = '已达上限'; btn.style.opacity = '0.5'; }
-      else if (canBuy) btn.textContent = '升级 ★' + cu.cost;
-      else { btn.textContent = '★' + cu.cost + ' 不足'; btn.style.opacity = '0.5'; }
-      btn.disabled = !canBuy;
-      btn.addEventListener('click', function () {
-        var pp = getProfile();
-        var cur = pp.coreUpgrade && pp.coreUpgrade[cu.id] || 0;
-        if (pp.stars < cu.cost) { showToast('星币不足'); return; }
-        if (cur >= cu.max) { showToast(cu.name + ' 已达上限'); return; }
-        pp.stars -= cu.cost;
-        pp.coreUpgrade = pp.coreUpgrade || {};
-        pp.coreUpgrade[cu.id] = cur + 1;
-        saveProfile(pp);
-        renderUpgradeList();
-        updateMenuStars();
-        audio.powerup();
-        showToast(cu.name + ' 成功！');
-      });
-      row.appendChild(btn);
-      list.appendChild(row);
+      list.appendChild(buildUpgradeCard({
+        icon: cu.icon || '★', name: cu.name, lv: lv, max: cu.max, desc: cu.desc,
+        cost: cu.cost, canBuy: canBuy, full: lv >= cu.max,
+        onBuy: function () {
+          var pp = getProfile();
+          var cur = pp.coreUpgrade && pp.coreUpgrade[cu.id] || 0;
+          if (pp.stars < cu.cost) { showToast('星币不足'); return; }
+          if (cur >= cu.max) { showToast(cu.name + ' 已达上限'); return; }
+          pp.stars -= cu.cost;
+          pp.coreUpgrade = pp.coreUpgrade || {};
+          pp.coreUpgrade[cu.id] = cur + 1;
+          saveProfile(pp);
+          renderUpgradeList();
+          updateMenuStars();
+          audio.powerup();
+          showToast(cu.name + ' 成功！');
+        }
+      }));
     });
   }
 
@@ -4719,33 +4738,27 @@
       var lv = m[b.id] || 0;
       var maxed = lv >= GameCore.DEFAULT_CONFIG.masteryMax;
       var cost = maxed ? 0 : MASTERY_COSTS[Math.min(MASTERY_COSTS.length - 1, lv + 1)];
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(10,24,52,0.85);border:1px solid ' + (maxed ? '#3ddc84' : '#2b4a7d') + ';border-radius:8px;';
-      row.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-size:14px;color:#dff1ff;">' + b.name + ' <span style="font-size:10px;color:#8aa0c8;">Lv.' + lv + (maxed ? '（已满）' : '/' + GameCore.DEFAULT_CONFIG.masteryMax) + '</span></div><div style="font-size:11px;color:#8aa0c8;margin-top:2px;">' + b.desc + '</div></div>';
-      var btn = document.createElement('button');
-      btn.className = 'btn small';
       var canBuy = !maxed && p.stars >= cost;
-      if (maxed) { btn.textContent = '已满级'; btn.style.opacity = '0.5'; btn.disabled = true; }
-      else if (canBuy) btn.textContent = '升级 ★' + cost;
-      else { btn.textContent = '★' + cost + ' 不足'; btn.style.opacity = '0.5'; btn.disabled = true; }
-      btn.addEventListener('click', function () {
-        var pp = getProfile();
-        pp.mastery = pp.mastery || {};
-        pp.mastery[masteryWeapon] = pp.mastery[masteryWeapon] || {};
-        var cur = pp.mastery[masteryWeapon][b.id] || 0;
-        if (cur >= GameCore.DEFAULT_CONFIG.masteryMax) { showToast(b.name + ' 已满级'); return; }
-        var c = MASTERY_COSTS[Math.min(MASTERY_COSTS.length - 1, cur + 1)];
-        if (pp.stars < c) { showToast('星币不足（需 ★' + c + '）'); return; }
-        pp.stars -= c;
-        pp.mastery[masteryWeapon][b.id] = cur + 1;
-        saveProfile(pp);
-        renderMasteryPanel();
-        updateMenuStars();
-        audio.powerup();
-        showToast(masteryWeapon + '·' + b.name + ' 升至 Lv.' + (cur + 1) + '！');
-      });
-      row.appendChild(btn);
-      branches.appendChild(row);
+      branches.appendChild(buildUpgradeCard({
+        icon: b.icon || '◆', name: b.name, lv: lv, max: GameCore.DEFAULT_CONFIG.masteryMax, desc: b.desc,
+        cost: cost, canBuy: canBuy, full: maxed,
+        onBuy: function () {
+          var pp = getProfile();
+          pp.mastery = pp.mastery || {};
+          pp.mastery[masteryWeapon] = pp.mastery[masteryWeapon] || {};
+          var cur = pp.mastery[masteryWeapon][b.id] || 0;
+          if (cur >= GameCore.DEFAULT_CONFIG.masteryMax) { showToast(b.name + ' 已满级'); return; }
+          var c = MASTERY_COSTS[Math.min(MASTERY_COSTS.length - 1, cur + 1)];
+          if (pp.stars < c) { showToast('星币不足（需 ★' + c + '）'); return; }
+          pp.stars -= c;
+          pp.mastery[masteryWeapon][b.id] = cur + 1;
+          saveProfile(pp);
+          renderMasteryPanel();
+          updateMenuStars();
+          audio.powerup();
+          showToast(masteryWeapon + '·' + b.name + ' 升至 Lv.' + (cur + 1) + '！');
+        }
+      }));
     });
   }
 
@@ -6192,6 +6205,7 @@
     flame: glowSprite('eb-flame', 44, 'rgba(255,243,208,0.95)', 'rgba(255,140,43,0.9)'),
     special: glowSprite('eb-special', 32, 'rgba(255,255,255,0.98)', 'rgba(255,82,82,0.9)'),
     red: glowSprite('eb-red', 32, 'rgba(255,255,255,0.95)', 'rgba(255,43,77,0.9)'),
+    darkred: glowSprite('eb-darkred', 32, 'rgba(255,255,255,0.98)', 'rgba(178,6,6,0.95)'), // P12f：不可抵消弹幕深红光晕
     bolt: glowSprite('eb-bolt', 32, 'rgba(255,255,255,0.95)', 'rgba(191,233,255,0.9)'),
     cyan: glowSprite('eb-cyan', 32, 'rgba(255,255,255,0.95)', 'rgba(125,240,255,0.9)')
   };
@@ -7336,6 +7350,23 @@
       ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, eb.width * 0.38, eb.height * 0.38, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+      ctx.restore();
+      return;
+    }
+    // P12f：不可抵消弹幕统一深红色样式（Boss 弹幕 / 自爆弹 / 分裂溢出 / 克隆红弹）
+    if (eb.noCancel) {
+      ctx.drawImage(EB_SPRITES.darkred, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
+      ctx.fillStyle = '#c40d0d';
+      ctx.beginPath();
+      ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1.5, eb.width * 0.34), Math.max(1.5, eb.height * 0.34), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#6e0000';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1, eb.width * 0.13), 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
       return;
     }
