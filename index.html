@@ -737,6 +737,9 @@
       <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">武 器 专 精</div>
       <div id="mastery-weapon-tabs" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:10px;"></div>
       <div id="mastery-branches" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+      <!-- P11：局外核心强化（方案1-D，成长页第三栏） -->
+      <div style="font-size:13px;color:#7df0ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">局 外 核 心 强 化</div>
+      <div id="core-upgrade-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
       <div class="hint">每次游戏结束，得分按 ★10 分 = 1 星币 结算<br>通用强化所有武器共享 · 专精按武器独立生效</div>
       <button class="btn small" id="btn-upgrade-back">返 回</button>
     </div>
@@ -761,6 +764,35 @@
     <div style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">三选一 · 立即生效</div>
     <div id="buff-options" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
+
+  <!-- P11：升级三选一（弹壳方向：经验升级 → 技能三选一 → 融合超武） -->
+  <div id="skill-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:45;width:min(94vw,500px);background:rgba(3,8,30,0.97);border:1px solid #c9a7e8;border-radius:14px;padding:16px 18px;text-align:center;box-shadow:0 0 34px rgba(201,167,232,0.4);">
+    <div style="font-size:17px;color:#c9a7e8;letter-spacing:3px;margin-bottom:2px;">⚡ 等 级 提 升</div>
+    <div id="skill-panel-lv" style="font-size:12px;color:#8aa0c8;margin-bottom:10px;">Lv 2 · 选择一项能力</div>
+    <div id="skill-options" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+
+  <!-- P11：战前祝福商店（方案1-C） -->
+  <div id="bless-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:46;width:min(94vw,500px);background:rgba(3,8,30,0.97);border:1px solid #ffd166;border-radius:14px;padding:16px 18px;text-align:center;box-shadow:0 0 34px rgba(255,209,102,0.4);">
+    <div style="font-size:17px;color:#ffd166;letter-spacing:3px;margin-bottom:2px;">✦ 战 前 祝 福</div>
+    <div id="bless-stars" style="font-size:12px;color:#8aa0c8;margin-bottom:10px;">消耗星币购买一项开局祝福</div>
+    <div id="bless-options" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <button type="button" id="btn-bless-skip" class="btn small" style="margin-top:12px;">不 购 买</button>
+  </div>
+
+  <!-- P11：复活确认（方案1-E） -->
+  <div id="revive-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:47;width:min(88vw,400px);background:rgba(30,4,14,0.97);border:1px solid #ff5a7a;border-radius:14px;padding:20px 18px;text-align:center;box-shadow:0 0 34px rgba(255,90,122,0.45);">
+    <div style="font-size:18px;color:#ff5a7a;letter-spacing:2px;margin-bottom:8px;">💔 战 机 损 毁</div>
+    <div id="revive-cost-text" style="font-size:13px;color:#ffd27d;margin-bottom:6px;">消耗 ★500 复活（本局仅一次）</div>
+    <div style="font-size:11px;color:#8aa0c8;margin-bottom:16px;">复活后恢复一半生命 · 清空敌弹</div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button type="button" id="btn-revive-yes" class="btn primary" style="flex:1;">复 活</button>
+      <button type="button" id="btn-revive-no" class="btn small" style="flex:1;">放 弃</button>
+    </div>
+  </div>
+
+  <!-- P11：护盾水晶主动技能按钮 -->
+  <button type="button" id="btn-crystal" title="护盾水晶：敌弹变水晶计分" style="display:none;position:fixed;left:14px;bottom:90px;z-index:30;padding:10px 12px;font-size:14px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.85);border:1px solid #7df0ff;border-radius:10px;box-shadow:0 0 12px rgba(125,240,255,0.35);pointer-events:auto;cursor:pointer;">❄ 水晶</button>
 
   <script>/**
  * game-core.js — 星际战机核心游戏逻辑（纯函数，不依赖 DOM，可在 Node 中测试）
@@ -849,6 +881,77 @@
     comboWindow: 3,          // 连击保持窗口（秒）：窗口内继续击杀续连击
     comboStep: 0.02,         // 每层连击加分倍率 +2%
     comboCap: 50,            // 连击上限 50 层（最高 2 倍分）
+
+    // ============ P11：方案1+2 并行（雷霆×弹壳）肉鸽技能模型 ============
+    // 经验与升级
+    expPerKill: 3,            // 击杀普通敌人获得经验
+    expBossMult: 12,          // Boss 击杀经验倍率
+    expBaseNeed: 12,          // 1 级升级所需经验
+    expGrow: 1.25,            // 每级经验需求增长
+    expLevelMax: 60,          // 最高等级
+    rogueSkillMax: 5,         // 技能满级（5 星触发融合）
+    // 三选一卡池（主动技能 id 与武器映射；被动技能独立）
+    rogueActivePool: ['gun', 'cannon', 'laser', 'boomerang', 'saber', 'homing', 'charge', 'flamethrower', 'lightning', 'energyball', 'drone', 'guardian'],
+    roguePassivePool: ['atk', 'speed', 'multi', 'range', 'dur', 'cdr', 'magnet', 'leech', 'pierce', 'crit'],
+    rogueNewSkills: {
+      energyball: { label: '能量球', desc: '弹跳光球，左右反弹伤害敌人' },
+      drone: { label: '自动无人机', desc: '自动向最近敌人扫射' },
+      guardian: { label: '守卫者', desc: '环绕护盾球，触碰敌人造成伤害' }
+    },
+    roguePassives: {
+      atk: { label: '攻击力', desc: '伤害 +25%/级' },
+      speed: { label: '攻速', desc: '冷却 -12%/级' },
+      multi: { label: '弹道', desc: '弹道 +1/级' },
+      range: { label: '范围', desc: '子弹/光束尺寸 +18%/级' },
+      dur: { label: '持续时间', desc: '特效与弹道存留 +15%/级' },
+      cdr: { label: '冷却缩减', desc: '技能节奏加快（攻速 -8%/级）' },
+      magnet: { label: '磁铁', desc: '道具自动吸附 +40%/级' },
+      leech: { label: '吸血', desc: '击杀回复 1 点生命（吞噬者回球血）/级' },
+      pierce: { label: '穿透', desc: '子弹穿透 +1 个敌人/级' },
+      crit: { label: '暴击', desc: '暴击率 +10%、暴伤 +50%/级' }
+    },
+    // 超武融合表（双技能满级融合；fuse 键为 {主+副}）
+    fusionTable: [
+      { a: 'boomerang', b: 'magnet', id: 'fmagboomerang', name: '磁力回旋镖', desc: '环绕扩散·自动追踪' },
+      { a: 'lightning', b: 'cdr', id: 'fstorm', name: '狂雷电池', desc: '连锁 +3·全屏雷暴' },
+      { a: 'saber', b: 'leech', id: 'fbloodsaber', name: '血魔刃', desc: '斩杀回血·范围翻倍' },
+      { a: 'homing', b: 'pierce', id: 'fghost', name: '幽灵导弹', desc: '无限追踪·穿透全部' },
+      { a: 'gun', b: 'speed', id: 'fgatling', name: '加特林风暴', desc: '弹量×3·扇形扫射' },
+      { a: 'laser', b: 'range', id: 'flasermatrix', name: '激光矩阵', desc: '三道全屏光束交叉' }
+    ],
+    // 战斗掉落道具（方案1-A）
+    combatDropChance: 0.16,   // 击杀掉落概率
+    combatDrops: {
+      rage: { label: '暴走', desc: '火力×2·积分×2（6s）', base: 6 },
+      shield: { label: '护盾', desc: '抵消伤害·可把敌弹变水晶', base: 1 },
+      heal: { label: '回血', desc: '恢复生命', base: 1 },
+      magnet: { label: '磁铁', desc: '道具自动吸附（8s）', base: 8 }
+    },
+    combatDropRarity: [0.62, 0.28, 0.1], // 白/蓝/金
+    // 武器特技词条（方案1-B）
+    traitPool: [
+      { id: 'pierce', name: '贯穿', desc: '弹体穿透敌人继续飞行', max: 3 },
+      { id: 'splash', name: '溅射', desc: '命中扩散伤害相邻敌人', max: 3 },
+      { id: 'field', name: '领域', desc: '命中残留灼烧区域', max: 2 },
+      { id: 'leech', name: '吸血', desc: '击杀回复生命', max: 2 },
+      { id: 'ward', name: '御伤', desc: '每波首次受击只扣 1 点', max: 1 }
+    ],
+    // 战前祝福（方案1-C）
+    blessings: [
+      { id: 'brage', name: '开局暴走', desc: '开局 6 秒暴走', cost: 150 },
+      { id: 'bshield', name: '开局护盾', desc: '开局获得 2 层护盾', cost: 120 },
+      { id: 'ball', name: '全属性+5%', desc: '伤害·攻速·弹道各小幅提升', cost: 200 },
+      { id: 'bmulti', name: '开局弹道+1', desc: '初始弹道 +1', cost: 180 },
+      { id: 'bdrop', name: '首波史诗', desc: '第 1 波必掉金色道具', cost: 220 }
+    ],
+    // 局外核心强化（方案1-D，成长页第三栏；等级 0~3）
+    coreUpgrades: [
+      { id: 'cuRage', name: '暴走延脉', desc: '暴走时长 +1 秒/级', cost: 120, max: 3 },
+      { id: 'cuHeal', name: '拾取回血', desc: '拾取任意道具回 1 点生命/级', cost: 100, max: 3 },
+      { id: 'cuFullDmg', name: '满血增伤', desc: '满血时伤害 +15%/级', cost: 150, max: 3 },
+      { id: 'cuDouble', name: '双倍道具', desc: '道具升级 30% 概率触发两次/级', cost: 160, max: 3 }
+    ],
+    reviveCost: 500,          // 方案1-E：复活消耗星币
 
     // 波次关卡（替代时间驱动难度）
     waveBreakDuration: 2.5,  // 波间休息时长
@@ -1112,6 +1215,27 @@
       devourSkillTimer: 0,          // 吞噬者技能周期计时
       chainBonus: 0,                // P6：雷电专属强化——连锁次数 +1（波间强化必刷，上限 10）
       relics: [],                   // P8：局内遗物（波间强化获得，双刃剑效果）
+      // ============ P11：方案1+2 肉鸽系统状态 ============
+      exp: 0,                       // 当前经验
+      expLevel: 1,                  // 等级（击杀→经验→升级三选一）
+      expNeed: cfg.expBaseNeed,     // 升级所需经验
+      rogueSkills: {},              // 主动技能星级 {skillId: 1~5}
+      roguePassives: {},            // 被动技能星级 {passiveId: 1~5}
+      fusions: [],                  // 已融合超武 id 列表
+      traits: [],                   // 武器特技词条（方案1-B）
+      // 战斗道具状态（方案1-A）
+      rageUntil: 0,                 // 暴走结束时间
+      shieldStacks: 0,              // 护盾层数
+      crystalUntil: 0,              // 敌弹变水晶窗口
+      magnetUntil: 0,               // 磁铁吸附窗口
+      lootTimer: 0,                 // 掉落道具显示计时
+      // 局外/祝福/复活
+      blessing: null,               // 战前祝福 id
+      coreUpgrade: (cfg.coreUpgrade) ? merge({}, cfg.coreUpgrade) : {}, // 局外核心强化等级 {cuId: 0~3}
+      reviveUsed: false,            // 本局是否已复活
+      // 三选一（升级时由 rollSkillChoices 填充，前端展示后 applySkillChoice）
+      pendingSkillChoices: [],      // [{kind:'active'|'passive'|'fusion', id, level}]
+      fusionReadyIds: [],           // 当前可融合的超武 id（升级后重算）
       weaponDamage: {},             // P5：各武器累计伤害（右侧伤害面板数据源）
       codexEvents: []               // 本帧内遇到的新实体（图鉴解锁用，前端消费后清空）
     };
@@ -1501,6 +1625,10 @@
     // P8：专精「多重」分支 +1/级（上限 5）；遗物「超载芯片」弹道 -1（下限 1）；蜂巢无本体武器，不叠加
     var multi = (state.weapon === 'hswarm') ? 0 : (getMastery(state, state.weapon).multi || 0);
     var count = Math.min(state.config.multishotMax, 1 + state.multishotLevel + multi + getRelicFxs(state).multishot);
+    // P11：被动「弹道」每级 +1（不突破 5 条上限，仅叠加到上限）
+    count = Math.min(state.config.multishotMax, count + getPassiveLevel(state, 'multi'));
+    // P11：超武「加特林风暴」（机枪+攻速融合）弹量×3 扇形，无视上限
+    if (hasFusion(state, 'fgatling') && state.weapon === 'gun') return Math.max(3, count * 3);
     return Math.max(1, count);
   }
 
@@ -1508,21 +1636,25 @@
   function getFireCooldown(state) {
     var rapid = getMastery(state, state.weapon).rapid || 0;
     var factor = Math.max(0.2, 1 - rapid * 0.12);
-    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed;
+    // P11：被动「攻速」每级 -12%、「冷却缩减」每级 -8%（叠乘，下限 0.1）
+    var rogueFactor = Math.max(0.1, (1 - getPassiveLevel(state, 'speed') * 0.12) * (1 - getPassiveLevel(state, 'cdr') * 0.08));
+    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor;
   }
 
-  /** 激光当前 DPS（含伤害加成与武器升级；P8 专精：加长 +20%/级、穿透 +25%/级） */
+  /** 激光当前 DPS（含伤害加成与武器升级；P8 专精：加长 +20%/级、穿透 +25%/级；P11：被动伤害 + 超武矩阵） */
   function getLaserDps(state) {
     var cfg = state.config;
     var wcfg = cfg.weapons.laser;
     var m = getMastery(state, 'laser');
     var masteryMul = 1 + ((m.long || 0) * 0.2 + (m.pierce || 0) * 0.25);
-    return (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser')) * getShipFireFactor(state) * masteryMul;
+    var rogueMul = getRogueDmgMult(state);
+    if (hasFusion(state, 'flasermatrix')) rogueMul *= 1.5; // 激光矩阵：三道光束交叉 → DPS +50%
+    return (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser')) * getShipFireFactor(state) * masteryMul * rogueMul;
   }
 
-  /** 子弹尺寸系数（道具加成，每级 +25%） */
+  /** 子弹尺寸系数（道具加成每级 +25%；P11 被动「范围」每级 +18%） */
   function getBulletSize(state) {
-    return 1 + state.bulletSizeBonus * state.config.bulletSizeStep;
+    return (1 + state.bulletSizeBonus * state.config.bulletSizeStep) * (1 + getPassiveLevel(state, 'range') * 0.18);
   }
 
   /** 激光光束宽度（道具加成每级 +3px；P8 专精「加粗」每级 +30%） */
@@ -1579,7 +1711,9 @@
       // 弹道+1 → 光刃数量+1；"增加激光"道具 → 光刃长度增加
       var bladeW = Math.max(4, wcfg.bulletWidth);
       var bladeH = Math.max(8, wcfg.bulletHeight + state.laserWidthBonus * wcfg.bladeLengthStep);
-      var dmg = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state)));
+      // P11：超武「血魔刃」（光刃+吸血）范围翻倍
+      if (hasFusion(state, 'fbloodsaber')) { bladeW *= 2; bladeH *= 2; }
+      var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state) * getRogueDmgMult(state))));
       var existing = 0;
       for (var eix = 0; eix < state.bullets.length; eix++) {
         if (state.bullets[eix].type === 'saberblade') existing++;
@@ -1606,7 +1740,7 @@
       return true;
     }
 
-    var damage = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state)));
+    var damage = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state) * getRogueDmgMult(state))));
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
@@ -1616,6 +1750,11 @@
       var bx = p.x + p.width / 2 + offset - bw / 2;
       var by = p.y - bh;
       var btype = (state.weapon === 'lightning') ? 'lightningbolt' : state.weapon;
+      // P11：超武「磁力回旋镖」（回旋镖+磁铁）自动追踪最近敌人
+      var bvx = 0;
+      if (state.weapon === 'boomerang') {
+        bvx = hasFusion(state, 'fmagboomerang') ? 0 : (Math.random() * 2 - 1) * 90;
+      }
       state.bullets.push({
         id: newId(state),
         type: btype,
@@ -1623,7 +1762,7 @@
         y: by,
         width: bw,
         height: bh,
-        vx: state.weapon === 'boomerang' ? (Math.random() * 2 - 1) * 90 : 0,
+        vx: bvx,
         vy: -wcfg.bulletSpeed,
         damage: damage,
         life: 0,
@@ -1650,7 +1789,7 @@
     var sizeMul = getBulletSize(state);
     var bw = Math.min(wcfg.bulletWidth + wcfg.chargeSizeMax * charge, wcfg.bulletWidth + wcfg.chargeSizeMax) * sizeMul;
     var bh = Math.min(wcfg.bulletHeight + wcfg.chargeSizeMax * charge, wcfg.bulletHeight + wcfg.chargeSizeMax) * sizeMul;
-    var dmg = Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state)));
+    var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state))));
     var speed = wcfg.bulletSpeed + 260 * charge;
     // 按初始弹道数量平行发射多颗蓄力弹（弹丸宽，间隔按弹丸尺寸自适应避免重叠）
     var count = getBulletCount(state);
@@ -1930,6 +2069,11 @@
     if (o.red) b.red = true;
     if (o.flame) b.flame = true;
     if (o.damage !== undefined) b.damage = o.damage;
+    // P11：护盾水晶窗口——期间新生成的敌弹直接水晶化（计分）
+    if (state.crystalUntil > state.time) {
+      state.score += 5;
+      return null;
+    }
     state.enemyBullets.push(b);
     return state.enemyBullets[state.enemyBullets.length - 1];
   }
@@ -2019,9 +2163,376 @@
           state.relics.push(opts.id);
         }
         break;
+      case 'trait':
+        // P11：武器特技词条（贯穿/溅射/领域/吸血/御伤），波间强化获得，累计不超过词条上限
+        if (opts && opts.traitId) {
+          var tcount = 0;
+          for (var t0 = 0; t0 < state.traits.length; t0++) if (state.traits[t0] === opts.traitId) tcount++;
+          var tmax = 3;
+          for (var t1 = 0; t1 < cfg.traitPool.length; t1++) {
+            if (cfg.traitPool[t1].id === opts.traitId) tmax = cfg.traitPool[t1].max;
+          }
+          if (tcount < tmax) state.traits.push(opts.traitId);
+        }
+        break;
       default: break;
     }
     return state;
+  }
+
+  // ==================== P11：方案1+2 肉鸽技能模型（雷霆×弹壳） ====================
+
+  function getPassiveLevel(state, id) { return state.roguePassives[id] || 0; }
+  function getSkillLevel(state, id) { return state.rogueSkills[id] || 0; }
+  function hasFusion(state, id) { return state.fusions.indexOf(id) !== -1; }
+
+  /** 被动伤害倍率（atk 每级+25%；满血增伤 +15%/级；暴走火力×2；吞噬者不受修正） */
+  function getRogueDmgMult(state) {
+    if (state.weapon === 'devour') return 1;
+    var m = 1 + getPassiveLevel(state, 'atk') * 0.25;
+    if (state.rageUntil > state.time) m *= 2; // 方案1-A：暴走
+    var cu = state.coreUpgrade.cuFullDmg || 0;
+    if (cu > 0 && state.lives >= state.maxLives) m *= 1 + cu * 0.15;
+    return m;
+  }
+
+  /** 暴击：crit 每级 +10% 概率、+50% 暴伤 */
+  function rollCrit(state, baseDmg) {
+    var cl = getPassiveLevel(state, 'crit');
+    if (cl <= 0) return baseDmg;
+    if (Math.random() < cl * 0.1) return Math.round(baseDmg * (1.5 + cl * 0.5));
+    return baseDmg;
+  }
+
+  /** 击杀获得经验并升级（升级→填充三选一） */
+  function addExp(state, amount) {
+    if (state.status !== 'playing') return;
+    state.exp += amount;
+    while (state.exp >= state.expNeed && state.expLevel < state.config.expLevelMax) {
+      state.exp -= state.expNeed;
+      state.expLevel++;
+      state.expNeed = Math.round(state.config.expBaseNeed * Math.pow(state.config.expGrow, state.expLevel - 1));
+      refreshFusionReady(state);
+      state.pendingSkillChoices = rollSkillChoices(state);
+    }
+  }
+
+  /** 刷新可融合列表（双满级即就绪） */
+  function refreshFusionReady(state) {
+    state.fusionReadyIds = [];
+    var ft = state.config.fusionTable;
+    for (var i = 0; i < ft.length; i++) {
+      var f = ft[i];
+      if (hasFusion(state, f.id)) continue;
+      var aOk = getSkillLevel(state, f.a) >= state.config.rogueSkillMax;
+      var bOk = (state.config.roguePassivePool.indexOf(f.b) !== -1)
+        ? getPassiveLevel(state, f.b) >= state.config.rogueSkillMax
+        : getSkillLevel(state, f.b) >= state.config.rogueSkillMax;
+      if (aOk && bOk) state.fusionReadyIds.push(f.id);
+    }
+  }
+
+  /** 升级三选一：主动新技能 / 主动升级 / 被动 / 可融合超武 */
+  function rollSkillChoices(state) {
+    var cfg = state.config;
+    var choices = [];
+    var push = function (kind, id, level) {
+      if (choices.length < 3) choices.push({ kind: kind, id: id, level: level });
+    };
+    // 1) 可融合超武优先
+    var fusions = state.fusionReadyIds.slice();
+    for (var fi = 0; fi < fusions.length && choices.length < 3; fi++) {
+      var fdef = null;
+      for (var fti = 0; fti < cfg.fusionTable.length; fti++) {
+        if (cfg.fusionTable[fti].id === fusions[fi]) fdef = cfg.fusionTable[fti];
+      }
+      if (fdef) push('fusion', fdef.id, cfg.rogueSkillMax);
+    }
+    // 2) 升级已有主动技能（优先，等级未满）
+    var ownedActives = [];
+    var ownKeys = Object.keys(state.rogueSkills);
+    for (var ok = 0; ok < ownKeys.length; ok++) {
+      if (state.rogueSkills[ownKeys[ok]] < cfg.rogueSkillMax) ownedActives.push(ownKeys[ok]);
+    }
+    if (ownedActives.length > 0) {
+      var aId = ownedActives[Math.floor(Math.random() * ownedActives.length)];
+      push('active', aId, getSkillLevel(state, aId) + 1);
+    }
+    // 3) 升级已有被动
+    var ownedPass = [];
+    var pKeys = Object.keys(state.roguePassives);
+    for (var pk = 0; pk < pKeys.length; pk++) {
+      if (state.roguePassives[pKeys[pk]] < cfg.rogueSkillMax) ownedPass.push(pKeys[pk]);
+    }
+    if (ownedPass.length > 0) {
+      var pId = ownedPass[Math.floor(Math.random() * ownedPass.length)];
+      push('passive', pId, getPassiveLevel(state, pId) + 1);
+    }
+    // 4) 新主动（未拥有）
+    var newActives = cfg.rogueActivePool.filter(function (id) { return !state.rogueSkills[id]; });
+    if (newActives.length > 0) {
+      var nId = newActives[Math.floor(Math.random() * newActives.length)];
+      push('active', nId, 1);
+    }
+    // 5) 新被动
+    var newPass = cfg.roguePassivePool.filter(function (id) { return !state.roguePassives[id]; });
+    if (newPass.length > 0) {
+      var npId = newPass[Math.floor(Math.random() * newPass.length)];
+      push('passive', npId, 1);
+    }
+    // 6) 兜底：任意可升级项
+    while (choices.length < 3) {
+      var pool = [];
+      for (var a2 = 0; a2 < cfg.rogueActivePool.length; a2++) pool.push({ kind: 'active', id: cfg.rogueActivePool[a2] });
+      for (var p2 = 0; p2 < cfg.roguePassivePool.length; p2++) pool.push({ kind: 'passive', id: cfg.roguePassivePool[p2] });
+      var pick = pool[Math.floor(Math.random() * pool.length)];
+      var cur = pick.kind === 'active' ? getSkillLevel(state, pick.id) : getPassiveLevel(state, pick.id);
+      if (cur < cfg.rogueSkillMax) push(pick.kind, pick.id, cur + 1);
+      else break;
+    }
+    return choices.slice(0, 3);
+  }
+
+  /** 应用三选一选择（主动升级 / 被动升级 / 融合） */
+  function applySkillChoice(state, choice) {
+    if (!choice) return false;
+    if (choice.kind === 'fusion') {
+      return applyFusion(state, choice.id);
+    }
+    if (choice.kind === 'active') {
+      state.rogueSkills[choice.id] = Math.min(state.config.rogueSkillMax, choice.level || 1);
+      refreshFusionReady(state);
+      return true;
+    }
+    if (choice.kind === 'passive') {
+      state.roguePassives[choice.id] = Math.min(state.config.rogueSkillMax, choice.level || 1);
+      refreshFusionReady(state);
+      return true;
+    }
+    return false;
+  }
+
+  /** 执行融合：加入 fusions，移除来源技能星级 */
+  function applyFusion(state, fusionId) {
+    var cfg = state.config;
+    for (var i = 0; i < cfg.fusionTable.length; i++) {
+      var f = cfg.fusionTable[i];
+      if (f.id === fusionId) {
+        if (hasFusion(state, f.id)) return false;
+        state.fusions.push(f.id);
+        delete state.rogueSkills[f.a];
+        if (cfg.roguePassivePool.indexOf(f.b) !== -1) delete state.roguePassives[f.b];
+        else delete state.rogueSkills[f.b];
+        refreshFusionReady(state);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** 战斗掉落道具（白/蓝/金 三档稀有度） */
+  function dropCombatLoot(state, x, y) {
+    var cfg = state.config;
+    if (state.status !== 'playing') return null;
+    if (Math.random() > cfg.combatDropChance) return null;
+    var r = Math.random();
+    var rarity = r < cfg.combatDropRarity[0] ? 0 : (r < cfg.combatDropRarity[0] + cfg.combatDropRarity[1] ? 1 : 2);
+    var keys = Object.keys(cfg.combatDrops);
+    var type = keys[Math.floor(Math.random() * keys.length)];
+    var size = cfg.powerupSize;
+    var loot = {
+      id: newId(state),
+      kind: 'loot',
+      type: type,
+      rarity: rarity,
+      x: clamp(x - size / 2, 0, cfg.width - size),
+      y: clamp(y - size / 2, 0, cfg.height - size),
+      width: size,
+      height: size,
+      vx: (Math.random() * 2 - 1) * 40,
+      vy: -60 - Math.random() * 40
+    };
+    state.powerups.push(loot);
+    return loot;
+  }
+
+  /** 拾取战斗道具效果 */
+  function applyCombatPickup(state, type, rarity) {
+    var cfg = state.config;
+    var mult = 1 + rarity * 0.5; // 蓝 ×1.5、金 ×2
+    var double = (state.coreUpgrade.cuDouble || 0) > 0 && Math.random() < (state.coreUpgrade.cuDouble) * 0.3;
+    var doApply = function () {
+      switch (type) {
+        case 'rage':
+          state.rageUntil = state.time + (cfg.combatDrops.rage.base + (state.coreUpgrade.cuRage || 0)) * mult;
+          break;
+        case 'shield':
+          state.shieldStacks = Math.min(4, state.shieldStacks + Math.max(1, Math.round(mult)));
+          break;
+        case 'heal':
+          if (state.weapon === 'devour') state.devourHp = Math.min(cfg.weapons.devour.hpMax || 100, state.devourHp + 20 * mult);
+          else state.lives = Math.min(state.maxLives, state.lives + 1);
+          break;
+        case 'magnet':
+          state.magnetUntil = state.time + cfg.combatDrops.magnet.base * mult;
+          break;
+      }
+    };
+    doApply();
+    if (double) doApply();
+    return true;
+  }
+
+  /** 护盾水晶：主动触发，把敌弹变水晶（计分 + 短暂无敌） */
+  function triggerCrystal(state) {
+    if (state.shieldStacks <= 0 || state.status !== 'playing') return false;
+    state.shieldStacks--;
+    state.crystalUntil = state.time + 3;
+    var gained = 0;
+    for (var i = state.enemyBullets.length - 1; i >= 0; i--) {
+      state.enemyBullets.splice(i, 1);
+      gained += 5;
+    }
+    state.score += gained;
+    return true;
+  }
+
+  /** 复活（消耗星币由前端扣减；每局限 1 次，回半血） */
+  function tryRevive(state) {
+    if (state.reviveUsed || state.status !== 'gameover') return false;
+    state.reviveUsed = true;
+    state.status = 'playing';
+    state.lives = Math.max(1, Math.round(state.maxLives / 2));
+    if (state.weapon === 'devour') state.devourHp = Math.max(30, Math.round(cfgWeaponHp(state) / 2));
+    state.invincibleUntil = state.time + 2;
+    state.enemyBullets.length = 0;
+    return true;
+  }
+  function cfgWeaponHp(state) { return (state.config.weapons.devour && state.config.weapons.devour.hpMax) || 100; }
+
+  /** 特技词条应用（伤害结算时调用：吸血/溅射/领域） */
+  function applyTraitOnHurt(state, enemy, damage, srcWeapon, x, y) {
+    if (!state.traits || state.traits.length === 0) return;
+    if (state._traitGuard) return; // 防溅射递归
+    state._traitGuard = true;
+    var cfg = state.config;
+    for (var i = 0; i < state.traits.length; i++) {
+      var t = state.traits[i];
+      if (t === 'leech') {
+        if (state.weapon === 'devour') state.devourHp = Math.min(cfg.weapons.devour.hpMax || 100, state.devourHp + 3);
+        else if (Math.random() < 0.5) state.lives = Math.min(state.maxLives, state.lives + 1);
+        state.affixFx.push({ kind: 'leechHeal', x: x, y: y });
+      } else if (t === 'splash') {
+        for (var e = state.enemies.length - 1; e >= 0; e--) {
+          var o = state.enemies[e];
+          if (o === enemy) continue;
+          var dx = (o.x + o.width / 2) - x, dy = (o.y + o.height / 2) - y;
+          if (dx * dx + dy * dy < 78 * 78) {
+            state._killWeapon = srcWeapon || state.weapon;
+            hurtEnemy(state, o, Math.max(1, Math.round(damage * 0.5)), 'phys', srcWeapon || state.weapon);
+          }
+        }
+        state.affixFx.push({ kind: 'splash', x: x, y: y });
+      } else if (t === 'field') {
+        state.affixFx.push({ kind: 'field', x: x, y: y, until: state.time + 2 });
+      }
+    }
+    state._traitGuard = false;
+  }
+
+  /** 祝福应用（开局时由前端调用） */
+  function applyBlessing(state) {
+    var cfg = state.config;
+    var b = null;
+    for (var i = 0; i < cfg.blessings.length; i++) {
+      if (cfg.blessings[i].id === state.blessing) b = cfg.blessings[i];
+    }
+    if (!b) return;
+    switch (b.id) {
+      case 'brage': state.rageUntil = state.time + 6; break;
+      case 'bshield': state.shieldStacks = 2; break;
+      case 'ball':
+        state.damageBonus += 0;
+        state.fireSpeedFactor = Math.max(cfg.fireSpeedMin, state.fireSpeedFactor * 0.97);
+        state.roguePassives.atk = Math.max(getPassiveLevel(state, 'atk'), 1);
+        state.roguePassives.multi = Math.max(getPassiveLevel(state, 'multi'), 1);
+        state.roguePassives.speed = Math.max(getPassiveLevel(state, 'speed'), 1);
+        break;
+      case 'bmulti': state.multishotLevel = Math.min(cfg.multishotMax - 1, state.multishotLevel + 1); break;
+      case 'bdrop': state.lootTimer = 1; break; // 前端在第 1 波首杀掉落金色道具
+    }
+  }
+
+  /** 被动强化：回合辅助函数（被现有辅助函数内部调用） */
+  function getPassiveBonus(state, id) { return getPassiveLevel(state, id); }
+
+  /** 新技能自动攻击更新（无人机/守卫者/能量球），每帧由 update 调用 */
+  function updateRogueSkills(state, dt) {
+    var cfg = state.config;
+    var p = state.player;
+    // 无人机：向最近敌人自动扫射
+    var dl = getSkillLevel(state, 'drone');
+    if (dl > 0) {
+      state.droneTimer = (state.droneTimer || 0) - dt;
+      if (state.droneTimer <= 0) {
+        state.droneTimer = Math.max(0.25, 0.5 - dl * 0.04);
+        var target = null, bestD = 1e9;
+        for (var i = 0; i < state.enemies.length; i++) {
+          var e = state.enemies[i];
+          var ddx = (e.x + e.width / 2) - (p.x + p.width / 2);
+          var ddy = (e.y + e.height / 2) - p.y;
+          var dd = ddx * ddx + ddy * ddy;
+          if (dd < bestD) { bestD = dd; target = e; }
+        }
+        var ox = p.x + p.width / 2 - 14 + (Math.random() * 2 - 1) * 20;
+        var oy = p.y + 14;
+        if (target) {
+          var ang = Math.atan2((target.y + target.height / 2) - oy, (target.x + target.width / 2) - ox);
+          state.bullets.push({ id: newId(state), type: 'dronebolt', x: ox - 3, y: oy - 6, width: 6, height: 10, vx: Math.cos(ang) * 420, vy: Math.sin(ang) * 420, damage: Math.max(1, Math.round((2 + dl) * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'phys', weapon: 'drone' });
+        } else {
+          state.bullets.push({ id: newId(state), type: 'dronebolt', x: ox - 3, y: oy - 6, width: 6, height: 10, vx: 0, vy: -420, damage: Math.max(1, Math.round((2 + dl) * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'phys', weapon: 'drone' });
+        }
+      }
+    }
+    // 守卫者：环绕玩家旋转，触碰敌人造成伤害
+    var gl = getSkillLevel(state, 'guardian');
+    if (gl > 0) {
+      state.guardianAngle = (state.guardianAngle || 0) + dt * 4;
+      var gcount = Math.min(3, 1 + gl);
+      var gdmg = Math.max(1, Math.round(4 * gl * getRogueDmgMult(state)));
+      state.guardianOrbs = [];
+      for (var g = 0; g < gcount; g++) {
+        var ga = state.guardianAngle + (g / gcount) * Math.PI * 2;
+        var gx = p.x + p.width / 2 + Math.cos(ga) * 52;
+        var gy = p.y + p.height / 2 + Math.sin(ga) * 52;
+        state.guardianOrbs.push({ x: gx, y: gy, r: 12 });
+        for (var ei = state.enemies.length - 1; ei >= 0; ei--) {
+          var en = state.enemies[ei];
+          if (en.special === 'clone') continue;
+          var cdx = (en.x + en.width / 2) - gx, cdy = (en.y + en.height / 2) - gy;
+          if (cdx * cdx + cdy * cdy < (14 + en.width / 2) * (14 + en.width / 2)) {
+            state._killWeapon = 'guardian';
+            hurtEnemy(state, en, gdmg, 'magic', 'guardian');
+          }
+        }
+      }
+    }
+    // 能量球：自动发射弹跳球（左右反弹）
+    var el = getSkillLevel(state, 'energyball');
+    if (el > 0) {
+      state.ebTimer = (state.ebTimer || 0) - dt;
+      if (state.ebTimer <= 0) {
+        state.ebTimer = Math.max(0.4, 1.0 - el * 0.1);
+        state.bullets.push({ id: newId(state), type: 'energyball', x: p.x + p.width / 2 - 10, y: p.y - 20, width: 20, height: 20, vx: 120 * (Math.random() < 0.5 ? -1 : 1), vy: -300, damage: Math.max(1, Math.round(3 * el * getRogueDmgMult(state))), life: 0, bounceCount: 0, dmgType: 'magic', weapon: 'energyball' });
+      }
+    }
+  }
+
+  /** 能量球弹墙反弹（子弹移动循环调用） */
+  function updateEnergyBall(state, b, dt) {
+    var cfg = state.config;
+    if (b.x <= 0 || b.x + b.width >= cfg.width) { b.vx = -b.vx; b.x = clamp(b.x, 0, cfg.width - b.width); }
+    if (b.y <= 0) { b.vy = -b.vy; }
   }
 
   // ==================== BOSS ====================
@@ -2455,6 +2966,8 @@
     enemy.hp -= damage;
     // P8：命中事件（表现层：命中火花/飘字）
     state.hitFx.push({ x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2, weapon: srcWeapon || '', damage: damage, dmgType: dmgType });
+    // P11：武器特技词条（吸血/溅射/领域）
+    applyTraitOnHurt(state, enemy, damage, srcWeapon || '', enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
     // P8：吸血词缀——受击回复所扣血量的 40%（不超过上限）
     if (enemy.affix === 'leech' && damage > 0) {
       var leechHeal = Math.max(1, Math.round(damage * cfg.leechFactor));
@@ -2508,7 +3021,9 @@
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
       state.comboTimer = state.config.comboWindow;
-      state.score += Math.round(enemy.score * getComboMultiplier(state));
+      // P11：暴走期间积分 ×2
+      var rageMult = (state.rageUntil > state.time) ? 2 : 1;
+      state.score += Math.round(enemy.score * getComboMultiplier(state) * rageMult);
       // 武器升级树：记录当前武器击杀数
       if (state._killWeapon && state.weaponKills) {
         state.weaponKills[state._killWeapon] = (state.weaponKills[state._killWeapon] || 0) + 1;
@@ -2538,6 +3053,14 @@
         level: enemy.level,
         affix: enemy.affix
       };
+      // P11：击杀经验 + 战斗掉落道具（方案1-A/2-A）
+      addExp(state, state.config.expPerKill * (1 + (enemy.level || 0)));
+      dropCombatLoot(state, enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+      // P11：祝福「首波史诗」第 1 波必掉金色道具
+      if (state.lootTimer > 0 && state.wave <= 1) {
+        var gl = dropCombatLoot(state, enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+        if (gl) gl.rarity = 2;
+      }
       return true;
     }
     return false;
@@ -3017,6 +3540,13 @@
     // P5：吞噬者按住攻击键释放继承能力（火焰/雷电/治疗）
     updateDevourSkills(state, dt);
 
+    // P11：肉鸽新技能自动攻击（无人机/守卫者/能量球）
+    updateRogueSkills(state, dt);
+    // P11：暴走积分翻倍（rage 火力×2 已并入 getRogueDmgMult）
+    if (state.rageUntil > state.time && state.comboRageScore) {
+      state.comboRageScore = false;
+    }
+
     // 激光持续伤害
     if (state.laserActive) {
       updateLaser(state, dt);
@@ -3076,6 +3606,24 @@
       } else {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
+        // P11：能量球左右反弹；磁力回旋镖追踪最近敌人
+        if (b.type === 'energyball') updateEnergyBall(state, b, dt);
+        if (b.type === 'boomerang' && hasFusion(state, 'fmagboomerang') && state.enemies.length > 0) {
+          var ne = null, nb = 1e9;
+          for (var nx = 0; nx < state.enemies.length; nx++) {
+            var ne2 = state.enemies[nx];
+            var nx2 = (ne2.x + ne2.width / 2) - b.x, ny2 = (ne2.y + ne2.height / 2) - b.y;
+            var nd = nx2 * nx2 + ny2 * ny2;
+            if (nd < nb) { nb = nd; ne = ne2; }
+          }
+          if (ne) {
+            var ta = Math.atan2((ne.y + ne.height / 2) - b.y, (ne.x + ne.width / 2) - b.x);
+            var spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+            if (spd < 40) spd = 420;
+            b.vx = Math.cos(ta) * spd;
+            b.vy = Math.sin(ta) * spd;
+          }
+        }
         // 上下任一方向出界都移除（bombbullet 向下飞）
         if (b.y + b.height < 0 || b.y > cfg.height + 40 || b.x < -60 || b.x > cfg.width + 60) {
           state.bullets.splice(j, 1);
@@ -3103,6 +3651,13 @@
           state._killWeapon = bullet.type === 'chargebolt' ? 'charge' : bullet.type;
           hurtEnemy(state, tgt, bullet.damage, bullet.dmgType || 'phys', bullet.weapon);
           hit = true;
+          // P11：超武「幽灵导弹」（追踪弹+穿透）穿透不消失，记录已伤害目标
+          if (bullet.type === 'homing' && hasFusion(state, 'fghost')) {
+            bullet.pierced = bullet.pierced || {};
+            bullet.pierced[tgt.id] = true;
+            hit = false;
+            continue;
+          }
           // 回旋镖命中敌人后：随机向周围弹射
           if (bullet.type === 'boomerang') {
             scatterBoomerang(bullet, state.config.weapons.boomerang);
@@ -3148,8 +3703,8 @@
         }
       }
       if (hit) {
-        // 回旋镖/蓄力弹/光刃命中不消失（回旋镖持续弹跳；蓄力弹穿透；光刃挥砍持续存在）
-        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade') {
+        // 回旋镖/蓄力弹/光刃/幽灵导弹（追踪弹+穿透超武）命中不消失
+        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade' && !(bullet.type === 'homing' && hasFusion(state, 'fghost'))) {
           state.bullets.splice(bi, 1);
         }
       }
@@ -3170,6 +3725,12 @@
       var eb2 = state.enemyBullets[ebi];
       if (rectsOverlap(state.player, eb2)) {
         state.enemyBullets.splice(ebi, 1);
+        // P11：护盾层数优先抵消（不掉血，层数 -1）
+        if (state.shieldStacks > 0) {
+          state.shieldStacks--;
+          state.affixFx.push({ kind: 'shieldBreak', x: state.player.x + state.player.width / 2, y: state.player.y });
+          continue;
+        }
         if (hasShield(state)) continue;
         if (isInvincible(state)) continue;
         damagePlayer(state);
@@ -3241,7 +3802,26 @@
     // 移动道具
     for (var pi = state.powerups.length - 1; pi >= 0; pi--) {
       var p = state.powerups[pi];
-      p.y += cfg.powerupSpeed * dt;
+      if (p.kind === 'loot') {
+        p.x += (p.vx || 0) * dt;
+        p.y += (p.vy || 0) * dt;
+        p.vx = (p.vx || 0) * 0.98;
+        p.vy = (p.vy || 0) * 0.98;
+      } else {
+        p.y += cfg.powerupSpeed * dt;
+      }
+      // P11：磁铁吸附（loot 与普通道具在磁铁窗口内飞向玩家）
+      if (state.magnetUntil > state.time) {
+        var pcx = p.x + p.width / 2, pcy = p.y + p.height / 2;
+        var plx = state.player.x + state.player.width / 2, ply = state.player.y + state.player.height / 2;
+        var pdx = plx - pcx, pdy = ply - pcy;
+        var pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+        if (pdist > 4) {
+          var pspeed = 260 + getPassiveLevel(state, 'magnet') * 60;
+          p.x += (pdx / pdist) * pspeed * dt;
+          p.y += (pdy / pdist) * pspeed * dt;
+        }
+      }
       if (p.y > cfg.height) {
         state.powerups.splice(pi, 1);
       }
@@ -3251,7 +3831,18 @@
     for (var pi2 = state.powerups.length - 1; pi2 >= 0; pi2--) {
       var p2 = state.powerups[pi2];
       if (rectsOverlap(state.player, p2)) {
-        applyPowerup(state, p2.type);
+        if (p2.kind === 'loot') {
+          // P11：战斗掉落道具（暴走/护盾/回血/磁铁）
+          applyCombatPickup(state, p2.type, p2.rarity || 0);
+          // P11：核心强化「拾取回血」——拾取任意道具回 1 点生命
+          var cuHeal = state.coreUpgrade.cuHeal || 0;
+          if (cuHeal > 0) {
+            if (state.weapon === 'devour') state.devourHp = Math.min(cfg.weapons.devour.hpMax || 100, state.devourHp + cuHeal * 2);
+            else state.lives = Math.min(state.maxLives, state.lives + 1);
+          }
+        } else {
+          applyPowerup(state, p2.type);
+        }
         state.powerups.splice(pi2, 1);
       }
     }
@@ -3419,6 +4010,22 @@
     getLaserWidth: getLaserWidth,
     damagePlayer: damagePlayer,
     hurtEnemy: hurtEnemy,
+    // P11：方案1+2 肉鸽系统 API
+    addExp: addExp,
+    rollSkillChoices: rollSkillChoices,
+    applySkillChoice: applySkillChoice,
+    applyFusion: applyFusion,
+    refreshFusionReady: refreshFusionReady,
+    getSkillLevel: getSkillLevel,
+    getPassiveLevel: getPassiveLevel,
+    hasFusion: hasFusion,
+    dropCombatLoot: dropCombatLoot,
+    applyCombatPickup: applyCombatPickup,
+    triggerCrystal: triggerCrystal,
+    tryRevive: tryRevive,
+    applyBlessing: applyBlessing,
+    applyTraitOnHurt: applyTraitOnHurt,
+    getRogueDmgMult: getRogueDmgMult,
     updateHoming: updateHoming,
     spawnBoss: spawnBoss,
     bossFire: bossFire,
@@ -3761,6 +4368,9 @@
     p.upgrades.hp = Math.min(5, Math.max(0, p.upgrades.hp | 0));
     p.upgrades.multishot = Math.min(5, Math.max(0, p.upgrades.multishot | 0));
     p.upgrades.damage = Math.min(5, Math.max(0, p.upgrades.damage | 0));
+    // P11：祝福/核心强化字段兼容旧存档
+    if (p.blessing === undefined) p.blessing = null;
+    if (!p.coreUpgrade) p.coreUpgrade = {};
     return p;
   }
 
@@ -3813,11 +4423,50 @@
       row.appendChild(btn);
       list.appendChild(row);
     });
+    // P11：局外核心强化（方案1-D）——成长页第三栏
+    renderCoreUpgrades(p);
+  }
+
+  /** P11：局外核心强化渲染（暴走延脉/拾取回血/满血增伤/双倍道具） */
+  function renderCoreUpgrades(p) {
+    var list = document.getElementById('core-upgrade-list');
+    if (!list) return;
+    list.innerHTML = '';
+    (GameCore.DEFAULT_CONFIG.coreUpgrades || []).forEach(function (cu) {
+      var lv = p.coreUpgrade && p.coreUpgrade[cu.id] || 0;
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(10,30,58,0.85);border:1px solid #2b5a8d;border-radius:8px;';
+      row.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-size:14px;color:#e6f7ff;">' + cu.name + ' <span style="color:#7df0ff;font-size:11px;">' + lv + '/' + cu.max + '级</span></div><div style="font-size:11px;color:#8aa0c8;margin-top:2px;">' + cu.desc + '</div></div>';
+      var btn = document.createElement('button');
+      btn.className = 'btn small';
+      var canBuy = p.stars >= cu.cost && lv < cu.max;
+      if (lv >= cu.max) { btn.textContent = '已达上限'; btn.style.opacity = '0.5'; }
+      else if (canBuy) btn.textContent = '升级 ★' + cu.cost;
+      else { btn.textContent = '★' + cu.cost + ' 不足'; btn.style.opacity = '0.5'; }
+      btn.disabled = !canBuy;
+      btn.addEventListener('click', function () {
+        var pp = getProfile();
+        var cur = pp.coreUpgrade && pp.coreUpgrade[cu.id] || 0;
+        if (pp.stars < cu.cost) { showToast('星币不足'); return; }
+        if (cur >= cu.max) { showToast(cu.name + ' 已达上限'); return; }
+        pp.stars -= cu.cost;
+        pp.coreUpgrade = pp.coreUpgrade || {};
+        pp.coreUpgrade[cu.id] = cur + 1;
+        saveProfile(pp);
+        renderUpgradeList();
+        updateMenuStars();
+        audio.powerup();
+        showToast(cu.name + ' 成功！');
+      });
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
   }
 
   function openUpgradePanel() {
     renderUpgradeList();
     renderMasteryPanel();
+    renderCoreUpgrades(getProfile());
     showPanel('upgrade');
   }
 
@@ -3910,6 +4559,8 @@
   document.getElementById('btn-start').addEventListener('click', function () {
     audio.unlock();
     music.start();
+    // P11：战前祝福——未购买且星币足够时先进入祝福商店
+    if (maybeOpenBlessPanel()) return;
     startGame();
   });
   document.getElementById('btn-loadout').addEventListener('click', function () { showPanel('loadout'); });
@@ -4089,9 +4740,13 @@
       initialDamage: settings.damage + (p.upgrades.damage || 0),
       difficulty: settings.difficulty,
       lives: Math.max(1, Math.round((GameCore.DEFAULT_CONFIG.lives + (p.upgrades.hp || 0)) * shipCfg.hp)),
-      mastery: p.mastery || {} // P8：武器专精
+      mastery: p.mastery || {}, // P8：武器专精
+      coreUpgrade: p.coreUpgrade || {} // P11：局外核心强化（暴走延脉/拾取回血/满血增伤/双倍道具）
     });
     GameCore.start(state);
+    // P11：战前祝福应用（方案1-C）
+    state.blessing = p.blessing || null;
+    GameCore.applyBlessing(state);
     // P3：关卡模式目标波次（前端附加字段，用于通关判定）
     state.levelTarget = settings.levelTarget || 0;
     state.levelDone = false;
@@ -6092,6 +6747,35 @@
 
   function drawBullet(b) {
     ctx.save();
+    // P11：肉鸽新技能子弹（无人机光束 / 能量球）
+    if (b.type === 'dronebolt') {
+      ctx.shadowColor = '#7df0ff';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#7df0ff';
+      ctx.fillRect(b.x, b.y, b.width, b.height);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(b.x + b.width * 0.25, b.y, b.width * 0.5, b.height * 0.6);
+      ctx.restore();
+      return;
+    }
+    if (b.type === 'energyball') {
+      ctx.shadowColor = '#c9a7e8';
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = '#c9a7e8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(201,167,232,0.5)';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
     // P10c：攻击特效精美优化——双层拖尾（亮芯 + 外层光晕）+ 各武器专属动态细节
     if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt') {
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
@@ -6370,6 +7054,30 @@
     var cy = p.y + p.height / 2;
     var r = p.width / 2;
     ctx.save();
+    // P11：战斗掉落道具（暴走/护盾/回血/磁铁，白蓝金三档）
+    if (p.kind === 'loot') {
+      var lcolors = { rage: '#ff7a3c', shield: '#7df0ff', heal: '#7be36e', magnet: '#ffd166' };
+      var rcolors = ['#cfe6ff', '#4e9bff', '#ffd700']; // 白/蓝/金
+      ctx.shadowColor = lcolors[p.type] || '#fff';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = rcolors[p.rarity] || rcolors[0];
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = lcolors[p.type] || '#fff';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#06203a';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var glyph = { rage: '🔥', shield: '🛡', heal: '❤', magnet: '🧲' }[p.type] || '★';
+      ctx.fillText(glyph, cx, cy);
+      ctx.restore();
+      return;
+    }
     var colors = {
       score: '#ffd166', shield: '#4ee0ff', speed: '#ff9f43',
       life: '#ff6b9d', multishot: '#7dfff0', firespeed: '#ff5a7a', damage: '#c44dff',
@@ -6686,6 +7394,62 @@
     if (state.status === 'playing' || state.status === 'gameover') {
       drawWeaponDamage();
     }
+
+    // P11：肉鸽状态 HUD（暴走条 / 护盾层 / 磁铁 / 经验条 / 融合图标）
+    if (state.status === 'playing') {
+      drawRogueHUD();
+    }
+  }
+
+  /** P11：方案1+2 状态 HUD——左下角经验条 + 道具状态 + 融合列表 */
+  function drawRogueHUD() {
+    if (!state.rogueSkills && !state.expLevel) return;
+    ctx.save();
+    // 经验条（底部中央）
+    var ew = 150, ex = W / 2 - ew / 2, ey = H - 16;
+    ctx.fillStyle = 'rgba(6,14,28,0.7)';
+    roundRect(ctx, ex - 3, ey - 5, ew + 6, 12, 6);
+    ctx.fill();
+    var er = Math.min(1, state.exp / state.expNeed);
+    ctx.fillStyle = 'rgba(201,167,232,0.9)';
+    roundRect(ctx, ex, ey, ew * er, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(201,167,232,0.9)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Lv ' + state.expLevel + ' · ' + Math.floor(state.exp) + '/' + state.expNeed, W / 2, ey - 8);
+    // 融合超武图标（右上角横排）
+    if (state.fusions && state.fusions.length > 0) {
+      ctx.textAlign = 'right';
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#ff5a7a';
+      ctx.fillText('🌟 超武 ×' + state.fusions.length, W - 10, 52);
+    }
+    // 道具状态（左下角竖排）
+    var bx = 10, by = H - 20;
+    ctx.textAlign = 'left';
+    ctx.font = '11px monospace';
+    if (state.rageUntil > state.time) {
+      var rr = Math.max(0, (state.rageUntil - state.time) / 6);
+      ctx.fillStyle = 'rgba(255,120,40,0.85)';
+      ctx.fillText('🔥 暴走 ' + rr.toFixed(1) + 's', bx, by); by -= 16;
+    }
+    if (state.shieldStacks > 0) {
+      ctx.fillStyle = '#7df0ff';
+      ctx.fillText('🛡 护盾 ×' + state.shieldStacks, bx, by); by -= 16;
+      if (btnCrystal) btnCrystal.style.display = 'block';
+    } else if (btnCrystal) {
+      btnCrystal.style.display = 'none';
+    }
+    if (state.magnetUntil > state.time) {
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('🧲 磁铁 ' + Math.max(0, state.magnetUntil - state.time).toFixed(1) + 's', bx, by); by -= 16;
+    }
+    if (state.crystalUntil > state.time) {
+      ctx.fillStyle = '#b0e8ff';
+      ctx.fillText('❄ 水晶化 ' + Math.max(0, state.crystalUntil - state.time).toFixed(1) + 's', bx, by);
+    }
+    ctx.restore();
   }
 
   /** P5：武器伤害统计面板——右侧从上到下显示各武器累计伤害 */
@@ -7316,6 +8080,28 @@
         particles.push({ x: exhX, y: exhY, vx: (Math.random() - 0.5) * 26, vy: 55 + Math.random() * 45, life: 0, maxLife: 0.32 + Math.random() * 0.2, size: 1.6 + Math.random() * 1.4, color: exhCol });
       }
       drawPlayer(state.player.x, state.player.y, state.player.width, state.player.height);
+      // P11：守卫者环绕球
+      if (state.guardianOrbs && state.guardianOrbs.length > 0) {
+        for (var go = 0; go < state.guardianOrbs.length; go++) {
+          var orb = state.guardianOrbs[go];
+          ctx.save();
+          ctx.shadowColor = '#c9a7e8';
+          ctx.shadowBlur = 16;
+          ctx.strokeStyle = '#c9a7e8';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, orb.r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(201,167,232,0.45)';
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, orb.r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
       drawWingmen();
     }
 
@@ -7618,7 +8404,7 @@
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
       btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
       btn.addEventListener('click', function () {
-        GameCore.applyPowerup(state, b.type, b.relicId ? { id: b.relicId } : undefined);
+        GameCore.applyPowerup(state, b.type, b.relicId ? { id: b.relicId } : (b.traitId ? { traitId: b.traitId } : undefined));
         GameCore.togglePause(state);
         buffPanel.style.display = 'none';
         audio.powerup();
@@ -7632,6 +8418,177 @@
   function hideBuffPanel() {
     if (buffPanel) buffPanel.style.display = 'none';
   }
+
+  // ==================== P11：方案1+2 前端（升级三选一 / 祝福 / 复活 / 水晶 / 特技池） ====================
+
+  var skillPanel = document.getElementById('skill-panel');
+  var skillBox = document.getElementById('skill-options');
+  var skillPanelLv = document.getElementById('skill-panel-lv');
+  var blessPanel = document.getElementById('bless-panel');
+  var blessBox = document.getElementById('bless-options');
+  var revivePanel = document.getElementById('revive-panel');
+  var btnCrystal = document.getElementById('btn-crystal');
+
+  /** 升级三选一：弹出卡池面板（选择后应用，恢复游戏） */
+  function openSkillPanel() {
+    if (!skillPanel) return;
+    var choices = state.pendingSkillChoices;
+    if (!choices || choices.length === 0) return;
+    if (state.status !== 'playing') return;
+    GameCore.togglePause(state);
+    if (skillPanelLv) skillPanelLv.textContent = 'Lv ' + state.expLevel + ' · 选择一项能力';
+    skillBox.innerHTML = '';
+    var cfg = GameCore.DEFAULT_CONFIG;
+    choices.forEach(function (ch) {
+      var btn = document.createElement('button');
+      btn.className = 'btn primary';
+      btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+      var title = '', desc = '', icon = '◆';
+      if (ch.kind === 'fusion') {
+        var fdef = null;
+        for (var fi = 0; fi < cfg.fusionTable.length; fi++) {
+          if (cfg.fusionTable[fi].id === ch.id) fdef = cfg.fusionTable[fi];
+        }
+        title = '🌟 融合 · ' + (fdef ? fdef.name : ch.id);
+        desc = (fdef ? fdef.desc : '双技能满级融合成超武');
+        icon = '🔥';
+      } else if (ch.kind === 'active') {
+        if (cfg.rogueNewSkills[ch.id]) {
+          title = (cfg.rogueNewSkills[ch.id].label || ch.id) + ' ★' + ch.level;
+          desc = cfg.rogueNewSkills[ch.id].desc || '';
+        } else {
+          title = '武器技 · ' + ((cfg.weapons[ch.id] && cfg.weapons[ch.id].label) || ch.id) + ' ★' + ch.level;
+          desc = '强化主动武器技能（' + ch.level + '/5）';
+        }
+      } else {
+        var pdef = cfg.roguePassives[ch.id];
+        title = '被动 · ' + (pdef ? pdef.label : ch.id) + ' ★' + ch.level;
+        desc = pdef ? pdef.desc : '';
+      }
+      btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + icon + '</span>' + title + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + desc + '</span>';
+      btn.addEventListener('click', function () {
+        GameCore.applySkillChoice(state, ch);
+        state.pendingSkillChoices = [];
+        GameCore.togglePause(state);
+        skillPanel.style.display = 'none';
+        audio.powerup();
+        if (ch.kind === 'fusion') { addFlash('255,90,122', 240); addShake(10, 260); showToast('🌟 超武融合成功！'); }
+      });
+      skillBox.appendChild(btn);
+    });
+    skillPanel.style.display = 'block';
+  }
+
+  /** 战前祝福商店：profile 无祝福且星币足够时弹窗（3 选 1 + 跳过） */
+  function maybeOpenBlessPanel() {
+    var p = getProfile();
+    if (p.blessing) return false;
+    var cfg = GameCore.DEFAULT_CONFIG;
+    var minCost = 1e9;
+    cfg.blessings.forEach(function (b) { if (b.cost < minCost) minCost = b.cost; });
+    if (p.stars < minCost) return false;
+    if (!blessPanel) return false;
+    var starsEl = document.getElementById('bless-stars');
+    if (starsEl) starsEl.textContent = '当前 ★' + p.stars + ' · 购买一项开局祝福';
+    blessBox.innerHTML = '';
+    cfg.blessings.forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.className = 'btn primary';
+      btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+      var afford = p.stars >= b.cost;
+      btn.style.opacity = afford ? '1' : '0.45';
+      btn.innerHTML = '<span style="font-size:18px;margin-right:8px;">✨</span>' + b.name + ' <span style="color:#ffd27d;">★' + b.cost + '</span><span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
+      btn.addEventListener('click', function () {
+        if (p.stars < b.cost) { showToast('星币不足'); return; }
+        p.stars -= b.cost;
+        p.blessing = b.id;
+        saveProfile(p);
+        updateMenuStars();
+        blessPanel.style.display = 'none';
+        showToast('祝福已购买：' + b.name);
+        startGame();
+      });
+      blessBox.appendChild(btn);
+    });
+    blessPanel.style.display = 'block';
+    return true;
+  }
+
+  /** 复活检查：死亡结算前调用；星币足够且未复活 → 弹确认并返回 true（本次不结算） */
+  function maybeRevive() {
+    if (!revivePanel) return false;
+    if (state.reviveUsed) return false;
+    var p = getProfile();
+    if (p.stars < GameCore.DEFAULT_CONFIG.reviveCost) return false;
+    var costEl = document.getElementById('revive-cost-text');
+    if (costEl) costEl.textContent = '消耗 ★' + GameCore.DEFAULT_CONFIG.reviveCost + ' 复活（本局仅一次 · 当前 ★' + p.stars + '）';
+    revivePanel.style.display = 'block';
+    return true;
+  }
+
+  function closeRevivePanel() {
+    if (revivePanel) revivePanel.style.display = 'none';
+  }
+
+  // P11：特技词条加入波间强化池（方案1-B）
+  (GameCore.DEFAULT_CONFIG.traitPool || []).forEach(function (t) {
+    BUFF_POOL.push({
+      type: 'trait', traitId: t.id, icon: '✦', label: '特技 · ' + t.name, desc: t.desc,
+      maxed: function () {
+        var c = 0;
+        for (var i = 0; i < state.traits.length; i++) if (state.traits[i] === t.id) c++;
+        return c >= t.max;
+      }
+    });
+  });
+
+  // P11：按钮事件——复活确认 / 放弃 / 祝福跳过 / 护盾水晶
+  var btnReviveYes = document.getElementById('btn-revive-yes');
+  if (btnReviveYes) btnReviveYes.addEventListener('click', function () {
+    var p = getProfile();
+    if (p.stars < GameCore.DEFAULT_CONFIG.reviveCost) { closeRevivePanel(); return; }
+    p.stars -= GameCore.DEFAULT_CONFIG.reviveCost;
+    saveProfile(p);
+    updateMenuStars();
+    if (GameCore.tryRevive(state)) {
+      closeRevivePanel();
+      audio.powerup();
+      addFlash('125,240,255', 200);
+      showToast('已复活 · 剩余生命 ' + state.lives);
+    } else {
+      closeRevivePanel();
+    }
+  });
+  var btnReviveNo = document.getElementById('btn-revive-no');
+  if (btnReviveNo) btnReviveNo.addEventListener('click', function () {
+    closeRevivePanel();
+    // 放弃复活：走正常结算
+    if (recordScoreToRank()) {
+      gameoverReturnScheduled = true;
+      returnToMenuTimer = setTimeout(function () {
+        gameoverReturnScheduled = false;
+        backToMenu();
+      }, 2000);
+    } else {
+      clearTimeout(returnToMenuTimer);
+      returnToMenuTimer = null;
+      gameoverReturnScheduled = false;
+      openRankPanel(true);
+      showToast('输入玩家名称，记录本次得分');
+    }
+  });
+  var btnBlessSkip = document.getElementById('btn-bless-skip');
+  if (btnBlessSkip) btnBlessSkip.addEventListener('click', function () {
+    if (blessPanel) blessPanel.style.display = 'none';
+    startGame();
+  });
+  if (btnCrystal) btnCrystal.addEventListener('click', function () {
+    if (state.status !== 'playing') return;
+    if (GameCore.triggerCrystal(state)) {
+      audio.powerup();
+      addFlash('125,240,255', 160);
+    }
+  });
 
   function updateHud() {
     if (state.status !== 'playing') return;
@@ -7809,6 +8766,10 @@
       }
       // P2：波间强化三选一（进入 break 且未选择时弹出）
       offerBuffPanel();
+      // P11：升级三选一（经验升级触发，暂停等待选择）
+      if (state.pendingSkillChoices && state.pendingSkillChoices.length > 0 && state.status === 'playing' && !state.paused) {
+        openSkillPanel();
+      }
 
       // 蓄力炮满蓄力自动发射：播放音效并消费标志
       if (state.chargeAutoFired) {
@@ -7842,8 +8803,10 @@
       if (state.powerups.length < powerupBefore) soundEvents.powerup = true;
       if (statusBefore !== 'gameover' && state.status === 'gameover') {
         soundEvents.gameover = true;
-        // 记录成绩：已命名直接入榜并在 2 秒后自动回主菜单；未命名打开排行榜引导命名（暂停自动返回，避免打断输入）
-        if (recordScoreToRank()) {
+        // P11：复活——星币足够且未使用时弹确认（游戏保持 gameover 冻结，确认后由按钮回调恢复）
+        if (maybeRevive()) {
+          // 面板已弹出，本帧不结算
+        } else if (recordScoreToRank()) {
           gameoverReturnScheduled = true;
           returnToMenuTimer = setTimeout(function () {
             gameoverReturnScheduled = false;
