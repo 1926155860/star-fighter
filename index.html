@@ -1061,7 +1061,7 @@
     <button type="button" id="btn-crystal" title="护盾水晶：敌弹变水晶计分" style="display:none;position:absolute;left:14px;bottom:90px;z-index:30;padding:10px 12px;font-size:14px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.85);border:1px solid #7df0ff;border-radius:10px;box-shadow:0 0 12px rgba(125,240,255,0.35);pointer-events:auto;cursor:pointer;">❄ 水晶</button>
   </div>
 
-  <script>/**
+  <script>﻿/**
  * game-core.js — 星际战机核心游戏逻辑（纯函数，不依赖 DOM，可在 Node 中测试）
  *
  * 设计原则：
@@ -1240,7 +1240,7 @@
       { a: 'laser', b: 'range', id: 'flasermatrix', name: '激光矩阵', desc: '三道全屏光束交叉' }
     ],
     // 战斗掉落道具（方案1-A）
-    combatDropChance: 0.16,   // 击杀掉落概率
+    combatDropChance: 0.08,   // 击杀掉落概率（原 0.16，用户要求降低 50%）
     combatDrops: {
       rage: { label: '暴走', desc: '火力×2·积分×2（6s）', base: 6 },
       shield: { label: '护盾', desc: '抵消伤害·可把敌弹变水晶', base: 1 },
@@ -1705,6 +1705,13 @@
       a.y < b.y + b.height &&
       a.y + a.height > b.y
     );
+  }
+
+  /** P：玩家碰撞箱——只有身体中间部分受击才扣血（60%×60% 居中缩小） */
+  function playerHitbox(state) {
+    var p = state.player;
+    var hw = p.width * 0.6, hh = p.height * 0.6;
+    return { x: p.x + (p.width - hw) / 2, y: p.y + (p.height - hh) / 2, width: hw, height: hh };
   }
 
   /** 当前关卡：由波次驱动（每清完一波升 1 级，无尽波次无上限） */
@@ -5141,7 +5148,7 @@
     // 敌机子弹命中玩家
     for (var ebi = state.enemyBullets.length - 1; ebi >= 0; ebi--) {
       var eb2 = state.enemyBullets[ebi];
-      if (rectsOverlap(state.player, eb2)) {
+      if (rectsOverlap(playerHitbox(state), eb2)) {
         // P13-3：反射附魔——10% 概率将敌弹反弹为玩家子弹
         var ewR = (state.enchantWords && state.enchantWords.ewReflect) || 0;
         if (ewR > 0 && !eb2.noCancel && Math.random() < 0.1) {
@@ -5168,7 +5175,7 @@
     // 敌机撞玩家（被撞毁的球同样按规则分裂）
     for (var k = state.enemies.length - 1; k >= 0; k--) {
       var enemy2 = state.enemies[k];
-      if (rectsOverlap(state.player, enemy2)) {
+      if (rectsOverlap(playerHitbox(state), enemy2)) {
         // P5：吞噬者——碰撞伤害不可被任何元素修正：敌方扣 1、自身扣 1（带碰撞冷却，防御型无敌/克隆体免疫仍生效）
         // P6：吞噬者血量大于对方时直接吞噬（不扣自身血，吞噬其初始血量与能力）
         if (state.weapon === 'devour') {
@@ -5204,7 +5211,7 @@
     }
 
     // BOSS 撞玩家
-    if (state.boss && rectsOverlap(state.player, state.boss)) {
+    if (state.boss && rectsOverlap(playerHitbox(state), state.boss)) {
       // P5：吞噬者——与 Boss 碰撞同样 1:1 固定伤害（Boss 无抗性修正，冷却 0.5s）
       // P6：吞噬者血量大于 Boss 时直接吞噬 Boss（不扣自身血，吞噬其初始血量与能力）
       if (state.weapon === 'devour') {
@@ -5262,7 +5269,7 @@
     // 拾取道具
     for (var pi2 = state.powerups.length - 1; pi2 >= 0; pi2--) {
       var p2 = state.powerups[pi2];
-      if (rectsOverlap(state.player, p2)) {
+      if (rectsOverlap(playerHitbox(state), p2)) {
         if (p2.kind === 'loot') {
           // P11：战斗掉落道具（暴走/护盾/回血/磁铁）
           applyCombatPickup(state, p2.type, p2.rarity || 0);
@@ -5335,7 +5342,7 @@
       if (state.time >= pending.hitAt) {
         // 命中：对区域内玩家造成"一击致命"伤害（护盾/无敌可挡）
         var pb = pending;
-        if (!hasShield(state) && !isInvincible(state) && rectsOverlap(state.player, pb)) {
+        if (!hasShield(state) && !isInvincible(state) && rectsOverlap(playerHitbox(state), pb)) {
           setPlayerToOneHp(state);
         }
         state.explosions.push({ x: pb.x + pb.width / 2, y: pb.y + pb.height / 2, kind: 'bomb' });
@@ -5361,7 +5368,7 @@
     for (var wi = state.bossWarnZones.length - 1; wi >= 0; wi--) {
       var wz = state.bossWarnZones[wi];
       if (state.time >= wz.hitAt) {
-        if (!hasShield(state) && !isInvincible(state) && rectsOverlap(state.player, wz)) {
+        if (!hasShield(state) && !isInvincible(state) && rectsOverlap(playerHitbox(state), wz)) {
           setPlayerToOneHp(state);
         }
         state.explosions.push({ x: wz.x + wz.r, y: wz.y + wz.r, kind: 'bomb' });
@@ -5371,7 +5378,7 @@
     for (var ti = state.bossToxins.length - 1; ti >= 0; ti--) {
       var tz = state.bossToxins[ti];
       if (state.time >= tz.until) { state.bossToxins.splice(ti, 1); continue; }
-      if (rectsOverlap(state.player, tz)) {
+      if (rectsOverlap(playerHitbox(state), tz)) {
         if (!tz.lastHit || state.time - tz.lastHit > 0.6) {
           tz.lastHit = state.time;
           damagePlayer(state);
@@ -5540,8 +5547,9 @@
   };
 });
 
+
 </script>
-  <script>/**
+  <script>﻿/**
  * main.js — 星际战机 Demo：界面交互、科幻渲染、输入与音效
  * 依赖 game-core.js（纯逻辑），本文件负责：
  *  - 主菜单 / 装备 / 难度 / 设置 四个界面的交互
@@ -11691,9 +11699,9 @@
 
     // 还原屏幕震动位移
     if (shaking) ctx.restore();
-    // 全屏闪光（大招 / 受伤）
+    // 全屏闪光（受击 / 复活 / 水晶等）——alpha 全局封顶 0.32，杜绝强闪
     if (nowMs < flashUntil) {
-      var fa = Math.max(0, 0.5 * (flashUntil - nowMs) / 180);
+      var fa = Math.min(0.32, 0.5 * (flashUntil - nowMs) / 180);
       ctx.fillStyle = 'rgba(' + flashColor + ',' + fa.toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
     }
@@ -12367,7 +12375,7 @@
     if (GameCore.tryRevive(state)) {
       closeRevivePanel();
       audio.powerup();
-      addFlash('125,240,255', 200);
+      addFlash('125,240,255', 100);
       showToast('已复活 · 剩余生命 ' + state.lives);
     } else {
       closeRevivePanel();
@@ -12400,7 +12408,7 @@
     if (state.status !== 'playing') return;
     if (GameCore.triggerCrystal(state)) {
       audio.powerup();
-      addFlash('125,240,255', 160);
+      addFlash('125,240,255', 80);
     }
   });
 
@@ -12596,8 +12604,8 @@
       }
       if (state.lives < livesBefore) {
         track.damagedInWave = true;
-        addShake(9, 180);
-        addFlash('255,60,90', 120);
+        addShake(3, 90);
+        addFlash('255,60,90', 90);
       }
       // 连击里程碑音效（每 5 层一次上扬提示）
       if (state.combo > comboBefore && state.combo >= 5 && state.combo % 5 === 0) {
@@ -12703,7 +12711,7 @@
           lastKillFxAt = state.time;
           addHitStop(35);
           addShake(4, 170);
-          addFlash('rgba(255,80,120,0.10)', 70);
+          addFlash('rgba(255,80,120,0.08)', 50);
         } else if (lk.level >= 1) {
           // 中：轻顿帧
           addHitStop(25);
@@ -12738,15 +12746,22 @@
   lastTime = performance.now();
   rafId = requestAnimationFrame(loop);
 
-  // 素材套图：启动封面——点击后显示加载进度条，加载完成进入主菜单（避免白屏）
+  // 素材套图：启动封面——点击后显示加载进度条，加载完成后等待 30 秒缓冲，之后点击进入主菜单（避免白屏/误触）
   var splashEl = document.getElementById('splash');
   if (splashEl) {
     var splashProg = document.getElementById('splash-progress');
     var splashProgText = document.getElementById('splash-progress-text');
     var splashLoading = false;
+    var splashWaiting = false; // 加载完成后的 30 秒等待缓冲期（期间点击无效）
+    var splashReady = false;   // 缓冲结束，可点击进入
     function hideSplash() {
       splashEl.style.display = 'none';
       audio.unlock();
+    }
+    function splashClick() {
+      if (splashLoading || splashWaiting) return; // 加载中 / 30 秒等待期内点击无效
+      if (splashReady) { hideSplash(); return; }
+      startSplashLoad();
     }
     function startSplashLoad() {
       if (splashLoading || splashEl.style.display === 'none') return;
@@ -12769,8 +12784,21 @@
           p = 100;
           clearInterval(iv);
           if (splashProg) splashProg.style.width = '100%';
-          if (splashProgText) splashProgText.textContent = '加载完成 100%';
-          setTimeout(hideSplash, 160);
+          // 加载完成 → 进入 30 秒等待缓冲期（倒计时显示，点击无效）
+          splashWaiting = true;
+          var remain = 30;
+          if (splashProgText) splashProgText.textContent = '等待 30 秒后点击（剩余 ' + remain + 's）';
+          var waitIv = setInterval(function () {
+            remain--;
+            if (remain <= 0) {
+              clearInterval(waitIv);
+              splashWaiting = false;
+              splashReady = true;
+              if (splashProgText) splashProgText.textContent = '点 击 进 入';
+              return;
+            }
+            if (splashProgText) splashProgText.textContent = '等待 30 秒后点击（剩余 ' + remain + 's）';
+          }, 1000);
           return;
         }
         if (splashProg) splashProg.style.width = Math.floor(p) + '%';
@@ -12778,15 +12806,16 @@
       }, 36);
     }
     // P12：手机端触摸兼容——splash 点击/触摸均立即开始加载（消除移动端 300ms 延迟）
-    splashEl.addEventListener('click', startSplashLoad);
-    splashEl.addEventListener('touchstart', function (e) { e.preventDefault(); startSplashLoad(); }, { passive: false });
+    splashEl.addEventListener('click', splashClick);
+    splashEl.addEventListener('touchstart', function (e) { e.preventDefault(); splashClick(); }, { passive: false });
     document.addEventListener('keydown', function handlerKey(e) {
       if (splashEl.style.display === 'none') return;
-      startSplashLoad();
+      splashClick();
       document.removeEventListener('keydown', handlerKey);
     });
   }
 })();
+
 
 </script>
 </body>
