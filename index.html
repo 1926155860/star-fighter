@@ -708,6 +708,7 @@
       <div id="hud-score" style="position:absolute;top:8px;left:92px;font-size:15px;font-weight:700;color:#fff;text-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
       <div id="hud-daily-time" style="display:none;position:absolute;top:30px;left:92px;font-size:13px;font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
       <div id="hud-wave" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:15px;font-weight:600;color:#7df0ff;text-shadow:0 0 8px rgba(78,224,255,0.8);letter-spacing:2px;white-space:nowrap;"></div>
+      <div id="hud-rank" style="position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,209,102,0.8);letter-spacing:2px;white-space:nowrap;"></div>
       <div id="hud-combo" style="position:absolute;top:8px;right:12px;font-size:14px;font-weight:600;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
       <div id="hud-weapon-lv" style="position:absolute;top:30px;left:92px;font-size:12px;color:#9fc9ff;text-shadow:0 0 6px rgba(78,224,255,0.6);"></div>
       <div id="hud-hearts" style="position:absolute;top:28px;right:12px;font-size:15px;color:#ff5a7a;text-shadow:0 0 6px rgba(255,90,122,0.8);letter-spacing:2px;"></div>
@@ -855,7 +856,10 @@
     <div id="gameover" class="overlay">
       <div class="panel-title">本 局 结 算</div>
       <div id="gameover-report" style="display:flex;flex-direction:column;gap:6px;width:min(94vw,480px);font-size:14px;color:#cfe6ff;letter-spacing:1px;"></div>
-      <div style="margin-top:12px;color:#7df0ff;font-size:12px;letter-spacing:2px;" id="gameover-hint">即将返回主菜单…</div>
+      <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+        <button class="btn small" id="btn-share-stars" style="color:#7df0ff;border-color:#7df0ff;">📤 分享得 ★10</button>
+      </div>
+      <div style="margin-top:10px;color:#7df0ff;font-size:12px;letter-spacing:2px;" id="gameover-hint">即将返回主菜单…</div>
     </div>
 
     <!-- P13-13：新手引导（前 3 波逐步提示，可跳过） -->
@@ -1114,7 +1118,9 @@
       // P13-4：新武器（冰霜炮/电弧枪/漩涡枪/毒气喷射）
       icecannon: { cooldown: 0.6, damage: 3, bulletSpeed: 420, bulletWidth: 14, bulletHeight: 24, freezeTime: 0.9, freezeChance: 0.6, frostBurst: 0.35, label: '冰霜炮' },
       vortexgun: { cooldown: 0.5, damage: 1, bulletSpeed: 380, bulletWidth: 18, bulletHeight: 18, vortexDps: 9, vortexRadius: 120, label: '漩涡枪' },
-      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒气喷射' }
+      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒气喷射' },
+      // P21-B4：穿透弹——穿透 3 个敌人不消失（物理系）
+      pierce: { cooldown: 0.3, damage: 2, bulletSpeed: 560, bulletWidth: 8, bulletHeight: 20, pierceCount: 3, label: '穿透弹' }
     },
     // P8：局内遗物（波间强化可选，双刃剑效果，同一遗物不可重复拥有）
     relics: [
@@ -1135,7 +1141,7 @@
     ],
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
-      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys', icecannon: 'phys', vortexgun: 'phys', poison: 'phys',
+      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys', icecannon: 'phys', vortexgun: 'phys', poison: 'phys', pierce: 'phys',
       laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
     },
     bulletSpread: 14,
@@ -2188,6 +2194,11 @@
       if (state.weapon === 'vortexgun') blt._zone = 'vortex';
       if (state.weapon === 'vortexgun') blt._vortexR = wcfg.vortexRadius;
       if (state.weapon === 'vortexgun') blt._vortexDps = wcfg.vortexDps;
+      // P21-B4：穿透弹武器——自带穿透层数（3 个敌人不消失）
+      if (state.weapon === 'pierce') {
+        blt.pierceLeft = wcfg.pierceCount || 3;
+        blt.pierced = {};
+      }
       // P11B：武器技附魔——特性标记 + 穿透层数（激光/蓄力）
       if (enchants.length > 0) {
         blt.enchants = enchants;
@@ -3670,7 +3681,9 @@
     var cx = boss.x + boss.width / 2;
     var y = boss.y + boss.height;
     var mode = cfg.bossModes[(boss.patternIdx || 0) % cfg.bossModes.length];
-    var spd = cfg.bossBulletSpeed;
+    // P21-A3：狂暴阶段弹幕速度提升
+    var rageF = bossRageFactor(boss);
+    var spd = cfg.bossBulletSpeed * rageF;
     var bspd = spd * 0.85;
     // 朝玩家方向基准角
     var pcx = state.player ? state.player.x + state.player.width / 2 : cx;
@@ -4099,6 +4112,10 @@
       // 连击：击杀续连击，按连击倍率加分
       state.combo++;
       state.comboTimer = state.config.comboWindow;
+      // P21-B2：连击里程碑奖励（20/50/100 连击掉落随机强化道具）
+      if (state.combo === 20 || state.combo === 50 || state.combo === 100) {
+        dropPowerupAt(state, state.player.x + state.player.width / 2, state.player.y - 24);
+      }
       // P11：暴走期间积分 ×2
       var rageMult = (state.rageUntil > state.time) ? 2 : 1;
       state.score += Math.round(enemy.score * getComboMultiplier(state) * rageMult);
@@ -4790,6 +4807,14 @@
               continue;
             }
           }
+          // P21-B4：穿透弹武器——命中后穿透剩余次数（3 个敌人不消失）
+          if (bullet.pierceLeft > 0) {
+            bullet.pierceLeft--;
+            bullet.pierced = bullet.pierced || {};
+            bullet.pierced[tgt.id] = true;
+            hit = false;
+            continue;
+          }
           // P11：超武「幽灵导弹」（追踪弹+穿透）穿透不消失，记录已伤害目标
           if (bullet.type === 'homing' && hasFusion(state, 'fghost')) {
             bullet.pierced = bullet.pierced || {};
@@ -4831,6 +4856,12 @@
             bullet.pierced = bullet.pierced || {};
             bullet.pierced[state.boss.id] = true;
           }
+          // P21-B4：穿透弹对 Boss——记录已命中，继续穿透前进
+          if (bullet.pierceLeft > 0 && !(bullet.pierced && bullet.pierced[state.boss.id])) {
+            bullet.pierceLeft--;
+            bullet.pierced = bullet.pierced || {};
+            bullet.pierced[state.boss.id] = true;
+          }
         }
       }
       // 弹幕抵消：玩家子弹命中敌机子弹 → 敌弹消失；普通子弹自身也消失，回旋镖/蓄力弹保留
@@ -4846,8 +4877,8 @@
         }
       }
       if (hit) {
-        // 回旋镖/蓄力弹/光刃/幽灵导弹（追踪弹+穿透超武）/附魔弹射子弹 命中不消失
-        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade' && !(bullet.type === 'homing' && hasFusion(state, 'fghost')) && !bullet._enchantScatter) {
+        // 回旋镖/蓄力弹/光刃/幽灵导弹（追踪弹+穿透超武）/附魔弹射子弹/穿透弹 命中不消失
+        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade' && !(bullet.type === 'homing' && hasFusion(state, 'fghost')) && !bullet._enchantScatter && !(bullet.pierceLeft > 0)) {
           state.bullets.splice(bi, 1);
         }
       }
@@ -5026,6 +5057,15 @@
     return state;
   }
 
+  // P21-A3：Boss 狂暴阶段因子（血量 70%/40% 两档：弹幕更快更密）
+  function bossRageFactor(boss) {
+    if (!boss || !boss.maxHp) return 1;
+    var r = boss.hp / boss.maxHp;
+    if (r <= 0.4) return 0.6;   // 狂暴二档：弹幕间隔-40%，速度+25%
+    if (r <= 0.7) return 0.8;   // 狂暴一档：弹幕间隔-20%，速度+10%
+    return 1;
+  }
+
   function updateBoss(state, dt) {
     var cfg = state.config;
     if (!state.boss) return; // Boss 由波次驱动（每 waveBossEvery 波一次），不再按时间定时
@@ -5044,7 +5084,7 @@
     boss.nextFire -= dt;
     if (boss.nextFire <= 0) {
       bossFire(state);
-      boss.nextFire = cfg.bossFireInterval;
+      boss.nextFire = cfg.bossFireInterval * bossRageFactor(boss);
     }
     // P17：专属能力周期触发
     boss.abilityTimer -= dt;
@@ -5409,7 +5449,9 @@
     // P13-4：新武器（冰霜炮 / 漩涡枪 / 毒气喷射）
     { id: 'icecannon', icon: '❄', name: '冰霜炮', desc: '寒冰爆弹\n冻结减速敌人' },
     { id: 'vortexgun', icon: '🌀', name: '漩涡枪', desc: '引力弹\n吸附拉扯敌人' },
-    { id: 'poison', icon: '☠', name: '毒气喷射', desc: '毒云持续\n中毒叠层掉血' }
+    { id: 'poison', icon: '☠', name: '毒气喷射', desc: '毒云持续\n中毒叠层掉血' },
+    // P21-B4：穿透弹武器
+    { id: 'pierce', icon: '➹', name: '穿透弹', desc: '贯穿连击\n穿透 3 个敌人' }
   ];
 
   // P17：武器解锁（激光/回旋镖/光刃需通关 20 波；毒气/漩涡/电弧/吞噬者需通关 10 波；兑换码 010101 全解锁）
@@ -5817,6 +5859,35 @@
   document.getElementById('btn-settings').addEventListener('click', function () { showPanel('settings'); });
   document.getElementById('btn-loadout-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
   document.getElementById('btn-settings-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
+
+  // ===== P21-B5：分享得星币（每日前 3 次有效，每次 +10） =====
+  var btnShare = document.getElementById('btn-share-stars');
+  if (btnShare) {
+    btnShare.addEventListener('click', function () {
+      var p = getProfile();
+      var today = new Date();
+      var dayKey = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+      if (!p.shareDay || p.shareDay !== dayKey) { p.shareDay = dayKey; p.shareCount = 0; }
+      if ((p.shareCount || 0) >= 3) { showToast('今日分享次数已用完（3/3）'); return; }
+      var done = function () {
+        p.shareCount = (p.shareCount || 0) + 1;
+        p.stars = (p.stars || 0) + 10;
+        saveProfile(p);
+        updateMenuStars();
+        showToast('📤 分享成功！★ +10（' + p.shareCount + '/3）');
+        audio.powerup();
+      };
+      var url = location.href.split('?')[0] + '?share=1';
+      if (navigator.share) {
+        navigator.share({ title: '星际战机', text: '来玩星际战机，十四武器十 Boss，越战越强！', url: url }).then(done).catch(function () { /* 用户取消不奖励 */ });
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(done).catch(function () { showToast('复制失败'); });
+        showToast('已复制分享链接');
+      } else {
+        done();
+      }
+    });
+  }
 
   // ===== P17：兑换码（060606 开启高级设置；010101 解锁全部武器）——图标位于设置面板内 =====
   var btnSettingsCode = document.getElementById('btn-settings-code');
@@ -7659,6 +7730,14 @@
     ];
     var arpIntervals = [600, 480, 380];
     var currentLevel = -1;
+    // P21-A5：Boss 战 BGM 变奏（紧张减音阶 + 更快琶音；狂暴二档更激进）
+    var bossMode = false;
+    var bossRage = 0;
+    var bossScales = [
+      [233, 277, 311, 349, 415, 466],   // 紧张变奏（升四减五）
+      [233, 294, 349, 415, 466, 554]    // 狂暴变奏（增四紧张）
+    ];
+    var bossArpIntervals = [300, 210];
 
     function ensureCtx() {
       // 与音效共享同一个 AudioContext
@@ -7751,6 +7830,22 @@
         currentLevel = idx;
         scale = intensityScales[idx].slice();
         if (arpTimer !== null) startArp(arpIntervals[idx]);
+      },
+      // P21-A5：Boss 战 BGM 变奏（进入/离开 Boss 战；狂暴档位 0/1/2）
+      setBossMode: function (active, rage) {
+        rage = rage || 0;
+        if (active === bossMode && rage === bossRage) return;
+        bossMode = active;
+        bossRage = rage;
+        if (!active) {
+          // 恢复波次强度
+          currentLevel = -1;
+          setIntensity(state.wave || 1);
+          return;
+        }
+        var rIdx = Math.min(1, Math.max(0, rage - 1));
+        scale = bossScales[rIdx].slice();
+        if (arpTimer !== null) startArp(bossArpIntervals[rIdx]);
       }
     };
   })();
@@ -7760,6 +7855,24 @@
   var particles = [];
   // P3：雷电连锁线段（本帧绘制后衰减）
   var boltLines = [];
+  // P21-A2：爆炸冲击波（扩散环）
+  var shockwaves = [];
+  // P21-A4：环境动态层（流星雨 + 太空尘埃）
+  var envStars = [];
+  (function initEnvStars() {
+    var n = 36;
+    for (var i = 0; i < n; i++) {
+      envStars.push({
+        x: Math.random() * (W + 200) - 100,
+        y: Math.random() * (H + 200) - 100,
+        vx: (Math.random() - 0.5) * 6,
+        vy: 14 + Math.random() * 22,
+        len: 8 + Math.random() * 16,
+        size: 1 + Math.random() * 1.8,
+        isMeteor: Math.random() < 0.28
+      });
+    }
+  })();
   // P8：得分飘字（击杀加分浮字）
   var floatingTexts = [];
 
@@ -7824,6 +7937,12 @@
       return;
     }
     var count = kind === 'boss' ? 46 : kind === 'large' ? 26 : kind === 'storm' ? 30 : 12;
+    // P21-A2：爆炸冲击波（扩散环；boss 双环）
+    if (kind === 'boss' || kind === 'large' || kind === 'storm') {
+      var swMax = kind === 'boss' ? 150 : kind === 'storm' ? 90 : 70;
+      shockwaves.push({ x: x, y: y, r: 6, maxR: swMax, life: 0, maxLife: kind === 'boss' ? 0.7 : 0.5, color: kind === 'storm' ? '#c9a3ff' : '#ffd166' });
+      if (kind === 'boss') shockwaves.push({ x: x, y: y, r: 4, maxR: swMax * 0.6, life: 0, maxLife: 0.55, color: '#ffffff' });
+    }
     var colors = kind === 'boss'
       ? ['#ff6b6b', '#ffd166', '#ff9f43', '#ffffff']
       : kind === 'large'
@@ -7847,16 +7966,36 @@
   }
 
   function updateParticles(dt) {
+    // P21-D1：对象池优化——swap-pop 回收（避免 splice 频繁搬移，降低 GC 抖动）
     for (var i = particles.length - 1; i >= 0; i--) {
       var p = particles[i];
       p.life += dt;
       if (p.life >= p.maxLife) {
-        particles.splice(i, 1);
+        particles[i] = particles[particles.length - 1];
+        particles.pop();
         continue;
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 60 * dt;
+    }
+    // P21-A2：冲击波推进（r 扩散 + 衰减）
+    for (var si = shockwaves.length - 1; si >= 0; si--) {
+      var sw = shockwaves[si];
+      sw.life += dt;
+      if (sw.life >= sw.maxLife) { shockwaves.splice(si, 1); continue; }
+      var t = sw.life / sw.maxLife;
+      sw.r = 6 + (sw.maxR - 6) * (1 - Math.pow(1 - t, 2));
+    }
+    // P21-A4：环境动态层推进（流星/尘埃循环漂移）
+    var half = fxBudget().halfDensity;
+    for (var ei = 0; ei < envStars.length; ei++) {
+      var es = envStars[ei];
+      es.x += es.vx * dt * (half ? 0.6 : 1);
+      es.y += es.vy * dt * (half ? 0.6 : 1);
+      if (es.y > H + 120) { es.y = -120; es.x = Math.random() * (W + 200) - 100; }
+      if (es.x < -160) { es.x = W + 140; }
+      if (es.x > W + 160) { es.x = -140; }
     }
     // P3：雷电连线衰减
     for (var bi = boltLines.length - 1; bi >= 0; bi--) {
@@ -7877,6 +8016,28 @@
       ctx.arc(p.x, p.y, p.size * (1 - p.life / p.maxLife * 0.5), 0, Math.PI * 2);
       ctx.fill();
       if (particleGlow) ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+    // P21-A2：爆炸冲击波（扩散环，lighter 发光合成）
+    for (var si2 = 0; si2 < shockwaves.length; si2++) {
+      var sw2 = shockwaves[si2];
+      var st = sw2.life / sw2.maxLife;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = (1 - st) * 0.85;
+      ctx.strokeStyle = sw2.color;
+      ctx.lineWidth = 3 * (1 - st) + 1;
+      ctx.shadowColor = sw2.color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(sw2.x, sw2.y, sw2.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = (1 - st) * 0.22;
+      ctx.fillStyle = sw2.color;
+      ctx.beginPath();
+      ctx.arc(sw2.x, sw2.y, sw2.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     // P8：得分飘字
@@ -8090,7 +8251,36 @@
       ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
+    // P21-A4：环境动态层（流星拖尾 + 太空尘埃；高画质开启，倍速减密度）
+    if (fxBudget().maxParticles > 80) {
+      ctx.save();
+      for (var ei2 = 0; ei2 < envStars.length; ei2++) {
+        var es2 = envStars[ei2];
+        if (es2.isMeteor) {
+          ctx.globalAlpha = 0.5 + 0.2 * Math.sin(state.time * 6 + es2.y);
+          ctx.strokeStyle = '#bcdcff';
+          ctx.lineWidth = es2.size;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(es2.x, es2.y);
+          ctx.lineTo(es2.x - es2.len * 0.55, es2.y - es2.len * 0.85);
+          ctx.stroke();
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(es2.x, es2.y, es2.size * 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(state.time * 2 + es2.x));
+          ctx.fillStyle = th.star;
+          ctx.beginPath();
+          ctx.arc(es2.x, es2.y, es2.size * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // ==================== 玩家飞机（参考图圆润卡通蓝白战机建模） ====================
@@ -8961,7 +9151,7 @@
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
       // P15：新武器专属拖尾色（毒气绿/漩涡青紫/冰霜冰蓝），替代默认黄色柱条
       var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166'
-        : b.type === 'icecannon' ? '#a8e8ff' : b.type === 'vortexgun' ? '#9fe8ff' : b.type === 'poison' ? '#4ade80' : '#ffe066';
+        : b.type === 'icecannon' ? '#a8e8ff' : b.type === 'vortexgun' ? '#9fe8ff' : b.type === 'poison' ? '#4ade80' : b.type === 'pierce' ? '#7df0ff' : '#ffe066';
       if (fxBudget().tail) {
         // 外层光晕拖尾
         ctx.globalAlpha = 0.22;
@@ -8980,7 +9170,39 @@
         ctx.globalAlpha = 1;
       }
     }
-    if (b.type === 'cannon') {
+    if (b.type === 'pierce') {
+      // P21-B4：穿透弹——青白贯穿弹芯 + 旋转能量环（体现贯穿感）
+      ctx.shadowColor = '#7df0ff';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = '#7df0ff';
+      ctx.beginPath();
+      ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(b.x + b.width * 0.35, b.y + 2, Math.max(1, b.width * 0.3), b.height - 4);
+      // 弹头贯穿尖
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(b.x + b.width / 2, b.y - 4);
+      ctx.lineTo(b.x + b.width * 0.2, b.y + 2);
+      ctx.lineTo(b.x + b.width * 0.8, b.y + 2);
+      ctx.closePath();
+      ctx.fill();
+      // 旋转能量环（消耗穿透次数后更亮）
+      var pr = b.pierceLeft === undefined ? 0 : (3 - b.pierceLeft);
+      ctx.strokeStyle = pr > 0 ? 'rgba(255,209,102,0.9)' : 'rgba(125,240,255,0.5)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.62, b.height * 0.5, state.time * 8, 0, Math.PI * 2);
+      ctx.stroke();
+      // 贯穿计数点
+      for (var pi4 = 0; pi4 < pr; pi4++) {
+        ctx.fillStyle = '#ffd166';
+        ctx.beginPath();
+        ctx.arc(b.x + b.width * 0.15 + pi4 * 5, b.y + b.height / 2 - 6, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (b.type === 'cannon') {
       ctx.shadowColor = '#ff9f43';
       ctx.shadowBlur = 14;
       ctx.fillStyle = '#ff9f43';
@@ -9643,6 +9865,39 @@
   }
 
   function drawBoss(boss) {
+    // P21-A1：Boss 登场演出——传送光柱（进场 1.2 秒内：顶部到 Boss 的紫色光柱 + 上升粒子 + 地面光圈）
+    if (boss.enteredAt !== undefined && state.time - boss.enteredAt < 1.2) {
+      var et = (state.time - boss.enteredAt) / 1.2;
+      var ep = 1 - Math.pow(1 - et, 2);
+      var bcx = boss.x + boss.width / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var eg = ctx.createLinearGradient(0, boss.y - 200, 0, boss.y + boss.height);
+      eg.addColorStop(0, 'rgba(160,80,255,0)');
+      eg.addColorStop(0.6, 'rgba(190,120,255,' + (0.34 * (1 - et)) + ')');
+      eg.addColorStop(1, 'rgba(120,60,255,' + (0.5 * (1 - et)) + ')');
+      ctx.fillStyle = eg;
+      ctx.fillRect(bcx - boss.width * 0.55, boss.y - 200, boss.width * 1.1, boss.height + 200);
+      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(state.time * 18);
+      ctx.strokeStyle = '#c77dff';
+      ctx.lineWidth = 2;
+      for (var pi3 = 0; pi3 < 3; pi3++) {
+        var px3 = bcx + Math.sin(state.time * 4 + pi3) * boss.width * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(px3, boss.y - 120);
+        ctx.lineTo(px3 + Math.sin(state.time * 9 + pi3) * 8, boss.y + boss.height);
+        ctx.stroke();
+      }
+      // 落地扩散光圈
+      ctx.globalAlpha = (1 - et) * 0.7;
+      ctx.strokeStyle = '#d9a0ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(bcx, boss.y + boss.height, 20 + ep * 46, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     var x = boss.x, y = boss.y, w = boss.width, h = boss.height;
     var cx = x + w / 2;
     var boxX = x + w * 0.03, boxY = y + h * 0.03, boxW = w * 0.94, boxH = h * 0.94;
@@ -9668,12 +9923,29 @@
     var ratio = Math.max(0, boss.hp / boss.maxHp);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(cx - w * 0.55, y - 14, w * 1.1, 8);
-    var barCol = ratio > 0.75 ? '#52e07c' : ratio > 0.5 ? '#4ee0ff' : ratio > 0.25 ? '#ffb347' : '#ff3b6b';
+    // P21-A3：Boss 狂暴阶段——70%/40% 两档：血条变色脉动 + 顶部狂暴警告
+    var rage = ratio <= 0.4 ? 2 : ratio <= 0.7 ? 1 : 0;
+    var barCol = rage === 2 ? '#ff2a4d' : rage === 1 ? '#ff7a2b' : ratio > 0.75 ? '#52e07c' : ratio > 0.5 ? '#4ee0ff' : ratio > 0.25 ? '#ffb347' : '#ff3b6b';
     var barGrad = ctx.createLinearGradient(cx - w * 0.55, 0, cx + w * 0.55, 0);
     barGrad.addColorStop(0, barCol);
-    barGrad.addColorStop(1, '#ffd166');
+    barGrad.addColorStop(1, rage > 0 ? '#ffffff' : '#ffd166');
     ctx.fillStyle = barGrad;
     ctx.fillRect(cx - w * 0.55, y - 14, w * 1.1 * ratio, 8);
+    if (rage > 0) {
+      // 狂暴脉动光晕
+      var rp = 0.6 + 0.4 * Math.sin(state.time * (rage === 2 ? 14 : 9));
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,' + (rage === 2 ? '42,77' : '122,43') + ',' + rp + ')';
+      ctx.shadowColor = barCol;
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cx - w * 0.55 - 2, y - 16, w * 1.1 + 4, 12);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(rage === 2 ? '⚠ 狂暴 !!' : '⚠ 狂暴', cx, y - 22);
+      ctx.restore();
+    }
     // 分段刻度
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1;
@@ -10767,13 +11039,26 @@
 
   // ==================== 能量大招 / HUD ====================
 
-  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者', icecannon: '冰霜炮', vortexgun: '漩涡枪', poison: '毒气喷射' };
+  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者', icecannon: '冰霜炮', vortexgun: '漩涡枪', poison: '毒气喷射', pierce: '穿透弹' };
 
   function fmtNum(n) {
     var v = Math.round(n);
     if (v >= 10000) return (v / 10000).toFixed(1) + 'w';
     if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
     return String(v);
+  }
+
+  // P21-B3：无尽段位（10 阶段后进入无尽，按波次/层数进位：青铜→王者→传说）
+  function getRankForWave(wave) {
+    var ranks = [
+      { min: 1, name: '青铜' }, { min: 11, name: '白银' }, { min: 21, name: '黄金' },
+      { min: 31, name: '白金' }, { min: 41, name: '钻石' }, { min: 51, name: '大师' },
+      { min: 61, name: '宗师' }, { min: 71, name: '王者' }, { min: 81, name: '传说' }
+    ];
+    for (var i = ranks.length - 1; i >= 0; i--) {
+      if (wave >= ranks[i].min) return ranks[i].name;
+    }
+    return '青铜';
   }
 
   // ==================== 打击感（顿帧 / 屏幕震动 / 全屏闪光） ====================
@@ -11245,6 +11530,12 @@
         waveEl.textContent = (state.wave % state.config.waveBossEvery === 0) ? '第 ' + state.wave + ' 波 · BOSS' : '第 ' + state.wave + ' 波';
       }
     }
+    // P21-B3：无尽段位徽章（按波次分段位，10 阶段后进入无尽按层进位）
+    var rankEl = document.getElementById('hud-rank');
+    if (rankEl) {
+      var rk = getRankForWave(state.wave || 1);
+      rankEl.textContent = '⚜ ' + rk + (rk === '传说' ? '' : '段');
+    }
     var wl = document.getElementById('hud-weapon-lv');
     if (wl) {
       wl.textContent = (WEAPON_NAMES[state.weapon] || state.weapon) + ' LV.' + GameCore.getWeaponLevel(state, state.weapon);
@@ -11460,6 +11751,19 @@
         }
       }
       if (!bossBefore && state.boss) soundEvents.boss = true;
+      // P21-A5：Boss 战 BGM 变奏（进入/离开/狂暴档位）
+      if (state.boss) {
+        var br = state.boss.hp / state.boss.maxHp;
+        music.setBossMode(true, br <= 0.4 ? 2 : br <= 0.7 ? 1 : 0);
+      } else {
+        music.setBossMode(false, 0);
+      }
+      // P21-A1/A2：Boss 被击毁——全屏震动 + 白闪 + 大冲击波演出
+      if (bossBefore && !state.boss) {
+        addShake(12, 280);
+        addHitStop(60);
+        addFlash('255,255,255', 130);
+      }
 
       for (var x = 0; x < state.explosions.length; x++) {
         spawnExplosion(state.explosions[x].x, state.explosions[x].y, state.explosions[x].kind, state.explosions[x].fromX, state.explosions[x].fromY);
@@ -11520,6 +11824,17 @@
     function startSplashLoad() {
       if (splashLoading || splashEl.style.display === 'none') return;
       splashLoading = true;
+      // P21-D3：加载预解码——关键贴图预热解码（避免进入游戏首帧卡顿）
+      try {
+        [bossImg, bgCyanImg, bgPurpleImg, levelImg].forEach(function (im) {
+          if (im && im.src && typeof im.decode === 'function') im.decode().catch(function () {});
+        });
+        var allImgs = document.querySelectorAll('img');
+        for (var ii = 0; ii < allImgs.length; ii++) {
+          var iim = allImgs[ii];
+          if (iim && iim.src && typeof iim.decode === 'function') iim.decode().catch(function () {});
+        }
+      } catch (err) {}
       var p = 0;
       var iv = setInterval(function () {
         p += 6 + Math.random() * 12;
