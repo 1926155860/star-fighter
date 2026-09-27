@@ -6225,15 +6225,19 @@
     };
   }
   function checkFps(now) {
+    if (_fpsLastCheck === 0) { _fpsLastCheck = now; return; }
     _fpsCount++;
-    _fpsAccum += 16.7;
+    // 累计真实帧间隔（毫秒），avg 即实际每帧耗时
+    _fpsAccum += (now - lastTime);
     if (now - _fpsLastCheck < 5000) return;
     var avg = _fpsAccum / _fpsCount;
     _fpsAccum = 0;
     _fpsCount = 0;
     _fpsLastCheck = now;
-    if (avg > 17.5 && qualityLevel < 2) qualityLevel++;
-    else if (avg > 21 && qualityLevel > 0) qualityLevel--;
+    // avg>24ms(<41fps) 降档；avg<16.5ms(>60fps) 且持续良好才升档
+    if (avg > 24 && qualityLevel > 0) qualityLevel--;
+    else if (avg > 30 && qualityLevel > 0) qualityLevel--; // 严重卡顿再降一档
+    else if (avg < 16.5 && qualityLevel < 2) qualityLevel++;
   }
 
   var stars = [];
@@ -7337,13 +7341,15 @@
       ctx.restore();
       return;
     }
-    // 普通敌弹：按颜色选精灵（红/金/紫/电青/青）
+    // 普通敌弹：按颜色选精灵（红/金/紫/电青/青）；低画质跳过光晕精灵只画核心
     var spr2 = EB_SPRITES.base;
     if (eb.color === '#ffd166' || eb.color === '#ffd700') spr2 = EB_SPRITES.gold;
     else if (eb.color === '#9b7bff' || eb.color === '#a05bff') spr2 = EB_SPRITES.purple;
     else if (eb.color === '#bfe9ff') spr2 = EB_SPRITES.bolt;
     else if (eb.color === '#7df0ff' || eb.color === '#4ee0ff') spr2 = EB_SPRITES.cyan;
-    ctx.drawImage(spr2, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
+    if (fxBudget().enemyGlow) {
+      ctx.drawImage(spr2, eb.x - 6, eb.y - 6, eb.width + 12, eb.height + 12);
+    }
     ctx.fillStyle = eb.color || '#ff6b6b';
     ctx.beginPath();
     ctx.ellipse(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1.5, eb.width * 0.3), Math.max(1.5, eb.height * 0.3), 0, 0, Math.PI * 2);
@@ -8948,8 +8954,13 @@
     }
   });
 
+  var _hudLastUpdate = 0;
   function updateHud() {
     if (state.status !== 'playing') return;
+    // P12-FIX：HUD DOM 文本节流（约 8 次/秒）——减少低端机每帧 DOM 写入卡顿
+    var _hudNow = performance.now();
+    if (state.status === 'playing' && !state.paused && _hudNow - _hudLastUpdate < 120) return;
+    _hudLastUpdate = _hudNow;
     var scoreEl = document.getElementById('hud-score');
     if (scoreEl) {
       var prevScoreText = scoreEl.textContent;
@@ -9021,7 +9032,26 @@
     }
   }
 
+  // P12-FIX：loop 异常护栏——任何单帧异常不再中断 rAF（防止手机端完全冻结）
+  var _loopErrs = 0;
   function loop(now) {
+    try {
+      _loopBody(now);
+      _loopErrs = 0;
+    } catch (e) {
+      console.error('[loop]', e);
+      qualityLevel = 0; // 异常即降至最低画质
+      _loopErrs++;
+      if (_loopErrs > 30) { // 持续异常 → 回主菜单，避免死循环冻结
+        _loopErrs = 0;
+        try { backToMenu(); } catch (e2) { /* ignore */ }
+        return;
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+  }
+
+  function _loopBody(now) {
     // P12-E：帧率监控（画质自适应）
     checkFps(now);
     var dt = Math.min((now - lastTime) / 1000, 0.05);
