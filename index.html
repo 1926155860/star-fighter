@@ -737,18 +737,22 @@
 
     <!-- 成长升级（局外永久成长） -->
     <div id="upgrade" class="overlay">
-      <div class="panel-title">成 长 升 级</div>
-      <div class="upgrade-stars" id="upgrade-stars" style="font-size:15px;color:#ffd27d;text-align:center;margin-bottom:12px;">★ 0</div>
-      <div class="upgrade-list" id="upgrade-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
-      <!-- P8：武器专精（每武器 3 分支，花星币升级，局外永久生效） -->
-      <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">武 器 专 精</div>
-      <div id="mastery-weapon-tabs" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:10px;"></div>
-      <div id="mastery-branches" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
-      <!-- P11：局外核心强化（方案1-D，成长页第三栏） -->
-      <div style="font-size:13px;color:#7df0ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">局 外 核 心 强 化</div>
-      <div id="core-upgrade-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
-      <div class="hint">每次游戏结束，得分按 ★10 分 = 1 星币 结算<br>通用强化所有武器共享 · 专精按武器独立生效</div>
-      <button class="btn small" id="btn-upgrade-back">返 回</button>
+      <div style="width:min(96vw,920px);display:flex;flex-direction:column;">
+        <div class="panel-title">成 长 升 级</div>
+        <div class="upgrade-stars" id="upgrade-stars" style="font-size:15px;color:#ffd27d;text-align:center;margin-bottom:10px;">★ 0</div>
+        <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin:2px 0 8px;text-align:center;">通 用 强 化</div>
+        <!-- P12g：成长卡片两列网格（宽屏两列，手机自适应单列） -->
+        <div id="upgrade-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px;"></div>
+        <!-- P8：武器专精（每武器 3 分支，花星币升级，局外永久生效） -->
+        <div style="font-size:13px;color:#9be8ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">武 器 专 精</div>
+        <div id="mastery-weapon-tabs" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:10px;"></div>
+        <div id="mastery-branches" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px;"></div>
+        <!-- P11：局外核心强化（方案1-D，成长页第三栏） -->
+        <div style="font-size:13px;color:#7df0ff;letter-spacing:1px;margin:4px 0 8px;text-align:center;">局 外 核 心 强 化</div>
+        <div id="core-upgrade-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px;"></div>
+        <div class="hint" style="text-align:center;">每次游戏结束，得分按 ★10 分 = 1 星币 结算<br>通用强化所有武器共享 · 专精按武器独立生效</div>
+        <div style="display:flex;justify-content:center;margin-top:6px;"><button class="btn small" id="btn-upgrade-back">返 回</button></div>
+      </div>
     </div>
 
     <!-- 游戏内设置（暂停）：手机无键盘时点击左上角 ⚙ 打开 -->
@@ -4637,10 +4641,10 @@
     var maxed = o.full || (o.lv >= o.max);
     var accent = maxed ? '#3ddc84' : (o.canBuy ? '#4ee0ff' : '#2b4a7d');
     var pct = o.max > 0 ? Math.min(100, Math.round((o.lv / o.max) * 100)) : 100;
-    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(135deg,rgba(16,34,68,0.92),rgba(8,18,42,0.92));border:1px solid ' + accent + ';border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,0.25),inset 0 0 22px rgba(30,90,180,0.06);';
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:linear-gradient(135deg,rgba(16,34,68,0.92),rgba(8,18,42,0.92));border:1px solid ' + accent + ';border-radius:12px;box-shadow:0 0 8px rgba(0,0,0,0.25),inset 0 0 20px rgba(30,90,180,0.06);';
     // 图标徽章
     var badge = document.createElement('div');
-    badge.style.cssText = 'flex:0 0 40px;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:' + (maxed ? 'rgba(61,220,132,0.16)' : o.canBuy ? 'rgba(78,224,255,0.16)' : 'rgba(43,74,125,0.35)') + ';border:1px solid ' + accent + ';';
+    badge.style.cssText = 'flex:0 0 34px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;background:' + (maxed ? 'rgba(61,220,132,0.16)' : o.canBuy ? 'rgba(78,224,255,0.16)' : 'rgba(43,74,125,0.35)') + ';border:1px solid ' + accent + ';';
     badge.textContent = o.icon || '◆';
     row.appendChild(badge);
     // 信息区
@@ -4653,6 +4657,7 @@
     // 按钮
     var btn = document.createElement('button');
     btn.className = 'btn small';
+    btn.style.cssText += 'white-space:nowrap;';
     if (maxed) { btn.textContent = '已达上限'; btn.style.opacity = '0.55'; btn.disabled = true; }
     else if (o.canBuy) { btn.textContent = '升 级 ★' + o.cost; btn.style.cssText += 'background:linear-gradient(135deg,#f5c543,#ff9f43);color:#1a1020;border:1px solid #ffd166;font-weight:700;'; }
     else { btn.textContent = '★' + o.cost + ' 不足'; btn.style.opacity = '0.5'; btn.disabled = true; }
