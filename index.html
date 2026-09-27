@@ -3673,7 +3673,9 @@
     if (!boss) return false;
     var cx = boss.x + boss.width / 2;
     var y = boss.y + boss.height;
-    var mode = cfg.bossModes[(boss.patternIdx || 0) % cfg.bossModes.length];
+    // P22-③：转阶段弹幕解锁——阶段0(≥70%血) 用前 8 种；阶段1(40-70%) 用前 15 种；阶段2(<40%) 全 20 种
+    var _avail = (boss._phase || 0) >= 2 ? cfg.bossModes : (boss._phase || 0) >= 1 ? cfg.bossModes.slice(0, 15) : cfg.bossModes.slice(0, 8);
+    var mode = _avail[(boss.patternIdx || 0) % _avail.length];
     // P21-A3：狂暴阶段弹幕速度提升
     var rageF = bossRageFactor(boss);
     var spd = cfg.bossBulletSpeed * rageF;
@@ -5064,6 +5066,13 @@
     if (!state.boss) return; // Boss 由波次驱动（每 waveBossEvery 波一次），不再按时间定时
     var boss = state.boss;
     if (boss.invuln > 0) boss.invuln -= dt;
+    // P22-③：转阶段检测——70%/40% 生命线：解锁更高阶弹幕 + 触发阶段演出
+    var _phRatio = Math.max(0, boss.hp / boss.maxHp);
+    var _newPhase = _phRatio <= 0.4 ? 2 : (_phRatio <= 0.7 ? 1 : 0);
+    if ((boss._phase || 0) < _newPhase) {
+      boss._phase = _newPhase;
+      boss.phaseFx = { phase: _newPhase, at: state.time };
+    }
     boss.x += Math.sin(state.time * cfg.bossMoveFrequency) * cfg.bossMoveAmplitude * dt;
     boss.x = clamp(boss.x, 0, cfg.width - boss.width);
     // P14：冰霜圈对 Boss 的冻结（减速 55%）
@@ -7607,6 +7616,8 @@
   var lastTime = 0;
   var rafId = null;
   var gameSpeed = 1;          // P7：游戏倍速（1x / 2x / 4x）
+  var slowUntil = 0;          // P22-①：终结击杀慢动作（命中反馈分级）
+  var phaseTitle = null;      // P22-③：Boss 转阶段台词横幅 {text,color,until}
   var firingRequested = false;
   var laserVisible = false;
   var chargeVisible = false;
@@ -7892,6 +7903,16 @@
   }
 
   // P8：词缀特效（破盾碎裂环 / 燃火灼烧 / 吸血回复）
+  // P22-①/⑨：终结击杀金尘（二次粒子，高档画质开启）
+  function spawnGoldenDust(x, y) {
+    var n = 16;
+    for (var gi = 0; gi < n; gi++) {
+      var ga = Math.random() * Math.PI * 2;
+      var gs = 40 + Math.random() * 90;
+      particles.push({ x: x, y: y, vx: Math.cos(ga) * gs, vy: Math.sin(ga) * gs - 30, life: 0, maxLife: 0.5 + Math.random() * 0.3, size: 1.6 + Math.random() * 1.6, color: Math.random() < 0.5 ? '#ffd166' : '#fff3c4' });
+    }
+  }
+
   function consumeAffixFx(afx) {
     for (var i = 0; i < afx.length; i++) {
       var af = afx[i];
@@ -8151,15 +8172,21 @@
     return c;
   }
   // P12：画质自适应（方案4-E）——帧率监控自动降档
-  var qualityLevel = 2; // 2=高 1=中 0=低
+  // P22-⑨：画质档 0/1/2/3（关/低/中/高）；移动端默认中档，桌面默认高档
+  var qualityLevel = ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 1 : 2;
   var _fpsAccum = 0, _fpsCount = 0, _fpsLastCheck = 0;
   function fxBudget() {
     var q = qualityLevel;
     return {
-      maxParticles: q === 2 ? 320 : (q === 1 ? 160 : 80),
+      maxParticles: q >= 3 ? 420 : (q === 2 ? 320 : (q === 1 ? 160 : 60)),
       enemyGlow: q >= 1,
       tail: q >= 1,
-      halfDensity: gameSpeed > 1 // P12-F：倍速联动
+      halfDensity: gameSpeed > 1, // P12-F：倍速联动
+      parallax: q >= 2,           // P22-⑨：星云视差滚动
+      shell: q >= 2,              // P22-⑨：敌人能量壳呼吸环
+      tint: q >= 1,               // P22-⑨：战斗氛围色调（Boss 暗红层）
+      pulse: q >= 2,              // P22-⑨：不可抵消弹幕深红脉冲
+      secondParticles: q >= 3     // P22-⑨：二次粒子（终结金尘 / 阶段碎屑）
     };
   }
   function checkFps(now) {
@@ -8167,15 +8194,15 @@
     _fpsCount++;
     // 累计真实帧间隔（毫秒），avg 即实际每帧耗时
     _fpsAccum += (now - lastTime);
-    if (now - _fpsLastCheck < 5000) return;
+    if (now - _fpsLastCheck < 4000) return;
     var avg = _fpsAccum / _fpsCount;
     _fpsAccum = 0;
     _fpsCount = 0;
     _fpsLastCheck = now;
-    // avg>24ms(<41fps) 降档；avg<16.5ms(>60fps) 且持续良好才升档
-    if (avg > 24 && qualityLevel > 0) qualityLevel--;
-    else if (avg > 30 && qualityLevel > 0) qualityLevel--; // 严重卡顿再降一档
-    else if (avg < 16.5 && qualityLevel < 2) qualityLevel++;
+    // P22-⑧：收紧阈值——avg>20ms(<50fps) 立即降档；avg>26ms 再降一档；持续良好(>58fps) 才升档
+    if (avg > 26 && qualityLevel > 1) qualityLevel -= 2;
+    else if (avg > 20 && qualityLevel > 0) qualityLevel--;
+    else if (avg < 16.5 && qualityLevel < 3) qualityLevel++;
   }
 
   var stars = [];
@@ -8214,7 +8241,15 @@
     var hasBossNow = state.boss && state.boss.hp > 0;
     var bgImg = (hasBossNow || state.wave >= 10) ? bgPurpleImg : bgCyanImg;
     if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-      ctx.drawImage(bgImg, 0, 0, W, H);
+      if (fxBudget().parallax) {
+        // P22-⑨：星云视差滚动（高档画质）——横向缓移 + 上下随波微移
+        var pOff = (state.time * 7) % (W * 0.3);
+        var pY = Math.sin(state.time * 0.11) * 10;
+        ctx.drawImage(bgImg, -pOff, pY - 12, W * 1.3, H * 1.06);
+        ctx.drawImage(bgImg, W * 1.3 - pOff - 4, pY - 12, W * 1.3, H * 1.06);
+      } else {
+        ctx.drawImage(bgImg, 0, 0, W, H);
+      }
     } else {
       // P12-B：背景离屏缓存——整张烘焙（渐变+星云），每帧仅一次 drawImage
       ctx.drawImage(getBgCanvas(th), 0, 0);
@@ -8811,6 +8846,20 @@
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.lineWidth = 1;
     ctx.stroke();
+    // P22-⑨：能量壳呼吸环（高档画质）——球体外层半透明能量壳随节奏呼吸
+    if (fxBudget().shell && r > 4) {
+      var shellP = 0.35 + 0.25 * Math.sin(state.time * 2.2 + (e.id || 0));
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = (e.special === 'healer') ? '#3ddc84' : (e.special === 'defender' ? '#ffd166' : col);
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 10 + r * 0.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 3 + shellP * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
     // 高光点
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.beginPath();
@@ -9471,6 +9520,17 @@
       ctx.beginPath();
       ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, Math.max(1, eb.width * 0.13), 0, Math.PI * 2);
       ctx.fill();
+      // P22-⑨：深红脉冲外圈（高档画质）——不可抵消弹的威胁警示
+      if (fxBudget().pulse) {
+        var pulseR = eb.width / 2 + 4 + Math.sin(state.time * 6 + eb.x) * 1.6;
+        ctx.globalAlpha = 0.55 + 0.35 * Math.sin(state.time * 6 + eb.x);
+        ctx.strokeStyle = '#ff3b3b';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(eb.x + eb.width / 2, eb.y + eb.height / 2, pulseR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
       return;
     }
@@ -10702,6 +10762,13 @@
       drawBoss(state.boss);
     }
 
+    // P22-⑨：战斗氛围色调层（Boss 在场暗红随血量加深；狂暴时更浓；低画质关闭）
+    if (fxBudget().tint && state.boss && state.boss.hp > 0 && state.status === 'playing') {
+      var tintA = Math.min(0.12, 0.04 + (1 - state.boss.hp / state.boss.maxHp) * 0.10);
+      ctx.fillStyle = 'rgba(150,10,40,' + tintA + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+
     // P17：Boss 专属能力绘制（预警区 / 地面毒区）
     if (state.bossWarnZones && state.bossWarnZones.length) {
       for (var wzI = 0; wzI < state.bossWarnZones.length; wzI++) {
@@ -10751,11 +10818,44 @@
       drawBullet(state.bullets[bj]);
     }
 
+    // P22-⑧：敌弹分桶合并绘制——普通弹按颜色分组，先批量光晕 drawImage 再批量核心 fill（减少状态切换）；特殊弹（深红/火焰/自爆/克隆）逐颗
+    var _ebBuckets = {};
+    var _ebFirst = [];
     for (var ebj = 0; ebj < state.enemyBullets.length; ebj++) {
       // P13-17：性能——离屏敌弹跳过绘制
       var peb = state.enemyBullets[ebj];
       if (peb && (peb.x < -80 || peb.x > W + 80 || peb.y < -80 || peb.y > H + 80)) continue;
-      drawEnemyBullet(peb);
+      if (peb.flame || peb.noCancel || peb.special || peb.red) { _ebFirst.push(peb); continue; }
+      var bc2 = (peb.color === '#ffd166' || peb.color === '#ffd700') ? 'gold' : (peb.color === '#9b7bff' || peb.color === '#a05bff') ? 'purple' : (peb.color === '#bfe9ff') ? 'bolt' : (peb.color === '#7df0ff' || peb.color === '#4ee0ff') ? 'cyan' : 'base';
+      (_ebBuckets[bc2] = _ebBuckets[bc2] || []).push(peb);
+    }
+    for (var ebx2 = 0; ebx2 < _ebFirst.length; ebx2++) drawEnemyBullet(_ebFirst[ebx2]);
+    var _bOrder = ['gold', 'purple', 'bolt', 'cyan', 'base'];
+    for (var bk2 = 0; bk2 < _bOrder.length; bk2++) {
+      var arr2 = _ebBuckets[_bOrder[bk2]];
+      if (!arr2 || !arr2.length) continue;
+      var sprB = _bOrder[bk2] === 'gold' ? EB_SPRITES.gold : _bOrder[bk2] === 'purple' ? EB_SPRITES.purple : _bOrder[bk2] === 'bolt' ? EB_SPRITES.bolt : _bOrder[bk2] === 'cyan' ? EB_SPRITES.cyan : EB_SPRITES.base;
+      var colB = _bOrder[bk2] === 'gold' ? '#ffd166' : _bOrder[bk2] === 'purple' ? '#9b7bff' : _bOrder[bk2] === 'bolt' ? '#bfe9ff' : _bOrder[bk2] === 'cyan' ? '#7df0ff' : (arr2[0].color || '#ff6b6b');
+      // 光晕层：同精灵批量
+      if (fxBudget().enemyGlow) {
+        for (var b1 = 0; b1 < arr2.length; b1++) {
+          var eb1 = arr2[b1];
+          ctx.drawImage(sprB, eb1.x - 6, eb1.y - 6, eb1.width + 12, eb1.height + 12);
+        }
+      }
+      // 核心层：同色批量
+      ctx.fillStyle = colB;
+      for (var b2 = 0; b2 < arr2.length; b2++) {
+        var eb2 = arr2[b2];
+        ctx.beginPath();
+        ctx.ellipse(eb2.x + eb2.width / 2, eb2.y + eb2.height / 2, Math.max(1.5, eb2.width * 0.3), Math.max(1.5, eb2.height * 0.3), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.beginPath();
+        ctx.arc(eb2.x + eb2.width / 2, eb2.y + eb2.height / 2, Math.max(1, eb2.width * 0.14), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = colB;
+      }
     }
 
     if (state.status === 'playing' || state.status === 'gameover') {
@@ -10808,6 +10908,33 @@
     }
 
     drawParticles();
+
+    // P22-③：Boss 转阶段台词横幅（淡入淡出，2.2s 消失）
+    if (phaseTitle && state.time < phaseTitle.until) {
+      var pt = phaseTitle;
+      var ptA = 1;
+      var ptLife = pt.until - state.time;
+      if (ptLife > 2.0) ptA = (2.2 - ptLife) / 0.2;
+      else if (ptLife < 0.45) ptA = ptLife / 0.45;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, ptA));
+      ctx.font = '900 34px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(20,2,12,0.92)';
+      ctx.lineWidth = 7;
+      ctx.strokeText(pt.text, W / 2, H * 0.3);
+      ctx.shadowColor = pt.color;
+      ctx.shadowBlur = 24;
+      ctx.fillStyle = pt.color;
+      ctx.fillText(pt.text, W / 2, H * 0.3);
+      ctx.shadowBlur = 0;
+      // 底部小字提示
+      ctx.font = '600 14px "Microsoft YaHei","PingFang SC",sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(pt.phase === 2 ? '弹幕模式已全部解锁' : '高阶弹幕模式已解锁', W / 2, H * 0.3 + 30);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
 
     if (state.status === 'playing' || state.status === 'gameover') {
       drawHUD();
@@ -11556,6 +11683,8 @@
     var dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
     dt *= gameSpeed; // P7：游戏倍速（2x / 4x 时时间流速加倍，上限单帧 0.05*4）
+    // P22-①：终结击杀慢动作（0.3 倍速 0.15s，画面继续渲染）
+    if (now < slowUntil) dt *= 0.3;
 
     // 命中顿帧：短暂停止游戏逻辑（画面继续渲染），增强打击感
     if (now < hitStopUntil) {
@@ -11735,11 +11864,49 @@
           spawnHitSpark(hf.x, hf.y, hf.dmgType === 'magic' ? '#c98bff' : '#ffd166');
         }
       }
+      // P22-③：Boss 转阶段演出消费——黑场红闪 + 台词横幅 + 冲击波 + 顿帧（只在升阶段时触发一次）
+      if (state.boss && state.boss.phaseFx && state.boss.phaseFx.phase > (state._phaseShown || 0)) {
+        var pfx = state.boss.phaseFx;
+        state._phaseShown = pfx.phase;
+        phaseTitle = {
+          text: pfx.phase === 2 ? '最 后 的 疯 狂' : '它 觉 醒 了',
+          color: pfx.phase === 2 ? '#ff3b6b' : '#ff9f43',
+          until: state.time + 2.2
+        };
+        addFlash(pfx.phase === 2 ? 'rgba(255,30,60,0.35)' : 'rgba(255,159,67,0.3)', 420);
+        addShake(pfx.phase === 2 ? 8 : 5, 350);
+        addHitStop(pfx.phase === 2 ? 120 : 80);
+        shockwaves.push({ x: state.boss.x + state.boss.width / 2, y: state.boss.y + state.boss.height / 2, r: 20, maxR: pfx.phase === 2 ? 260 : 200, life: 0, maxLife: 0.5 });
+        if (fxBudget().secondParticles) {
+          for (var pdi = 0; pdi < 26; pdi++) {
+            var pda = Math.random() * Math.PI * 2;
+            particles.push({ x: state.boss.x + state.boss.width / 2, y: state.boss.y + state.boss.height / 2, vx: Math.cos(pda) * (60 + Math.random() * 140), vy: Math.sin(pda) * (60 + Math.random() * 140), life: 0, maxLife: 0.8 + Math.random() * 0.4, size: 2.2 + Math.random() * 2, color: pfx.phase === 2 ? '#ff5a7a' : '#ffd166' });
+          }
+        }
+      }
       if (state.lastKill) {
         var lk = state.lastKill;
         var lkCol = lk.level >= 2 ? '#ff9f43' : '#7df0ff';
         if (lk.affix && lk.affix !== 'none') lkCol = '#ff5a7a';
         spawnFloatingText(lk.x, lk.y - 14, '+' + lk.score, lkCol, lk.level >= 2 ? 16 : 12);
+        // P22-①：命中反馈分级——终结(连击≥30)/ 重(大球级) / 中(中球级) / 轻(小球级)
+        if (state.combo >= 30) {
+          // 终结：0.15s 慢动作 + 全屏金闪 + 金尘二次粒子 + 顿帧
+          slowUntil = state.time + 0.15;
+          addFlash('rgba(255,209,102,0.35)', 130);
+          spawnFloatingText(lk.x, lk.y - 40, '终结！', '#ffd166', 22);
+          addHitStop(20);
+          addShake(3, 150);
+          if (fxBudget().secondParticles) spawnGoldenDust(lk.x, lk.y);
+        } else if (lk.level >= 2) {
+          // 重：强顿帧 + 震屏 + 红闪
+          addHitStop(45);
+          addShake(5, 200);
+          addFlash('rgba(255,80,120,0.18)', 90);
+        } else if (lk.level >= 1) {
+          // 中：轻顿帧
+          addHitStop(30);
+        }
       }
       if (state.affixFx && state.affixFx.length) {
         consumeAffixFx(state.affixFx);
