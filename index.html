@@ -1166,7 +1166,8 @@
       mastery: cfg.mastery || {}, // P8：武器专精（局外成长，重置时保留）
       multishotLevel: clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1),
       fireSpeedFactor: clamp(cfg.initialFireSpeed || 1, cfg.fireSpeedMin, 1),
-      damageBonus: clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax),
+      damageBonus: clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax), // 武器成长初始攻击加成（局外）
+      buffAtkBonus: 0, // P12e：波间强化的攻击加成（独立叠加，不受道具上限 10 限制）
       bulletSizeBonus: 0,      // 子弹变大等级（道具）
       laserWidthBonus: 0,      // 激光变粗等级（道具）
       paused: false,           // 暂停标志
@@ -1661,7 +1662,7 @@
     var masteryMul = 1 + ((m.long || 0) * 0.2 + (m.pierce || 0) * 0.25);
     var rogueMul = getRogueDmgMult(state);
     if (hasFusion(state, 'flasermatrix')) rogueMul *= 1.5; // 激光矩阵：三道光束交叉 → DPS +50%
-    return (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser')) * getShipFireFactor(state) * masteryMul * rogueMul;
+    return (wcfg.dps + (state.damageBonus + state.buffAtkBonus) * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'laser')) * getShipFireFactor(state) * masteryMul * rogueMul;
   }
 
   /** 子弹尺寸系数（道具加成每级 +25%；P11 被动「范围」每级 +18%） */
@@ -1725,7 +1726,7 @@
       var bladeH = Math.max(8, wcfg.bulletHeight + state.laserWidthBonus * wcfg.bladeLengthStep);
       // P11：超武「血魔刃」（光刃+吸血）范围翻倍
       if (hasFusion(state, 'fbloodsaber')) { bladeW *= 2; bladeH *= 2; }
-      var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state) * getRogueDmgMult(state))));
+      var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + state.buffAtkBonus + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state) * getRogueDmgMult(state))));
       var existing = 0;
       for (var eix = 0; eix < state.bullets.length; eix++) {
         if (state.bullets[eix].type === 'saberblade') existing++;
@@ -1753,7 +1754,7 @@
     }
 
     var enchants = getEnchants(state);
-    var damage = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(enchants))));
+    var damage = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + state.buffAtkBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(enchants))));
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
@@ -1809,7 +1810,7 @@
     var sizeMul = getBulletSize(state);
     var bw = Math.min(wcfg.bulletWidth + wcfg.chargeSizeMax * charge, wcfg.bulletWidth + wcfg.chargeSizeMax) * sizeMul;
     var bh = Math.min(wcfg.bulletHeight + wcfg.chargeSizeMax * charge, wcfg.bulletHeight + wcfg.chargeSizeMax) * sizeMul;
-    var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(getEnchants(state)))));
+    var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + state.buffAtkBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(getEnchants(state)))));
     var speed = wcfg.bulletSpeed + 260 * charge;
     // P12b：蓄力弹同样携带武器技附魔（穿透/弹射/连锁/灼烧等）
     var enchants = getEnchants(state);
@@ -1907,7 +1908,7 @@
   /** P2：僚机当前伤害；P6：蜂巢武器僚机受攻击力加成（仍不受弹道影响） */
   function getWingmanDamage(state) {
     var cfg = state.config;
-    return cfg.wingmanDamage + state.damageBonus;
+    return cfg.wingmanDamage + state.damageBonus + state.buffAtkBonus;
   }
 
   /** P7e：恢复受击扣血——成长升级的"生命上限"需在实际生命判定中生效。
@@ -2184,6 +2185,7 @@
       case 'multishot': state.multishotLevel = Math.min(cfg.multishotMax - 1, state.multishotLevel + 1); break;
       case 'firespeed': state.fireSpeedFactor = Math.max(cfg.fireSpeedMin, state.fireSpeedFactor * cfg.fireSpeedStep); break;
       case 'damage': state.damageBonus = Math.min(cfg.damagePowerupMax, state.damageBonus + 1); break; // P12d：伤害道具永久+1，上限 10
+      case 'buffAtk': state.buffAtkBonus += 1; break; // P12e：波间强化的攻击加成（独立无限叠加）
       case 'bulletsize': state.bulletSizeBonus = Math.min(cfg.bulletSizeMax, state.bulletSizeBonus + 1); break;
       case 'laserwidth': state.laserWidthBonus = Math.min(cfg.laserWidthMax, state.laserWidthBonus + 1); break;
       case 'nuke':
@@ -3362,7 +3364,7 @@
     var wcfg = cfg.weapons.flamethrower;
     var p = state.player;
     var count = getBulletCount(state);
-    var dps = (wcfg.dps + state.damageBonus * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'flamethrower')) * getShipFireFactor(state);
+    var dps = (wcfg.dps + (state.damageBonus + state.buffAtkBonus) * cfg.laserDpsPerDamage + getWeaponLevelDamage(state, 'flamethrower')) * getShipFireFactor(state);
     var zones = [];
     for (var i = 0; i < count; i++) {
       var offset = (i - (count - 1) / 2) * cfg.bulletSpread * 1.4;
@@ -3754,7 +3756,7 @@
           var scx = b.x + b.width / 2;
           var scy = b.y + b.height / 2;
           var sradius = Math.max(b.width, b.height) * 0.9;
-          var sdps = (swcfg.meleeDps + state.damageBonus * state.config.laserDpsPerDamage + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state);
+          var sdps = (swcfg.meleeDps + (state.damageBonus + state.buffAtkBonus) * state.config.laserDpsPerDamage + getWeaponLevelDamage(state, 'saber')) * getShipFireFactor(state);
           for (var si = state.enemies.length - 1; si >= 0; si--) {
             var se = state.enemies[si];
             var secx = se.x + se.width / 2;
@@ -4147,6 +4149,7 @@
     state.multishotLevel = clamp((cfg.initialMultishot || 1) - 1, 0, cfg.multishotMax - 1);
     state.fireSpeedFactor = clamp(cfg.initialFireSpeed || 1, cfg.fireSpeedMin, 1);
     state.damageBonus = clamp(cfg.initialDamage || 0, 0, cfg.damageBonusMax);
+    state.buffAtkBonus = 0; // P12e：波间强化攻击加成每局重置
     state.nextSpawnTime = cfg.enemySpawnInterval;
     state.nextFireTime = 0;
     state.nextEnemyFireTime = cfg.enemyFireInterval;
@@ -8671,7 +8674,7 @@
   // ==================== P2：波间强化三选一 ====================
 
   var BUFF_POOL = [
-    { type: 'damage', icon: '⚔', label: '攻击力 +1', desc: '伤害永久 +1', maxed: function () { return state.damageBonus >= state.config.damagePowerupMax; } },
+    { type: 'buffAtk', icon: '⚔', label: '攻击力 +1', desc: '伤害永久 +1（波间强化，可无限叠加）' },
     { type: 'multishot', icon: '▮▮', label: '弹道 +1', desc: '同时发射弹道 +1', maxed: function () { return state.multishotLevel >= state.config.multishotMax - 1; } },
     { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
     { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
