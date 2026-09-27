@@ -1815,6 +1815,9 @@
     var bh = Math.min(wcfg.bulletHeight + wcfg.chargeSizeMax * charge, wcfg.bulletHeight + wcfg.chargeSizeMax) * sizeMul;
     var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(getEnchants(state)))));
     var speed = wcfg.bulletSpeed + 260 * charge;
+    // P12b：蓄力弹同样携带武器技附魔（穿透/弹射/连锁/灼烧等）
+    var enchants = getEnchants(state);
+    var pierce = getEnchantPierce(enchants);
     // 按初始弹道数量平行发射多颗蓄力弹（弹丸宽，间隔按弹丸尺寸自适应避免重叠）
     var count = getBulletCount(state);
     var gap = Math.max(cfg.bulletSpread * 2, bw * 1.1);
@@ -1834,7 +1837,10 @@
         bounceCount: 0,
         charge: charge,
         dmgType: 'phys',
-        weapon: 'charge'
+        weapon: 'charge',
+        enchants: enchants.length > 0 ? enchants : undefined,
+        pierceLeft: pierce > 0 ? pierce : undefined,
+        pierced: pierce > 0 ? {} : undefined
       });
     }
     return true;
@@ -8664,15 +8670,33 @@
     });
   });
 
+  // P12b：武器技附魔池（与波间强化合并出现，选中后附加到当前主武器）
+  var ENCHANT_POOL = [
+    { id: 'gun', icon: '🔫', label: '射速', desc: '附加到主武器' },
+    { id: 'cannon', icon: '💥', label: '爆裂', desc: '附加到主武器' },
+    { id: 'laser', icon: '🔦', label: '光束', desc: '附加到主武器' },
+    { id: 'boomerang', icon: '🌀', label: '弹射', desc: '附加到主武器' },
+    { id: 'saber', icon: '🗡', label: '挥砍', desc: '附加到主武器' },
+    { id: 'homing', icon: '🎯', label: '追踪', desc: '附加到主武器' },
+    { id: 'charge', icon: '🔮', label: '蓄力', desc: '附加到主武器' },
+    { id: 'flamethrower', icon: '🔥', label: '灼烧', desc: '附加到主武器' },
+    { id: 'lightning', icon: '⚡', label: '连锁', desc: '附加到主武器' },
+    { id: 'hswarm', icon: '🐝', label: '蜂巢', desc: '附加到主武器' }
+  ];
+  // 附魔图标/标题映射
+  var ENCHANT_ICON = {};
+  ENCHANT_POOL.forEach(function (e) { ENCHANT_ICON[e.id] = e.icon; });
+
   var buffPanel = document.getElementById('buff-panel');
 
   function offerBuffPanel() {
     if (!buffPanel) return;
     if (state.status !== 'playing') return;
     if (state.paused) return; // 暂停面板打开时不弹
-    // P3：第 1~9 波每波强化一次；第 10 波起每 5 波一次（10/15/20…）
+    // P12b 强化时机：1~9 波每波一次；10~20 波每 5 波一次（10/15/20）；20 波之后不能选择
     if (state.waveState !== 'break') return;
     if (state.buffOffered) return;
+    if (state.wave > 20) return;
     if (state.wave >= 10 && state.wave % 5 !== 0) return;
     // P8：无尽深化——每 10 层（波）结算星币奖励（第 20 波起）
     if (state.wave % 10 === 0 && state.wave > 10) {
@@ -8723,15 +8747,22 @@
         if (pool[fi2].type === 'chain') { forced = pool.splice(fi2, 1)[0]; break; }
       }
     }
-    // 洗牌取前 3（含必刷项）
+    // 洗牌取 2 项传统强化（含必刷项）+ 1 项武器技附魔（合并为"强化"）
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
-    var picks = pool.slice(0, 3);
-    if (forced) {
-      if (picks.length >= 3) picks.pop(); // 保留 3 项
-      picks.push(forced);
+    var picks = pool.slice(0, 2);
+    if (forced) picks.push(forced);
+    // 附魔卡：随机 1 项未满级武器技，附加到主武器（叠星）
+    var encPool = ENCHANT_POOL.filter(function (en) {
+      return (state.rogueSkills[en.id] || 0) < state.config.rogueSkillMax;
+    });
+    if (encPool.length > 0) {
+      var encPick = encPool[Math.floor(Math.random() * encPool.length)];
+      var encLv = (state.rogueSkills[encPick.id] || 0) + 1;
+      if (picks.length >= 3) picks.pop(); // 保持 3 项，附魔替换最后一项
+      picks.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label });
     }
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
@@ -8739,14 +8770,28 @@
       var btn = document.createElement('button');
       btn.className = 'btn primary';
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
-      btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
-      btn.addEventListener('click', function () {
-        GameCore.applyPowerup(state, b.type, b.relicId ? { id: b.relicId } : (b.traitId ? { traitId: b.traitId } : undefined));
-        GameCore.togglePause(state);
-        buffPanel.style.display = 'none';
-        audio.powerup();
-        showToast('强化：' + b.label);
-      });
+      if (b.kind === 'enchant') {
+        // 附魔卡：选中 → 附加到当前主武器（getEnchants 自动带出，可叠星）
+        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>附魔 · ' + b.label + ' ★' + b.encLv + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">附加到主武器 → ' + getEnchantDesc(b.encId, b.encLv) + '</span>';
+        btn.addEventListener('click', function () {
+          GameCore.applySkillChoice(state, { kind: 'active', id: b.encId, level: b.encLv });
+          GameCore.togglePause(state);
+          buffPanel.style.display = 'none';
+          audio.powerup();
+          addFlash('255,230,120', 160);
+          var mainLabel = (GameCore.DEFAULT_CONFIG.weapons[state.weapon] && GameCore.DEFAULT_CONFIG.weapons[state.weapon].label) || state.weapon;
+          showToast('附魔「' + b.label + '」已附加到 ' + mainLabel);
+        });
+      } else {
+        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
+        btn.addEventListener('click', function () {
+          GameCore.applyPowerup(state, b.type, b.relicId ? { id: b.relicId } : (b.traitId ? { traitId: b.traitId } : undefined));
+          GameCore.togglePause(state);
+          buffPanel.style.display = 'none';
+          audio.powerup();
+          showToast('强化：' + b.label);
+        });
+      }
       box.appendChild(btn);
     });
     buffPanel.style.display = 'block';
@@ -9128,8 +9173,8 @@
       // 波次变化：重置"本波是否受伤"标记 + BGM 强度提升 + 成就检查
       if (waveBefore !== state.wave) {
         track.damagedInWave = false;
-        // P3：第 1~9 波每波重置强化标记；第 10 波起每 5 波重置一次
-        if (state.wave < 10 || state.wave % 5 === 0) state.buffOffered = false;
+        // P12b 强化时机：1~9 波每波重置一次；10~20 波每 5 波（10/15/20）重置；20 波之后不再出现
+        if (state.wave <= 9 || (state.wave >= 10 && state.wave <= 20 && state.wave % 5 === 0)) state.buffOffered = false;
         music.setIntensity(state.wave);
       }
       if (state.lives < livesBefore) {
