@@ -5818,6 +5818,22 @@
   // 主菜单按钮精确对齐背景图；窗口变化时重新对齐
   placeMenuButtons();
   window.addEventListener('resize', placeMenuButtons);
+  // P18：画布按屏幕等比放大（contain），消除宽屏下"画面居中+按钮贴边"的错位感
+  function fitCanvas() {
+    var pad = 4; // 边框 2px*2
+    var scale = Math.min((window.innerWidth - pad) / W, (window.innerHeight - pad) / H);
+    if (scale < 0.2) scale = 0.2;
+    canvas.style.width = Math.round(W * scale) + 'px';
+    canvas.style.height = Math.round(H * scale) + 'px';
+    // 倍速/水晶等 fixed 按钮同步贴到画布左上角/左下角（跟随画布，不再固定在视口角）
+    var cr = canvas.getBoundingClientRect();
+    var sb = document.getElementById('speed-btn');
+    var cb = document.getElementById('btn-crystal');
+    if (sb && cr.width) { sb.style.left = Math.round(cr.left + 12) + 'px'; sb.style.top = Math.round(cr.top + 66) + 'px'; }
+    if (cb && cr.width) { cb.style.left = Math.round(cr.left + 14) + 'px'; cb.style.bottom = Math.round(window.innerHeight - cr.bottom + 90) + 'px'; }
+  }
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas);
   // P13-12：进入主菜单时拉取云存档（成长/天赋/图鉴/成就/星币），延迟避免首帧争抢
   setTimeout(syncProfileFromCloud, 1200);
 
