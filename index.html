@@ -10788,8 +10788,11 @@
     // 红色外发光
     ctx.shadowColor = '#ff3b6b';
     ctx.shadowBlur = 18;
-    // Boss 图片：完整展示整张图（contain 等比缩放，不裁切、不变形）；未上传自定义图时按主题绘制独立形态
-    if (bossImg.complete && bossImg.naturalWidth > 0) {
+    // Boss 形象优先级：用户上传的自定义图 > 主题形象（内置 10 款图 / Canvas 程序化）
+    // P25：默认恶魔立绘不再覆盖所有主题（此前 bossImg 默认值导致所有 Boss 都显示恶魔）
+    var _useCustom = false;
+    try { _useCustom = localStorage.getItem('bossImage') !== null; } catch (errC) { _useCustom = false; }
+    if (_useCustom && bossImg.complete && bossImg.naturalWidth > 0) {
       var iw = bossImg.naturalWidth, ih = bossImg.naturalHeight;
       var k2 = Math.min(boxW / iw, boxH / ih);
       var dw2 = iw * k2, dh2 = ih * k2;
