@@ -580,7 +580,7 @@
 
     /* ===== 游戏内设置（手机无键盘时使用） ===== */
     #speed-btn {
-      position: fixed;
+      position: absolute;
       top: 66px;
       left: 12px;
       z-index: 25;
@@ -597,7 +597,7 @@
       display: none;
     }
     #in-game-btn {
-      position: fixed;
+      position: absolute;
       top: 12px;
       left: 12px;
       z-index: 25;
@@ -955,10 +955,11 @@
         <button class="btn danger" id="btn-game-menu">返回初始界面</button>
       </div>
     </div>
-  </div>
 
-  <button type="button" id="in-game-btn" title="设置">⚙</button>
-  <button type="button" id="speed-btn" title="游戏倍速">⏩ 1x</button>
+    <!-- 游戏内按钮：置于 wrap 内，跟随画布缩放对齐（P18） -->
+    <button type="button" id="in-game-btn" title="设置">⚙</button>
+    <button type="button" id="speed-btn" title="游戏倍速">⏩ 1x</button>
+  </div>
 
   <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
   <div id="buff-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,460px);background:rgba(3,8,30,0.96);border:1px solid #4ee0ff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 0 30px rgba(78,224,255,0.35);">
@@ -992,10 +993,9 @@
       <button type="button" id="btn-revive-yes" class="btn primary" style="flex:1;">复 活</button>
       <button type="button" id="btn-revive-no" class="btn small" style="flex:1;">放 弃</button>
     </div>
+    <!-- P11：护盾水晶主动技能按钮（置于 wrap 内跟随画布，P18） -->
+    <button type="button" id="btn-crystal" title="护盾水晶：敌弹变水晶计分" style="display:none;position:absolute;left:14px;bottom:90px;z-index:30;padding:10px 12px;font-size:14px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.85);border:1px solid #7df0ff;border-radius:10px;box-shadow:0 0 12px rgba(125,240,255,0.35);pointer-events:auto;cursor:pointer;">❄ 水晶</button>
   </div>
-
-  <!-- P11：护盾水晶主动技能按钮 -->
-  <button type="button" id="btn-crystal" title="护盾水晶：敌弹变水晶计分" style="display:none;position:fixed;left:14px;bottom:90px;z-index:30;padding:10px 12px;font-size:14px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.85);border:1px solid #7df0ff;border-radius:10px;box-shadow:0 0 12px rgba(125,240,255,0.35);pointer-events:auto;cursor:pointer;">❄ 水晶</button>
 
   <script>/**
  * game-core.js — 星际战机核心游戏逻辑（纯函数，不依赖 DOM，可在 Node 中测试）
@@ -5819,18 +5819,13 @@
   placeMenuButtons();
   window.addEventListener('resize', placeMenuButtons);
   // P18：画布按屏幕等比放大（contain），消除宽屏下"画面居中+按钮贴边"的错位感
+  // 游戏内按钮（⚙/倍速/水晶）已移入 #wrap 内 absolute 定位，天然跟随画布，无需 JS 同步
   function fitCanvas() {
     var pad = 4; // 边框 2px*2
     var scale = Math.min((window.innerWidth - pad) / W, (window.innerHeight - pad) / H);
     if (scale < 0.2) scale = 0.2;
     canvas.style.width = Math.round(W * scale) + 'px';
     canvas.style.height = Math.round(H * scale) + 'px';
-    // 倍速/水晶等 fixed 按钮同步贴到画布左上角/左下角（跟随画布，不再固定在视口角）
-    var cr = canvas.getBoundingClientRect();
-    var sb = document.getElementById('speed-btn');
-    var cb = document.getElementById('btn-crystal');
-    if (sb && cr.width) { sb.style.left = Math.round(cr.left + 12) + 'px'; sb.style.top = Math.round(cr.top + 66) + 'px'; }
-    if (cb && cr.width) { cb.style.left = Math.round(cr.left + 14) + 'px'; cb.style.bottom = Math.round(window.innerHeight - cr.bottom + 90) + 'px'; }
   }
   fitCanvas();
   window.addEventListener('resize', fitCanvas);
