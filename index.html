@@ -4918,6 +4918,10 @@
         p.y += (p.vy || 0) * dt;
         p.vx = (p.vx || 0) * 0.98;
         p.vy = (p.vy || 0) * 0.98;
+        // P18d：上抛速度衰减后改为缓慢下落，避免掉落道具悬浮在顶部堆积遮挡 HUD
+        if (Math.abs(p.vy || 0) < 30) p.vy = (p.vy || 0) + 60 * dt;
+        if (p.y < 0) { p.y = 0; p.vy = Math.max(p.vy || 0, 0); } // 不飞出屏幕顶部
+        p.age = (p.age || 0) + dt;
       } else {
         p.y += cfg.powerupSpeed * dt;
       }
@@ -4933,7 +4937,7 @@
           p.y += (pdy / pdist) * pspeed * dt;
         }
       }
-      if (p.y > cfg.height) {
+      if (p.y > cfg.height || (p.kind === 'loot' && p.age > 20)) {
         state.powerups.splice(pi, 1);
       }
     }
