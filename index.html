@@ -1121,6 +1121,7 @@
     powerupSpeed: 120,
     shieldDuration: 5,
     scorePowerupBonus: 50,
+    damagePowerupMax: 10, // P12d：伤害道具永久 +1，捡取上限 10
 
     // 关卡（时间驱动：前 10 级每 60 秒升 1 级，第 10 级完成后进入无尽模式，每 30 秒升 1 级）
     scorePerLevel: 10,       // 保留兼容字段（不再驱动关卡）
@@ -2120,7 +2121,9 @@
 
   function spawnPowerup(state) {
     var cfg = state.config;
-    var type = cfg.powerupTypes[Math.floor(Math.random() * cfg.powerupTypes.length)];
+    // P12d：可拾取道具类型过滤——已满级的类型不再刷出（伤害道具上限 10）
+    var available = getAvailablePowerupTypes(state);
+    var type = available[Math.floor(Math.random() * available.length)];
     var powerup = {
       id: newId(state),
       type: type,
@@ -2134,9 +2137,29 @@
     return powerup;
   }
 
+  /** P12d：计算当前还能刷出的道具类型（跳过已满级项，兜底分数） */
+  function getAvailablePowerupTypes(state) {
+    var cfg = state.config;
+    var out = [];
+    for (var gi = 0; gi < cfg.powerupTypes.length; gi++) {
+      var t = cfg.powerupTypes[gi];
+      var full = false;
+      if (t === 'multishot') full = state.multishotLevel >= cfg.multishotMax - 1;
+      else if (t === 'firespeed') full = state.fireSpeedFactor <= cfg.fireSpeedMin;
+      else if (t === 'damage') full = state.damageBonus >= cfg.damagePowerupMax;
+      else if (t === 'bulletsize') full = state.bulletSizeBonus >= cfg.bulletSizeMax;
+      else if (t === 'laserwidth') full = state.laserWidthBonus >= cfg.laserWidthMax;
+      else if (t === 'life') full = state.lives >= cfg.maxLives;
+      else if (t === 'wingman') full = (state.weapon === 'hswarm' ? state.wingman >= cfg.weapons.hswarm.wingmanMax : state.wingman >= cfg.wingmanMax);
+      if (!full) out.push(t);
+    }
+    return out.length > 0 ? out : ['score'];
+  }
+
   function dropPowerupAt(state, x, y) {
     var cfg = state.config;
-    var type = cfg.powerupTypes[Math.floor(Math.random() * cfg.powerupTypes.length)];
+    var available = getAvailablePowerupTypes(state);
+    var type = available[Math.floor(Math.random() * available.length)];
     var size = cfg.powerupSize;
     var powerup = {
       id: newId(state),
@@ -2160,7 +2183,7 @@
       case 'life': state.lives = Math.min(cfg.maxLives, state.lives + 1); break;
       case 'multishot': state.multishotLevel = Math.min(cfg.multishotMax - 1, state.multishotLevel + 1); break;
       case 'firespeed': state.fireSpeedFactor = Math.max(cfg.fireSpeedMin, state.fireSpeedFactor * cfg.fireSpeedStep); break;
-      case 'damage': state.damageBonus += 1; break; // 攻击力道具无限叠加（无上限）
+      case 'damage': state.damageBonus = Math.min(cfg.damagePowerupMax, state.damageBonus + 1); break; // P12d：伤害道具永久+1，上限 10
       case 'bulletsize': state.bulletSizeBonus = Math.min(cfg.bulletSizeMax, state.bulletSizeBonus + 1); break;
       case 'laserwidth': state.laserWidthBonus = Math.min(cfg.laserWidthMax, state.laserWidthBonus + 1); break;
       case 'nuke':
@@ -8648,7 +8671,7 @@
   // ==================== P2：波间强化三选一 ====================
 
   var BUFF_POOL = [
-    { type: 'damage', icon: '⚔', label: '攻击力 +1', desc: '伤害永久 +1' },
+    { type: 'damage', icon: '⚔', label: '攻击力 +1', desc: '伤害永久 +1', maxed: function () { return state.damageBonus >= state.config.damagePowerupMax; } },
     { type: 'multishot', icon: '▮▮', label: '弹道 +1', desc: '同时发射弹道 +1', maxed: function () { return state.multishotLevel >= state.config.multishotMax - 1; } },
     { type: 'firespeed', icon: '⏩', label: '攻速提升', desc: '冷却降低 15%', maxed: function () { return state.fireSpeedFactor <= state.config.fireSpeedMin; } },
     { type: 'shield', icon: '🛡', label: '能量护盾', desc: '抵挡一次伤害' },
