@@ -1638,7 +1638,10 @@
     var factor = Math.max(0.2, 1 - rapid * 0.12);
     // P11：被动「攻速」每级 -12%、「冷却缩减」每级 -8%（叠乘，下限 0.1）
     var rogueFactor = Math.max(0.1, (1 - getPassiveLevel(state, 'speed') * 0.12) * (1 - getPassiveLevel(state, 'cdr') * 0.08));
-    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor;
+    // P11B：机枪附魔——攻速 +5%/星（任意主武器拿到机枪技生效）
+    var gunEnchant = getSkillLevel(state, 'gun');
+    var gunFactor = (gunEnchant > 0 && state.weapon !== 'hswarm') ? (1 - gunEnchant * 0.05) : 1;
+    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor * gunFactor;
   }
 
   /** 激光当前 DPS（含伤害加成与武器升级；P8 专精：加长 +20%/级、穿透 +25%/级；P11：被动伤害 + 超武矩阵） */
@@ -1740,10 +1743,12 @@
       return true;
     }
 
-    var damage = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state) * getRogueDmgMult(state))));
+    var enchants = getEnchants(state);
+    var damage = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, state.weapon)) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(enchants))));
     var sizeMul = getBulletSize(state);
     var bw = Math.max(2, wcfg.bulletWidth * sizeMul);
     var bh = Math.max(2, wcfg.bulletHeight * sizeMul);
+    var pierce = getEnchantPierce(enchants);
 
     for (var i = 0; i < count; i++) {
       var offset = (i - (count - 1) / 2) * cfg.bulletSpread;
@@ -1755,7 +1760,7 @@
       if (state.weapon === 'boomerang') {
         bvx = hasFusion(state, 'fmagboomerang') ? 0 : (Math.random() * 2 - 1) * 90;
       }
-      state.bullets.push({
+      var blt = {
         id: newId(state),
         type: btype,
         x: bx,
@@ -1769,7 +1774,13 @@
         bounceCount: 0,
         dmgType: cfg.weaponDamageType[state.weapon] || 'phys',
         weapon: state.weapon // P5：武器伤害统计来源
-      });
+      };
+      // P11B：武器技附魔——特性标记 + 穿透层数（激光/蓄力）
+      if (enchants.length > 0) {
+        blt.enchants = enchants;
+        if (pierce > 0) { blt.pierceLeft = pierce; blt.pierced = {}; }
+      }
+      state.bullets.push(blt);
     }
 
     state.nextFireTime = state.time + getFireCooldown(state);
@@ -1789,7 +1800,7 @@
     var sizeMul = getBulletSize(state);
     var bw = Math.min(wcfg.bulletWidth + wcfg.chargeSizeMax * charge, wcfg.bulletWidth + wcfg.chargeSizeMax) * sizeMul;
     var bh = Math.min(wcfg.bulletHeight + wcfg.chargeSizeMax * charge, wcfg.bulletHeight + wcfg.chargeSizeMax) * sizeMul;
-    var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state))));
+    var dmg = rollCrit(state, Math.max(1, Math.round((wcfg.damage + state.damageBonus + getWeaponLevelDamage(state, 'charge') + wcfg.chargeDamage * charge) * getShipFireFactor(state) * getRogueDmgMult(state) * getEnchantDmgMult(getEnchants(state)))));
     var speed = wcfg.bulletSpeed + 260 * charge;
     // 按初始弹道数量平行发射多颗蓄力弹（弹丸宽，间隔按弹丸尺寸自适应避免重叠）
     var count = getBulletCount(state);
@@ -2533,6 +2544,128 @@
     var cfg = state.config;
     if (b.x <= 0 || b.x + b.width >= cfg.width) { b.vx = -b.vx; b.x = clamp(b.x, 0, cfg.width - b.width); }
     if (b.y <= 0) { b.vy = -b.vy; }
+  }
+
+  // ==================== P11B：武器技附魔系统（方案 3） ====================
+
+  /** 附魔列表：所有已学武器技（排除新技能与吞噬者） */
+  function getEnchants(state) {
+    var list = [];
+    var cfg = state.config;
+    var keys = Object.keys(state.rogueSkills || {});
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === 'energyball' || k === 'drone' || k === 'guardian') continue;
+      if (k === 'devour') continue;
+      if (cfg.weapons[k] && state.rogueSkills[k] > 0) {
+        list.push({ id: k, level: state.rogueSkills[k] });
+      }
+    }
+    return list;
+  }
+
+  function hasEnchant(enchants, id) {
+    if (!enchants) return false;
+    for (var i = 0; i < enchants.length; i++) if (enchants[i].id === id) return true;
+    return false;
+  }
+
+  /** 附魔穿透层数（激光/蓄力，取最高）：ceil(星/2)+1 */
+  function getEnchantPierce(enchants) {
+    var p = 0;
+    if (!enchants) return p;
+    for (var i = 0; i < enchants.length; i++) {
+      var e = enchants[i];
+      if (e.id === 'laser' || e.id === 'charge') p = Math.max(p, Math.ceil(e.level / 2) + 1);
+    }
+    return p;
+  }
+
+  /** 附魔伤害倍率（大炮 +25%/星、蓄力 +15%/星） */
+  function getEnchantDmgMult(enchants) {
+    var m = 1;
+    if (!enchants) return m;
+    for (var i = 0; i < enchants.length; i++) {
+      var e = enchants[i];
+      if (e.id === 'cannon') m *= 1 + 0.25 * e.level;
+      if (e.id === 'charge') m *= 1 + 0.15 * e.level;
+    }
+    return m;
+  }
+
+  /** 附魔命中结算（在子弹命中敌人后调用：弹射/连锁/灼烧/挥砍/爆裂） */
+  function applyEnchantOnHit(state, bullet, enemy) {
+    if (!bullet.enchants || bullet.enchants.length === 0) return;
+    var cfg = state.config;
+    var x = enemy.x + enemy.width / 2;
+    var y = enemy.y + enemy.height / 2;
+    for (var i = 0; i < bullet.enchants.length; i++) {
+      var e = bullet.enchants[i];
+      var lv = e.level;
+      if (e.id === 'boomerang') {
+        if (bullet.type !== 'boomerang') {
+          // 普通子弹获得弹射：次数由星级限制，命中后转向随机周围方向
+          if (!bullet.enchantBounces) bullet.enchantBounces = 0;
+          if (bullet.enchantBounces < lv) {
+            bullet.enchantBounces++;
+            var ang = -Math.PI / 2 + (Math.random() * 2 - 1) * Math.PI * 0.85;
+            var spd = Math.hypot(bullet.vx, bullet.vy) * 1.06;
+            bullet.vx = Math.cos(ang) * spd;
+            bullet.vy = Math.sin(ang) * spd;
+            bullet._enchantScatter = true;
+            bullet.enchantLastHit = bullet.enchantLastHit || {};
+            bullet.enchantLastHit[enemy.id] = true;
+          }
+        } else {
+          scatterBoomerang(bullet, cfg.weapons.boomerang);
+        }
+      } else if (e.id === 'lightning') {
+        chainLightning(state, bullet);
+      } else if (e.id === 'flamethrower') {
+        // 灼烧 DOT（敌人身上挂持续伤害）
+        enemy.dot = { dps: 8 * lv, until: state.time + 2 + lv };
+        state.affixFx.push({ kind: 'burnTick', x: x, y: y });
+      } else if (e.id === 'saber') {
+        // 命中点范围挥砍
+        var srad = 50 + 10 * lv;
+        for (var s2 = state.enemies.length - 1; s2 >= 0; s2--) {
+          var se3 = state.enemies[s2];
+          if (se3 === enemy) continue;
+          var sdx = (se3.x + se3.width / 2) - x, sdy = (se3.y + se3.height / 2) - y;
+          if (sdx * sdx + sdy * sdy < srad * srad) {
+            state._killWeapon = bullet.weapon || state.weapon;
+            hurtEnemy(state, se3, Math.max(1, Math.round(bullet.damage * 0.5)), bullet.dmgType || 'phys', bullet.weapon);
+          }
+        }
+        state.explosions.push({ x: x, y: y, kind: 'small' });
+      } else if (e.id === 'cannon') {
+        // 命中爆裂
+        var brad = 15 * lv;
+        for (var c2 = state.enemies.length - 1; c2 >= 0; c2--) {
+          var ce3 = state.enemies[c2];
+          if (ce3 === enemy) continue;
+          var cdx = (ce3.x + ce3.width / 2) - x, cdy = (ce3.y + ce3.height / 2) - y;
+          if (cdx * cdx + cdy * cdy < brad * brad) {
+            state._killWeapon = bullet.weapon || state.weapon;
+            hurtEnemy(state, ce3, Math.max(1, Math.round(bullet.damage * 0.5)), bullet.dmgType || 'phys', bullet.weapon);
+          }
+        }
+        state.explosions.push({ x: x, y: y, kind: 'large' });
+      }
+    }
+  }
+
+  /** 敌人灼烧 DOT 结算（update 敌人循环调用） */
+  function tickEnemyDot(state, enemy, dt) {
+    if (!enemy.dot) return;
+    if (state.time >= enemy.dot.until) { enemy.dot = null; return; }
+    var d = enemy.dot.dps * dt;
+    enemy.hp -= d;
+    state.hitFx.push({ x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2, weapon: 'flamethrower', damage: d, dmgType: 'magic' });
+    if (enemy.hp <= 0 && state.enemies.indexOf(enemy) !== -1) {
+      state._killWeapon = 'flamethrower';
+      hurtEnemy(state, enemy, 1, 'magic', 'flamethrower');
+    }
   }
 
   // ==================== BOSS ====================
@@ -3499,6 +3632,10 @@
       if (e.y > cfg.height + 60) { e.y = -e.height - 20; }
       if (e.y + e.height < -80) { e.y = cfg.height + 40; }
     }
+    // P11B：敌人灼烧 DOT 结算（火焰附魔）
+    for (var di = state.enemies.length - 1; di >= 0; di--) {
+      tickEnemyDot(state, state.enemies[di], dt);
+    }
 
     // 特殊敌人逻辑：治疗型（给范围内敌人回血）与防御型（周期性无敌）
     updateHealers(state, dt);
@@ -3542,6 +3679,12 @@
 
     // P11：肉鸽新技能自动攻击（无人机/守卫者/能量球）
     updateRogueSkills(state, dt);
+    // P11B：蜂巢附魔——任意主武器拿到蜂巢技后每 2 星 +1 僚机
+    var hsLv = getSkillLevel(state, 'hswarm');
+    if (hsLv > 0 && state.weapon !== 'hswarm') {
+      var wantWm = Math.floor(hsLv / 2);
+      if ((state.wingman || 0) < wantWm) state.wingman = wantWm;
+    }
     // P11：暴走积分翻倍（rage 火力×2 已并入 getRogueDmgMult）
     if (state.rageUntil > state.time && state.comboRageScore) {
       state.comboRageScore = false;
@@ -3604,29 +3747,35 @@
           }
         }
       } else {
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        // P11：能量球左右反弹；磁力回旋镖追踪最近敌人
-        if (b.type === 'energyball') updateEnergyBall(state, b, dt);
-        if (b.type === 'boomerang' && hasFusion(state, 'fmagboomerang') && state.enemies.length > 0) {
-          var ne = null, nb = 1e9;
-          for (var nx = 0; nx < state.enemies.length; nx++) {
-            var ne2 = state.enemies[nx];
-            var nx2 = (ne2.x + ne2.width / 2) - b.x, ny2 = (ne2.y + ne2.height / 2) - b.y;
-            var nd = nx2 * nx2 + ny2 * ny2;
-            if (nd < nb) { nb = nd; ne = ne2; }
-          }
-          if (ne) {
-            var ta = Math.atan2((ne.y + ne.height / 2) - b.y, (ne.x + ne.width / 2) - b.x);
-            var spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-            if (spd < 40) spd = 420;
-            b.vx = Math.cos(ta) * spd;
-            b.vy = Math.sin(ta) * spd;
+        // P11B：追踪附魔——由 updateHoming 完成转向与移动
+        if (b.enchants && hasEnchant(b.enchants, 'homing') && b.type !== 'boomerang' && b.type !== 'saberblade') {
+          updateHoming(state, b, dt);
+        } else {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          // P11：能量球左右反弹；磁力回旋镖追踪最近敌人
+          if (b.type === 'energyball') updateEnergyBall(state, b, dt);
+          if (b.type === 'boomerang' && hasFusion(state, 'fmagboomerang') && state.enemies.length > 0) {
+            var ne = null, nb = 1e9;
+            for (var nx = 0; nx < state.enemies.length; nx++) {
+              var ne2 = state.enemies[nx];
+              var nx2 = (ne2.x + ne2.width / 2) - b.x, ny2 = (ne2.y + ne2.height / 2) - b.y;
+              var nd = nx2 * nx2 + ny2 * ny2;
+              if (nd < nb) { nb = nd; ne = ne2; }
+            }
+            if (ne) {
+              var ta = Math.atan2((ne.y + ne.height / 2) - b.y, (ne.x + ne.width / 2) - b.x);
+              var spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+              if (spd < 40) spd = 420;
+              b.vx = Math.cos(ta) * spd;
+              b.vy = Math.sin(ta) * spd;
+            }
           }
         }
         // 上下任一方向出界都移除（bombbullet 向下飞）
         if (b.y + b.height < 0 || b.y > cfg.height + 40 || b.x < -60 || b.x > cfg.width + 60) {
-          state.bullets.splice(j, 1);
+          var bix = state.bullets.indexOf(b);
+          if (bix !== -1) state.bullets.splice(bix, 1);
         }
       }
     }
@@ -3651,6 +3800,17 @@
           state._killWeapon = bullet.type === 'chargebolt' ? 'charge' : bullet.type;
           hurtEnemy(state, tgt, bullet.damage, bullet.dmgType || 'phys', bullet.weapon);
           hit = true;
+          // P11B：武器技附魔命中结算（弹射/连锁/灼烧/挥砍/爆裂 + 穿透）
+          if (bullet.enchants && bullet.enchants.length > 0) {
+            applyEnchantOnHit(state, bullet, tgt);
+            if (bullet.pierceLeft > 0) {
+              bullet.pierceLeft--;
+              bullet.pierced = bullet.pierced || {};
+              bullet.pierced[tgt.id] = true;
+              hit = false;
+              continue;
+            }
+          }
           // P11：超武「幽灵导弹」（追踪弹+穿透）穿透不消失，记录已伤害目标
           if (bullet.type === 'homing' && hasFusion(state, 'fghost')) {
             bullet.pierced = bullet.pierced || {};
@@ -3703,8 +3863,8 @@
         }
       }
       if (hit) {
-        // 回旋镖/蓄力弹/光刃/幽灵导弹（追踪弹+穿透超武）命中不消失
-        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade' && !(bullet.type === 'homing' && hasFusion(state, 'fghost'))) {
+        // 回旋镖/蓄力弹/光刃/幽灵导弹（追踪弹+穿透超武）/附魔弹射子弹 命中不消失
+        if (bullet.type !== 'boomerang' && bullet.type !== 'chargebolt' && bullet.type !== 'saberblade' && !(bullet.type === 'homing' && hasFusion(state, 'fghost')) && !bullet._enchantScatter) {
           state.bullets.splice(bi, 1);
         }
       }
@@ -4026,6 +4186,13 @@
     applyBlessing: applyBlessing,
     applyTraitOnHurt: applyTraitOnHurt,
     getRogueDmgMult: getRogueDmgMult,
+    // P11B：武器技附魔系统（方案 3）
+    getEnchants: getEnchants,
+    hasEnchant: hasEnchant,
+    getEnchantPierce: getEnchantPierce,
+    getEnchantDmgMult: getEnchantDmgMult,
+    applyEnchantOnHit: applyEnchantOnHit,
+    tickEnemyDot: tickEnemyDot,
     updateHoming: updateHoming,
     spawnBoss: spawnBoss,
     bossFire: bossFire,
@@ -6504,6 +6671,24 @@
     }
     // 防御型无敌状态：金色脉冲描边 + 护盾环
     var defending = e.special === 'defender' && e.invulnUntil && e.invulnUntil > state.time;
+    // P11B：灼烧 DOT 视觉——敌人身上火焰圈（火焰附魔）
+    if (e.dot && e.dot.until > state.time) {
+      var flr = 8 + Math.sin(state.time * 10 + (e.id || 0)) * 2;
+      ctx.save();
+      ctx.shadowColor = '#ff7a2b';
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = 'rgba(255,122,43,0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + flr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,200,80,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + flr * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.save();
     // 外发光
     ctx.shadowColor = defending ? '#fff8dc' : col;
@@ -6777,6 +6962,19 @@
       return;
     }
     // P10c：攻击特效精美优化——双层拖尾（亮芯 + 外层光晕）+ 各武器专属动态细节
+    // P11B：光束附魔（激光武器技附加到其他主武器 → 子弹变光束）
+    if (b.enchants && GameCore.hasEnchant(b.enchants, 'laser') && b.type !== 'laser' && b.type !== 'boomerang') {
+      ctx.shadowColor = '#7dfff0';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = 'rgba(125,255,240,0.35)';
+      ctx.fillRect(b.x - b.width * 1.5, b.y, b.width * 4, b.height);
+      ctx.fillStyle = '#7dfff0';
+      ctx.fillRect(b.x, b.y, b.width, b.height);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(b.x + 1, b.y, Math.max(1, b.width - 2), b.height);
+      ctx.restore();
+      return;
+    }
     if (b.type !== 'boomerang' && b.type !== 'saberblade' && b.type !== 'lightningbolt') {
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
       var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166' : '#ffe066';
@@ -8458,7 +8656,10 @@
           desc = cfg.rogueNewSkills[ch.id].desc || '';
         } else {
           title = '武器技 · ' + ((cfg.weapons[ch.id] && cfg.weapons[ch.id].label) || ch.id) + ' ★' + ch.level;
-          desc = '强化主动武器技能（' + ch.level + '/5）';
+          // P11B：附加预览——选中后挂到当前主武器上的复合效果
+          var mainLabel = (cfg.weapons[state.weapon] && cfg.weapons[state.weapon].label) || state.weapon;
+          var encDesc = getEnchantDesc(ch.id, ch.level);
+          desc = '附加到「' + mainLabel + '」→ ' + encDesc;
         }
       } else {
         var pdef = cfg.roguePassives[ch.id];
@@ -8477,6 +8678,23 @@
       skillBox.appendChild(btn);
     });
     skillPanel.style.display = 'block';
+  }
+
+  /** P11B：武器技附魔效果描述（三选一卡牌附加预览用） */
+  function getEnchantDesc(wid, lv) {
+    var map = {
+      gun: '射速附魔：攻速 +' + (5 * lv) + '%',
+      cannon: '爆裂附魔：伤害 +' + (25 * lv) + '%，命中爆裂半径 ' + (15 * lv) + 'px',
+      laser: '光束附魔：子弹变光束，穿透 ' + (Math.ceil(lv / 2) + 1) + ' 敌 + 灼烧 ' + (6 * lv) + ' DPS',
+      boomerang: '弹射附魔：命中弹射 ' + lv + ' 次',
+      saber: '挥砍附魔：命中范围挥砍半径 ' + (50 + 10 * lv) + 'px · 50% 伤害',
+      homing: '追踪附魔：子弹自动追踪（转向 ' + (120 + 60 * lv) + '°/s）',
+      charge: '蓄力附魔：穿透 ' + (Math.ceil(lv / 2) + 1) + ' 敌 + 伤害 +' + (15 * lv) + '%',
+      flamethrower: '灼烧附魔：命中灼烧 ' + (2 + lv) + 's · ' + (8 * lv) + ' DPS',
+      lightning: '连锁附魔：命中连锁 ' + lv + ' 敌',
+      hswarm: '僚机附魔：僚机 +' + Math.floor(lv / 2) + ' 架'
+    };
+    return map[wid] || '武器特性附加到主武器弹道上';
   }
 
   /** 战前祝福商店：profile 无祝福且星币足够时弹窗（3 选 1 + 跳过） */
