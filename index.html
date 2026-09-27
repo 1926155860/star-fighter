@@ -1103,9 +1103,9 @@
     // 武器配置
     weapons: {
       gun: { cooldown: 0.22, damage: 1, bulletSpeed: 520, bulletWidth: 6, bulletHeight: 16, label: '机枪' },
-      cannon: { cooldown: 0.7, damage: 3, bulletSpeed: 420, bulletWidth: 16, bulletHeight: 26, label: '大炮' },
+      cannon: { cooldown: 0.7, damage: 4, bulletSpeed: 420, bulletWidth: 16, bulletHeight: 26, label: '大炮' },
       laser: { cooldown: 0.12, damage: 1, bulletSpeed: 700, bulletWidth: 6, bulletHeight: 30, dps: 40, beamWidth: 6, label: '激光' },
-      boomerang: { cooldown: 1.0, damage: 2, bulletSpeed: 420, bulletWidth: 18, bulletHeight: 18, bounceGrow: 1.18, bounceSpeedBoost: 1.06, maxBoomerangSize: 220, label: '回旋镖' },
+      boomerang: { cooldown: 1.0, damage: 2, bulletSpeed: 420, bulletWidth: 18, bulletHeight: 18, bounceGrow: 1.18, bounceSpeedBoost: 1.06, maxBoomerangSize: 320, label: '回旋镖' },
       saber: { cooldown: 0.25, damage: 5, bulletSpeed: 500, bulletWidth: 10, bulletHeight: 30, meleeDps: 32, meleeRadius: 78, bladeLengthStep: 8, label: '光刃' },
       homing: { cooldown: 0.34, damage: 1, bulletSpeed: 320, bulletWidth: 8, bulletHeight: 16, turnRate: 420, label: '追踪弹' },
       charge: { cooldown: 0.2, damage: 3, bulletSpeed: 460, bulletWidth: 12, bulletHeight: 20, chargeTime: 2.0, chargeDamage: 12, chargeSizeMax: 44, label: '蓄力炮' },
@@ -5917,6 +5917,22 @@
     p.mastery = p.mastery || {};
     p.mastery[masteryWeapon] = p.mastery[masteryWeapon] || {};
     var m = p.mastery[masteryWeapon];
+    // P22-⑪：熟练度条（击杀×2 + 局数×5 → 熟练等级 = floor(xp/20)，满级 10 + 满级称号）
+    var xp = m.xp || 0;
+    var expLv = Math.min(10, Math.floor(xp / 20));
+    var expNext = (expLv + 1) * 20;
+    var expProg = Math.max(0, Math.min(1, expLv >= 10 ? 1 : (xp - expLv * 20) / 20));
+    var title = expLv >= 10 ? '传说' : expLv >= 7 ? '大师' : expLv >= 4 ? '精英' : expLv >= 1 ? '熟练' : '新兵';
+    var expRow = document.createElement('div');
+    expRow.style.cssText = 'width:100%;padding:10px 14px;border:1px solid rgba(78,224,255,0.35);border-radius:12px;margin-bottom:10px;background:rgba(10,24,52,0.55);';
+    expRow.innerHTML =
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:#7df0ff;letter-spacing:1px;">' +
+      '<span>' + (WEAPON_NAMES[masteryWeapon] || masteryWeapon) + ' 熟练度 Lv.' + expLv + ' · ' + title + (expLv >= 10 ? '「' + (WEAPON_NAMES[masteryWeapon] || '武器') + '大师」' : '') + '</span>' +
+      '<span>' + (expLv >= 10 ? 'MAX' : (xp - expLv * 20) + '/' + 20) + '</span></div>' +
+      '<div style="height:8px;border-radius:6px;background:rgba(120,160,210,0.25);margin-top:6px;overflow:hidden;">' +
+      '<div style="height:100%;width:' + Math.round(expProg * 100) + '%;background:linear-gradient(90deg,#4ee0ff,#7df0ff);border-radius:6px;"></div></div>' +
+      '<div style="font-size:11px;color:#8aa0c8;margin-top:5px;">熟练度随击杀与对局累计，每级解锁武器专属被动（下方分支）</div>';
+    branches.appendChild(expRow);
     var wcfg = GameCore.DEFAULT_CONFIG.masteryBranches || {};
     var bs = getMasteryBranches(masteryWeapon);
     bs.forEach(function (b) {
@@ -6734,6 +6750,14 @@
       }
     });
     if (anyTask) saveDailyTasks(loadDailyTasks());
+    // P22-⑪：武器熟练度累计（击杀×2 + 局数×5 → 熟练等级 = floor(xp/20)，满级 10）
+    try {
+      var mp = getProfile();
+      mp.mastery = mp.mastery || {};
+      var mw = mp.mastery[state.weapon] = mp.mastery[state.weapon] || {};
+      mw.xp = (mw.xp || 0) + (track.totalKills || 0) * 2 + 5;
+      saveProfile(mp);
+    } catch (e) {}
     pushProfileToCloud();
   }
 
@@ -6961,7 +6985,7 @@
   }
 
   // 本局追踪数据（main.js 层，不进 game-core）
-  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false };
+  var track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false, hitsTaken: 0 };
   function resetTracking() {
     track = { totalKills: 0, bossKills: 0, damagedInWave: false, cloneSeen: false };
   }
@@ -11563,15 +11587,31 @@
       var encLv = encPick.word ? 1 : (state.rogueSkills[encPick.id] || 0) + 1;
       poolAll.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label, word: !!encPick.word });
     }
-    // 统一洗牌取 3 项
+    // P22-⑬：随机事件节点——每 5 波 30% 概率出现（星币商店 / 赌命箱 / 试炼塔）
+    var eventPicks = [];
+    if (state.wave >= 5 && state.wave % 5 === 0 && Math.random() < 0.3) {
+      eventPicks.push({ kind: 'event' });
+    }
+    // 统一洗牌取 3 项（事件卡 30% 时挤占一席）
     for (var i2 = poolAll.length - 1; i2 > 0; i2--) {
       var j2 = Math.floor(Math.random() * (i2 + 1));
       var tmp2 = poolAll[i2]; poolAll[i2] = poolAll[j2]; poolAll[j2] = tmp2;
     }
-    var picks = poolAll.slice(0, 3);
+    var picks = poolAll.slice(0, eventPicks.length ? 2 : 3);
+    if (eventPicks.length) picks.push({ kind: 'event' });
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
     picks.forEach(function (b) {
+      if (b.kind === 'event') {
+        // P22-⑬：事件卡——点击进入事件面板（替换当前强化选项）
+        var evtBtn = document.createElement('button');
+        evtBtn.className = 'btn primary';
+        evtBtn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;border:1px solid #c06bff;box-shadow:0 0 14px rgba(192,107,255,0.5);';
+        evtBtn.innerHTML = '<span style="font-size:20px;margin-right:8px;">🎲</span>随机事件<span style="display:block;font-size:11px;color:#c9a8ff;margin-top:3px;">神秘事件降临——商店 / 赌命 / 试炼</span>';
+        evtBtn.addEventListener('click', function () { renderEventPanel(box); });
+        box.appendChild(evtBtn);
+        return;
+      }
       var btn = document.createElement('button');
       btn.className = 'btn primary';
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
@@ -11644,6 +11684,110 @@
 
   function hideBuffPanel() {
     if (buffPanel) buffPanel.style.display = 'none';
+  }
+
+  /** P22-⑬：随机事件面板——星币商店 / 赌命箱 / 试炼塔（三选一事件节点） */
+  function renderEventPanel(box) {
+    box.innerHTML = '';
+    var title = document.createElement('div');
+    title.style.cssText = 'width:100%;text-align:center;font-size:15px;color:#c9a8ff;letter-spacing:1px;margin-bottom:8px;';
+    title.textContent = '🎲 随机事件 · 抉择时刻';
+    box.appendChild(title);
+    var events = [
+      {
+        icon: '🛒', name: '星币商店', desc: '20★ 随机强化 / 60★ 本武器羁绊组件',
+        run: function () {
+          var p = getProfile();
+          if (p.stars >= 60) {
+            // 羁绊组件：把当前主武器的羁绊伙伴加入本局已解锁（立即触发羁绊）
+            var bondDef = GameCore.WEAPON_BONDS && GameCore.WEAPON_BONDS[state.weapon];
+            if (bondDef) {
+              state.unlockedWeapons = state.unlockedWeapons || {};
+              state.unlockedWeapons[bondDef.partner] = true;
+              p.stars -= 60; saveProfile(p); updateMenuStars();
+              showToast('获得羁绊组件「' + (WEAPON_NAMES[bondDef.partner] || bondDef.partner) + '」！');
+            } else {
+              p.stars -= 60; saveProfile(p); updateMenuStars();
+              showToast('获得 1 点随机强化');
+              GameCore.applyPowerup(state, BUFF_POOL[Math.floor(Math.random() * BUFF_POOL.length)].type);
+            }
+          } else if (p.stars >= 20) {
+            p.stars -= 20; saveProfile(p); updateMenuStars();
+            var bb = BUFF_POOL[Math.floor(Math.random() * BUFF_POOL.length)];
+            GameCore.applyPowerup(state, bb.type);
+            showToast('★20 购得随机强化：' + bb.label);
+          } else {
+            showToast('星币不足（需要 20★）');
+            return;
+          }
+          closeEventCard();
+        }
+      },
+      {
+        icon: '🎁', name: '赌命箱', desc: '50% 大强化 / 30% 惩罚 / 20% 全属性+1',
+        run: function () {
+          var r = Math.random();
+          if (r < 0.5) {
+            var bb2 = BUFF_POOL[Math.floor(Math.random() * BUFF_POOL.length)];
+            GameCore.applyPowerup(state, bb2.type);
+            showToast('🎁 大强化：' + bb2.label + '！');
+          } else if (r < 0.8) {
+            state.maxLives = Math.max(1, state.maxLives - 1);
+            if (state.lives > state.maxLives) state.lives = state.maxLives;
+            showToast('💥 惩罚：生命上限 -1');
+          } else {
+            state.damageBonus = (state.damageBonus || 0) + 1;
+            state.buffAtkBonus = (state.buffAtkBonus || 0) + 1;
+            GameCore.applyPowerup(state, 'multishot');
+            showToast('✨ 全属性 +1（伤害/弹道）！');
+          }
+          closeEventCard();
+        }
+      },
+      {
+        icon: '🗼', name: '试炼塔', desc: '本局无伤击杀 20 敌 → 武器技碎片',
+        run: function () {
+          if (track.totalKills >= 20 && track.hitsTaken === 0) {
+            var pool2 = (GameCore.DEFAULT_CONFIG.rogueSkills || []).filter(function (s) { return (state.rogueSkills[s.id] || 0) < state.config.rogueSkillMax; });
+            if (pool2.length) {
+              var sk = pool2[Math.floor(Math.random() * pool2.length)];
+              GameCore.applySkillChoice(state, { kind: 'active', id: sk.id, level: (state.rogueSkills[sk.id] || 0) + 1 });
+              showToast('🗼 试炼通过！获得武器技碎片「' + (sk.label || sk.id) + '」');
+            } else { showToast('🗼 试炼通过！武器技已满级'); }
+          } else {
+            var p2 = getProfile();
+            p2.stars = (p2.stars || 0) + 2; saveProfile(p2); updateMenuStars();
+            showToast('🗼 试炼未达成（无伤击杀 ' + track.totalKills + '/20），安慰奖 ★2');
+          }
+          closeEventCard();
+        }
+      }
+    ];
+    events.forEach(function (ev) {
+      var b2 = document.createElement('button');
+      b2.className = 'btn primary';
+      b2.style.cssText = 'width:100%;padding:11px 14px;font-size:14px;text-align:center;letter-spacing:1px;margin-bottom:6px;border:1px solid rgba(192,107,255,0.6);';
+      b2.innerHTML = '<span style="font-size:18px;margin-right:8px;">' + ev.icon + '</span>' + ev.name + '<span style="display:block;font-size:11px;color:#c9a8ff;margin-top:3px;">' + ev.desc + '</span>';
+      b2.addEventListener('click', ev.run);
+      box.appendChild(b2);
+    });
+    var back = document.createElement('button');
+    back.className = 'btn small';
+    back.style.cssText = 'width:100%;margin-top:4px;';
+    back.textContent = '← 返回强化选择';
+    back.addEventListener('click', function () {
+      GameCore.togglePause(state);
+      hideBuffPanel();
+      state.buffOffered = false;
+      offerBuffPanel();
+    });
+    box.appendChild(back);
+    function closeEventCard() {
+      GameCore.togglePause(state);
+      hideBuffPanel();
+      audio.powerup();
+      addFlash('220,160,255', 160);
+    }
   }
 
   // ==================== P11：方案1+2 前端（升级三选一 / 祝福 / 复活 / 水晶 / 特技池） ====================
@@ -12084,7 +12228,7 @@
           addShake(2, 70);
         }
       }
-      if (state.lives < livesBefore) soundEvents.playerHit = true;
+      if (state.lives < livesBefore) { soundEvents.playerHit = true; track.hitsTaken++; }
       if (state.powerups.length < powerupBefore) soundEvents.powerup = true;
       if (statusBefore !== 'gameover' && state.status === 'gameover') {
         soundEvents.gameover = true;
