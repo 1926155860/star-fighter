@@ -1118,9 +1118,7 @@
       // P13-4：新武器（冰霜炮/电弧枪/漩涡枪/毒气喷射）
       icecannon: { cooldown: 0.6, damage: 3, bulletSpeed: 420, bulletWidth: 14, bulletHeight: 24, freezeTime: 0.9, freezeChance: 0.6, frostBurst: 0.35, label: '冰霜炮' },
       vortexgun: { cooldown: 0.5, damage: 1, bulletSpeed: 380, bulletWidth: 18, bulletHeight: 18, vortexDps: 9, vortexRadius: 120, label: '漩涡枪' },
-      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒气喷射' },
-      // P21-B4：穿透弹——穿透 3 个敌人不消失（物理系）
-      pierce: { cooldown: 0.3, damage: 2, bulletSpeed: 560, bulletWidth: 8, bulletHeight: 20, pierceCount: 3, label: '穿透弹' }
+      poison: { cooldown: 0.35, damage: 1, bulletSpeed: 300, bulletWidth: 16, bulletHeight: 16, poisonDps: 8, poisonDur: 3, label: '毒气喷射' }
     },
     // P8：局内遗物（波间强化可选，双刃剑效果，同一遗物不可重复拥有）
     relics: [
@@ -1141,7 +1139,7 @@
     ],
     // P3：武器伤害类型（物理 / 魔法）
     weaponDamageType: {
-      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys', icecannon: 'phys', vortexgun: 'phys', poison: 'phys', pierce: 'phys',
+      gun: 'phys', cannon: 'phys', boomerang: 'phys', homing: 'phys', charge: 'phys', icecannon: 'phys', vortexgun: 'phys', poison: 'phys',
       laser: 'magic', saber: 'magic', flamethrower: 'magic', lightning: 'magic'
     },
     bulletSpread: 14,
@@ -2194,11 +2192,6 @@
       if (state.weapon === 'vortexgun') blt._zone = 'vortex';
       if (state.weapon === 'vortexgun') blt._vortexR = wcfg.vortexRadius;
       if (state.weapon === 'vortexgun') blt._vortexDps = wcfg.vortexDps;
-      // P21-B4：穿透弹武器——自带穿透层数（3 个敌人不消失）
-      if (state.weapon === 'pierce') {
-        blt.pierceLeft = wcfg.pierceCount || 3;
-        blt.pierced = {};
-      }
       // P11B：武器技附魔——特性标记 + 穿透层数（激光/蓄力）
       if (enchants.length > 0) {
         blt.enchants = enchants;
@@ -5449,9 +5442,7 @@
     // P13-4：新武器（冰霜炮 / 漩涡枪 / 毒气喷射）
     { id: 'icecannon', icon: '❄', name: '冰霜炮', desc: '寒冰爆弹\n冻结减速敌人' },
     { id: 'vortexgun', icon: '🌀', name: '漩涡枪', desc: '引力弹\n吸附拉扯敌人' },
-    { id: 'poison', icon: '☠', name: '毒气喷射', desc: '毒云持续\n中毒叠层掉血' },
-    // P21-B4：穿透弹武器
-    { id: 'pierce', icon: '➹', name: '穿透弹', desc: '贯穿连击\n穿透 3 个敌人' }
+    { id: 'poison', icon: '☠', name: '毒气喷射', desc: '毒云持续\n中毒叠层掉血' }
   ];
 
   // P17：武器解锁（激光/回旋镖/光刃需通关 20 波；毒气/漩涡/电弧/吞噬者需通关 10 波；兑换码 010101 全解锁）
@@ -9151,7 +9142,7 @@
       var tailLen = b.type === 'chargebolt' ? b.height * 1.1 : b.height * 1.8;
       // P15：新武器专属拖尾色（毒气绿/漩涡青紫/冰霜冰蓝），替代默认黄色柱条
       var tc = b.type === 'cannon' ? '#ff9f43' : b.type === 'homing' ? '#ff5a5a' : b.type === 'bombbullet' ? '#ffd166'
-        : b.type === 'icecannon' ? '#a8e8ff' : b.type === 'vortexgun' ? '#9fe8ff' : b.type === 'poison' ? '#4ade80' : b.type === 'pierce' ? '#7df0ff' : '#ffe066';
+        : b.type === 'icecannon' ? '#a8e8ff' : b.type === 'vortexgun' ? '#9fe8ff' : b.type === 'poison' ? '#4ade80' : '#ffe066';
       if (fxBudget().tail) {
         // 外层光晕拖尾
         ctx.globalAlpha = 0.22;
@@ -9170,39 +9161,7 @@
         ctx.globalAlpha = 1;
       }
     }
-    if (b.type === 'pierce') {
-      // P21-B4：穿透弹——青白贯穿弹芯 + 旋转能量环（体现贯穿感）
-      ctx.shadowColor = '#7df0ff';
-      ctx.shadowBlur = 15;
-      ctx.fillStyle = '#7df0ff';
-      ctx.beginPath();
-      ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.fillRect(b.x + b.width * 0.35, b.y + 2, Math.max(1, b.width * 0.3), b.height - 4);
-      // 弹头贯穿尖
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(b.x + b.width / 2, b.y - 4);
-      ctx.lineTo(b.x + b.width * 0.2, b.y + 2);
-      ctx.lineTo(b.x + b.width * 0.8, b.y + 2);
-      ctx.closePath();
-      ctx.fill();
-      // 旋转能量环（消耗穿透次数后更亮）
-      var pr = b.pierceLeft === undefined ? 0 : (3 - b.pierceLeft);
-      ctx.strokeStyle = pr > 0 ? 'rgba(255,209,102,0.9)' : 'rgba(125,240,255,0.5)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width * 0.62, b.height * 0.5, state.time * 8, 0, Math.PI * 2);
-      ctx.stroke();
-      // 贯穿计数点
-      for (var pi4 = 0; pi4 < pr; pi4++) {
-        ctx.fillStyle = '#ffd166';
-        ctx.beginPath();
-        ctx.arc(b.x + b.width * 0.15 + pi4 * 5, b.y + b.height / 2 - 6, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (b.type === 'cannon') {
+    if (b.type === 'cannon') {
       ctx.shadowColor = '#ff9f43';
       ctx.shadowBlur = 14;
       ctx.fillStyle = '#ff9f43';
@@ -11039,7 +10998,7 @@
 
   // ==================== 能量大招 / HUD ====================
 
-  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者', icecannon: '冰霜炮', vortexgun: '漩涡枪', poison: '毒气喷射', pierce: '穿透弹' };
+  var WEAPON_NAMES = { gun: '机枪', cannon: '大炮', laser: '激光', boomerang: '回旋镖', saber: '光刃', homing: '追踪弹', charge: '蓄力炮', flamethrower: '火焰喷射', lightning: '雷电', hswarm: '蜂巢', devour: '吞噬者', icecannon: '冰霜炮', vortexgun: '漩涡枪', poison: '毒气喷射' };
 
   function fmtNum(n) {
     var v = Math.round(n);
