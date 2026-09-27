@@ -25,7 +25,8 @@
       min-height: 100vh;
       min-width: 100vw;
       background: #000;
-      font-family: "Microsoft YaHei", sans-serif;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
       color: #fff;
       overflow: hidden;
       max-width: 100vw;
@@ -688,6 +689,12 @@
     .weapon-card:hover {
       border-color: #7df0ff;
       box-shadow: 0 0 18px rgba(78,224,255,0.35), inset 0 0 10px rgba(78,224,255,0.10);
+    }
+    /* ===== P20：字体体系施行（科技/数值/中文三栈） ===== */
+    .panel-title { font-family: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .btn, .weapon-card, .game-panel-label { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; }
+    #hud-score, #hud-wave, #hud-combo, #hud-weapon-lv, #hud-hearts, #hud-daily-time {
+      font-variant-numeric: tabular-nums;
     }
   </style>
 </head>
@@ -7880,7 +7887,7 @@
       if (t.life >= t.maxLife) { floatingTexts.splice(fti, 1); continue; }
       ctx.globalAlpha = 1 - t.life / t.maxLife;
       ctx.fillStyle = t.color;
-      ctx.font = 'bold ' + t.size + 'px "Microsoft YaHei", sans-serif';
+      ctx.font = 'bold ' + t.size + 'px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.textAlign = 'center';
       ctx.shadowColor = t.color;
       ctx.shadowBlur = 6;
@@ -8238,7 +8245,7 @@
       ctx.arc(hcx, hcy, hpr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
       ctx.stroke();
       // 自身血量数字
-      ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+      ctx.font = 'bold 13px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#000';
@@ -8550,7 +8557,7 @@
     ctx.fill();
     // 倒计时标记（剩余秒数）
     var left = Math.max(0, e.cloneUntil - state.time);
-    ctx.font = 'bold 12px Consolas, monospace';
+    ctx.font = 'bold 12px "Bahnschrift","Consolas","SF Mono",monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
@@ -8668,7 +8675,7 @@
     var hpNum = Math.max(0, Math.ceil(e.hp));
     var fontSize = Math.max(9, Math.round(r * 0.95));
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold ' + fontSize + 'px Consolas, monospace';
+    ctx.font = 'bold ' + fontSize + 'px "Bahnschrift","Consolas","SF Mono",monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
@@ -8705,25 +8712,25 @@
       ctx.restore();
       // 词缀角标（中文单字）
       ctx.fillStyle = affixCol;
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Microsoft YaHei", sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.textAlign = 'center';
       var affixMark = e.affix === 'burning' ? '炎' : e.affix === 'leech' ? '吸' : e.affix === 'frenzy' ? '裂' : e.affix === 'shielded' ? '盾' : '毒';
       ctx.fillText(affixMark, cx, cy - r - 6);
       // 护盾剩余次数
       if (e.affix === 'shielded' && e.shieldHits > 0) {
         ctx.fillStyle = '#bfe8ff';
-        ctx.font = 'bold ' + Math.max(8, Math.round(r * 0.45)) + 'px Consolas, monospace';
+        ctx.font = 'bold ' + Math.max(8, Math.round(r * 0.45)) + 'px "Bahnschrift","Consolas","SF Mono",monospace';
         ctx.fillText('×' + e.shieldHits, cx, cy - r - 16);
       }
     }
     // 特殊类型角标（治疗=十字，防御=盾）
     if (e.special === 'healer') {
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.fillText('✚', cx, cy - r - 2);
     } else if (e.special === 'defender') {
       ctx.fillStyle = defending ? '#fff' : '#7a5c00';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.fillText('⛨', cx, cy - r - 2);
     } else if (e.special === 'devourer') {
       // 吞噬型：暗紫球 + 深渊口器 + 周围吸食圈
@@ -8732,12 +8739,12 @@
       ctx.arc(cx, cy, r + 7 + Math.sin(state.time * 3) * 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = 'rgba(200, 120, 255, 0.9)';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.fillText('◉', cx, cy - r - 2);
     } else if (e.special === 'charger') {
       // 冲撞型：蓄力时闪白，冲刺时红热箭头
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       if (e.chargeState === 'windup') {
         ctx.globalAlpha = 0.6 + 0.4 * Math.sin(state.time * 30);
         ctx.fillText('⚠', cx, cy - r - 2);
@@ -8750,13 +8757,13 @@
     } else if (e.special === 'assassin') {
       // 刺客型：青蓝闪烁，2 秒倒计时
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.time * 14);
       ctx.fillText('☠', cx, cy - r - 2);
       ctx.globalAlpha = 1;
       if (e.assassinTimer !== undefined && e.assassinTimer < 2) {
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px sans-serif';
+        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
         ctx.fillText(Math.ceil(e.assassinTimer) + '', cx, cy + r + 6);
       }
     } else if (e.special === 'tank') {
@@ -8767,12 +8774,12 @@
       ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.fillText('⛊', cx, cy - r - 2);
     } else if (e.special === 'suicider') {
       // 自爆兵：红黑球 + 引信闪光；无敌期金色盾环 + 剩余秒数
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       if (e.invulnUntil && e.invulnUntil > state.time) {
         var spulse = 0.6 + 0.4 * Math.sin(state.time * 20);
         ctx.globalAlpha = spulse;
@@ -8788,7 +8795,7 @@
         ctx.fillText('⏳', cx, cy - r - 2);
         var left = Math.max(0, e.invulnUntil - state.time);
         ctx.fillStyle = '#ffd166';
-        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px Consolas, monospace';
+        ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.55)) + 'px "Bahnschrift","Consolas","SF Mono",monospace';
         ctx.fillText(left.toFixed(1), cx, cy + r + 8);
       } else {
         ctx.fillText('💥', cx, cy - r - 2);
@@ -8796,7 +8803,7 @@
     } else if (e.special === 'flamer') {
       // 火焰兵：橙焰球 + 火苗角标
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       if (e.flameTimer !== undefined && e.flameTimer < 0.5) {
         ctx.globalAlpha = 0.6 + 0.4 * Math.sin(state.time * 24);
         ctx.fillText('🔥', cx, cy - r - 2);
@@ -8807,7 +8814,7 @@
     } else if (e.special === 'stormer') {
       // 雷电兵：紫电球 + 闪电角标；攻击预警时闪烁
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(9, Math.round(r * 0.7)) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       if (e.strikePending && state.time < e.strikePending.warnUntil) {
         ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.time * 22);
         ctx.fillText('☇', cx, cy - r - 2);
@@ -9356,7 +9363,7 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#06203a';
-      ctx.font = '12px monospace';
+      ctx.font = '12px "Bahnschrift","Consolas","SF Mono",monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       var glyph = { rage: '🔥', shield: '🛡', heal: '❤', magnet: '🧲' }[p.type] || '★';
@@ -9692,10 +9699,14 @@
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.fillStyle = '#ffd6e8';
-      ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
+      // P20：BOSS 来袭标题科技栈 + 发光
+      ctx.font = 'bold 15px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#ff5a9d';
+      ctx.shadowBlur = 12;
       ctx.fillText('⚠ ' + (boss.name || '恶魔') + ' 来袭 ⚠', cx, y - 33);
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
     // P3：Boss 加成徽章（显示在 Boss 头部上方）
@@ -9713,7 +9724,7 @@
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#ffd6e8';
-        ctx.font = '10px sans-serif';
+        ctx.font = '10px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(bnames[boss.buffs[bi]] || boss.buffs[bi], bx + 48, by + 9);
@@ -9817,20 +9828,20 @@
     roundRect(ctx, ex, ey, ew * er, 4, 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(201,167,232,0.9)';
-    ctx.font = '10px monospace';
+    ctx.font = '10px "Bahnschrift","Consolas","SF Mono",monospace';
     ctx.textAlign = 'center';
     ctx.fillText('Lv ' + state.expLevel + ' · ' + Math.floor(state.exp) + '/' + state.expNeed, W / 2, ey - 8);
     // 融合超武图标（右上角横排）
     if (state.fusions && state.fusions.length > 0) {
       ctx.textAlign = 'right';
-      ctx.font = '11px monospace';
+      ctx.font = '11px "Bahnschrift","Consolas","SF Mono",monospace';
       ctx.fillStyle = '#ff5a7a';
       ctx.fillText('🌟 超武 ×' + state.fusions.length, W - 10, 52);
     }
     // 道具状态（左下角竖排）
     var bx = 10, by = H - 20;
     ctx.textAlign = 'left';
-    ctx.font = '11px monospace';
+    ctx.font = '11px "Bahnschrift","Consolas","SF Mono",monospace';
     if (state.rageUntil > state.time) {
       var rr = Math.max(0, (state.rageUntil - state.time) / 6);
       ctx.fillStyle = 'rgba(255,120,40,0.85)';
@@ -9873,10 +9884,10 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#8fe9ff';
-    ctx.font = 'bold 11px "Microsoft YaHei", sans-serif';
+    ctx.font = 'bold 11px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('武器伤害', px + pad, top + pad + 10);
-    ctx.font = '10px "Microsoft YaHei", sans-serif';
+    ctx.font = '10px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
     var ly = top + pad + 26;
     for (var i = 0; i < keys.length; i++) {
       var nm = WEAPON_NAMES[keys[i]] || keys[i];
@@ -9917,10 +9928,10 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#ffd166';
-    ctx.font = 'bold 11px "Microsoft YaHei", sans-serif';
+    ctx.font = 'bold 11px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('吞噬能力', px + pad, 78 + pad + 10);
-    ctx.font = '10px "Microsoft YaHei", sans-serif';
+    ctx.font = '10px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
     var ly = 78 + pad + 26;
     for (var i = 0; i < lines.length; i++) {
       ctx.fillStyle = '#ffe9b0';
@@ -10492,7 +10503,7 @@
       ctx.save();
       ctx.globalAlpha = 0.75 + Math.sin(state.time * 6) * 0.2;
       ctx.fillStyle = '#bfefff';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 16px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('❄ 操控受限', state.player.x + state.player.width / 2, state.player.y - 10);
       ctx.restore();
@@ -10576,25 +10587,41 @@
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#7df0ff';
-      ctx.font = 'bold 36px "Microsoft YaHei", sans-serif';
+      // P20：大标题科技栈 + 描边发光双画
+      ctx.font = '900 38px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(2,10,30,0.9)';
+      ctx.lineWidth = 6;
+      ctx.strokeText('已 暂 停', W / 2, H / 2 - 30);
+      ctx.shadowColor = '#7df0ff';
+      ctx.shadowBlur = 18;
       ctx.fillText('已 暂 停', W / 2, H / 2 - 30);
+      ctx.shadowBlur = 0;
       ctx.fillStyle = '#c8d8f0';
-      ctx.font = '18px "Microsoft YaHei", sans-serif';
+      ctx.font = '18px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.fillText('按 P 或 Esc 继续 · 按 R 返回菜单', W / 2, H / 2 + 20);
     } else if (state.status === 'gameover') {
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#ff6b6b';
-      ctx.font = 'bold 36px "Microsoft YaHei", sans-serif';
+      // P20：游戏结束大标题科技栈 + 描边发光双画
+      ctx.font = '900 38px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(30,2,10,0.9)';
+      ctx.lineWidth = 6;
+      ctx.strokeText('游戏结束', W / 2, H / 2 - 60);
+      ctx.shadowColor = '#ff6b6b';
+      ctx.shadowBlur = 18;
       ctx.fillText('游戏结束', W / 2, H / 2 - 60);
+      ctx.shadowBlur = 0;
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 26px "Microsoft YaHei", sans-serif';
+      ctx.font = 'bold 26px "Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif';
       ctx.fillText('最终得分 ' + state.score, W / 2, H / 2 - 15);
       ctx.fillStyle = '#ffd166';
-      ctx.font = '20px "Microsoft YaHei", sans-serif';
+      ctx.font = '20px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.fillText('到达 Lv.' + state.level, W / 2, H / 2 + 22);
       ctx.fillStyle = '#8aa0c8';
-      ctx.font = '18px "Microsoft YaHei", sans-serif';
+      ctx.font = '18px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
       ctx.fillText('按 R 或点击返回菜单', W / 2, H / 2 + 58);
     }
 
