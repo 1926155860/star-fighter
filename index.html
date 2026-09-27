@@ -768,13 +768,8 @@
   <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
   <div id="buff-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,460px);background:rgba(3,8,30,0.96);border:1px solid #4ee0ff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 0 30px rgba(78,224,255,0.35);">
     <div style="font-size:17px;color:#7df0ff;letter-spacing:3px;margin-bottom:4px;">波 间 强 化</div>
-    <div id="buff-subtitle" style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">三选一 · 立即生效</div>
-    <!-- P12：升级三选一合并到波间强化（等级提升与强化一起出现） -->
-    <div id="buff-skill-zone" style="display:none;margin-bottom:8px;">
-      <div style="font-size:14px;color:#c9a7e8;letter-spacing:2px;margin-bottom:4px;">⚡ 能 力 升 级</div>
-      <div id="buff-skill-options" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <div style="border-top:1px solid rgba(78,224,255,0.25);margin:10px 0;"></div>
-    </div>
+    <div style="font-size:12px;color:#8aa0c8;margin-bottom:12px;">能力 · 强化 · 附魔 三选一</div>
+    <!-- P12c：能力池已删除——能力/强化/附魔统一并入下方强化池 -->
     <div id="buff-options" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
 
@@ -8709,27 +8704,15 @@
     }
     state.buffOffered = true;
     GameCore.togglePause(state); // 暂停游戏冻结波间倒计时，选择后恢复
-    // P12：升级三选一合并——若有待选升级，先渲染升级区（选完不关面板，继续选强化）
-    var buffSkillZone = document.getElementById('buff-skill-zone');
-    var buffSkillBox = document.getElementById('buff-skill-options');
-    var buffSubtitle = document.getElementById('buff-subtitle');
-    var needSkill = state.pendingSkillChoices && state.pendingSkillChoices.length > 0;
-    if (needSkill) {
-      if (buffSkillZone) buffSkillZone.style.display = 'block';
-      if (buffSubtitle) buffSubtitle.textContent = '先选能力，再选强化';
-      if (buffSkillBox) {
-        buffSkillBox.innerHTML = '';
-        state.pendingSkillChoices.forEach(function (ch) {
-          buffSkillBox.appendChild(buildSkillChoiceButton(ch, function () {
-            state.pendingSkillChoices = [];
-            if (buffSkillZone) buffSkillZone.style.display = 'none';
-            if (buffSubtitle) buffSubtitle.textContent = '三选一 · 立即生效';
-          }));
-        });
+    // P12c：能力 + 强化 + 附魔 统一放入强化池，三选一完全随机（能力池已删除，不再单独分区）
+    var poolAll = [];
+    // 1. 待选升级能力卡（并入强化池）
+    if (state.pendingSkillChoices && state.pendingSkillChoices.length) {
+      for (var psi = 0; psi < state.pendingSkillChoices.length; psi++) {
+        poolAll.push({ kind: 'skill', ch: state.pendingSkillChoices[psi] });
       }
-    } else if (buffSkillZone) {
-      buffSkillZone.style.display = 'none';
     }
+    // 2. 传统强化（洗牌取 2，含必刷项）
     var pool = BUFF_POOL.filter(function (b) {
       if (b.maxed && b.maxed()) return false;
       // P6：雷电专属强化仅雷电武器可选；其它武器不刷出
@@ -8747,29 +8730,45 @@
         if (pool[fi2].type === 'chain') { forced = pool.splice(fi2, 1)[0]; break; }
       }
     }
-    // 洗牌取 2 项传统强化（含必刷项）+ 1 项武器技附魔（合并为"强化"）
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
-    var picks = pool.slice(0, 2);
-    if (forced) picks.push(forced);
-    // 附魔卡：随机 1 项未满级武器技，附加到主武器（叠星）
+    var tradPicks = pool.slice(0, Math.min(2, pool.length));
+    if (forced) tradPicks.push(forced);
+    for (var ti = 0; ti < tradPicks.length; ti++) {
+      poolAll.push({ kind: 'buff', b: tradPicks[ti] });
+    }
+    // 3. 附魔卡：随机 1 项未满级武器技，附加到主武器（叠星）
     var encPool = ENCHANT_POOL.filter(function (en) {
       return (state.rogueSkills[en.id] || 0) < state.config.rogueSkillMax;
     });
     if (encPool.length > 0) {
       var encPick = encPool[Math.floor(Math.random() * encPool.length)];
       var encLv = (state.rogueSkills[encPick.id] || 0) + 1;
-      if (picks.length >= 3) picks.pop(); // 保持 3 项，附魔替换最后一项
-      picks.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label });
+      poolAll.push({ kind: 'enchant', encId: encPick.id, encLv: encLv, icon: encPick.icon, label: encPick.label });
     }
+    // 统一洗牌取 3 项
+    for (var i2 = poolAll.length - 1; i2 > 0; i2--) {
+      var j2 = Math.floor(Math.random() * (i2 + 1));
+      var tmp2 = poolAll[i2]; poolAll[i2] = poolAll[j2]; poolAll[j2] = tmp2;
+    }
+    var picks = poolAll.slice(0, 3);
     var box = document.getElementById('buff-options');
     box.innerHTML = '';
     picks.forEach(function (b) {
       var btn = document.createElement('button');
       btn.className = 'btn primary';
       btn.style.cssText = 'width:100%;padding:12px 14px;font-size:15px;text-align:center;letter-spacing:1px;';
+      if (b.kind === 'skill') {
+        // 能力卡：与强化/附魔同一池，选中即应用并恢复（一波一次）
+        box.appendChild(buildSkillChoiceButton(b.ch, function () {
+          state.pendingSkillChoices = [];
+          GameCore.togglePause(state);
+          buffPanel.style.display = 'none';
+        }));
+        return;
+      }
       if (b.kind === 'enchant') {
         // 附魔卡：选中 → 附加到当前主武器（getEnchants 自动带出，可叠星）
         btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>附魔 · ' + b.label + ' ★' + b.encLv + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">附加到主武器 → ' + getEnchantDesc(b.encId, b.encLv) + '</span>';
@@ -8783,13 +8782,15 @@
           showToast('附魔「' + b.label + '」已附加到 ' + mainLabel);
         });
       } else {
-        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + b.icon + '</span>' + b.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + b.desc + '</span>';
+        // 传统强化（池内包装为 {kind:'buff', b: 原强化项}）
+        var bb = b.b;
+        btn.innerHTML = '<span style="font-size:20px;margin-right:8px;">' + bb.icon + '</span>' + bb.label + '<span style="display:block;font-size:11px;color:#8aa0c8;margin-top:3px;">' + bb.desc + '</span>';
         btn.addEventListener('click', function () {
-          GameCore.applyPowerup(state, b.type, b.relicId ? { id: b.relicId } : (b.traitId ? { traitId: b.traitId } : undefined));
+          GameCore.applyPowerup(state, bb.type, bb.relicId ? { id: bb.relicId } : (bb.traitId ? { traitId: bb.traitId } : undefined));
           GameCore.togglePause(state);
           buffPanel.style.display = 'none';
           audio.powerup();
-          showToast('强化：' + b.label);
+          showToast('强化：' + bb.label);
         });
       }
       box.appendChild(btn);
