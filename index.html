@@ -1016,14 +1016,15 @@
       <div class="panel-title">设 置 · 已 暂 停</div>
       <div class="game-panel-label" style="font-size:13px;color:#8aa0c8;margin-bottom:10px;letter-spacing:1px;">切换武器</div>
       <div class="game-weapon-grid" id="game-weapon-grid"></div>      <div class="game-panel-btns">
+        <button class="btn" id="btn-game-settings">⚙ 设 置</button>
         <button class="btn primary" id="btn-game-resume">继续游戏</button>
         <button class="btn danger" id="btn-game-menu">返回初始界面</button>
       </div>
     </div>
 
-    <!-- 游戏内按钮：置于 wrap 内，跟随画布缩放对齐（P18） -->
+    <!-- 游戏内按钮：置于 wrap 内，跟随画布缩放对齐（P18）；倍速按钮需兑换码「开启倍速」后才显示 -->
     <button type="button" id="in-game-btn" title="设置">⚙</button>
-    <button type="button" id="speed-btn" title="游戏倍速">⏩ 1x</button>
+    <button type="button" id="speed-btn" title="游戏倍速" style="display:none;">⏩ 1x</button>
   </div>
 
   <!-- 波间强化三选一（P2：Roguelike 随机强化） -->
@@ -3647,6 +3648,9 @@
     // P13-7：Boss 主题（按波次轮换 4 主题：恶魔/星舰/章鱼/虚空）
     var themes = cfg.bossThemes || [];
     var theme = themes[Math.floor((state.wave - 1) / cfg.waveBossEvery) % themes.length] || themes[0];
+    // P24：Boss 显示名 = 主题名 + 模式简名（原实现 20 个模式名都叫"恶魔·XXX"，导致玩家以为只会遇到恶魔）
+    var bossModeName = cfg.bossNames[mode] || '恶魔';
+    var bossName = theme ? (theme.name + '·' + String(bossModeName).replace(/^恶魔·/, '')) : bossModeName;
     state.boss = {
       id: newId(state),
       x: cfg.width / 2 - cfg.bossWidth / 2,
@@ -3658,7 +3662,7 @@
       speed: cfg.bossSpeed,
       nextFire: cfg.bossFireInterval,
       mode: mode,
-      name: cfg.bossNames[mode] || '恶魔',
+      name: bossName,
       theme: theme ? theme.id : 'demon',
       themeName: theme ? theme.name : '恶魔领主',
       palette: theme ? theme.palette : ['#ff5566', '#ff8833'],
@@ -4791,6 +4795,24 @@
     // P4：克隆体/自爆兵/火焰兵/雷电兵行为
     updateP4Enemies(state, dt);
 
+    // P24：界外钳制兜底——分裂/吸引/召唤/冲撞可能把敌人推出可玩区域卡在屏幕外（还能向玩家开火），强制拉回
+    for (var oei = 0; oei < state.enemies.length; oei++) {
+      var oe = state.enemies[oei];
+      if (!oe) continue;
+      if (!isFinite(oe.x)) oe.x = cfg.width / 2 - oe.width / 2;
+      if (!isFinite(oe.y)) oe.y = -oe.height - 10;
+      // 半出上界且没有下落速度（被冰冻/减速/吸引卡住）→ 强制给下落速度拉回画面
+      // （完全出界 y<-h-14 或 y>h+60 由通用循环负责穿越，此处不二次干预）
+      if (oe.y < -oe.height * 0.4 && oe.y >= -oe.height - 14) {
+        if ((oe.vy !== undefined ? oe.vy : oe.speed) <= 0) {
+          if (oe.vy !== undefined) oe.vy = 30; else oe.speed = 30;
+        }
+      }
+      // 左右界外 → 拉回可玩区 + 反向弹回（杜绝界外开火，保留反弹设计）
+      if (oe.x < -oe.width * 0.5) { oe.x = -oe.width * 0.5; oe.vx = Math.abs(oe.vx || 0); }
+      if (oe.x > cfg.width + oe.width * 0.5) { oe.x = cfg.width + oe.width * 0.5; oe.vx = -Math.abs(oe.vx || 0); }
+    }
+
     // P2：僚机自动开火（每 wingmanCooldown 秒每架僚机发射一颗子弹）；P6：受攻速增强（蜂巢/其他武器一致）
     if (state.wingman > 0) {
       state.wingmanCooldown -= dt;
@@ -5894,6 +5916,8 @@
     // 关卡模式进度：lvClear=已通关章数(0-5)；endless=无尽模式解锁
     if (typeof p.lvClear !== 'number' || p.lvClear < 0) p.lvClear = 0;
     if (p.endless === undefined) p.endless = false;
+    // P24：兑换码「开启倍速」解锁游戏中倍速按钮
+    if (p.speedUnlock === undefined) p.speedUnlock = false;
     return p;
   }
 
@@ -6164,7 +6188,16 @@
   document.getElementById('btn-loadout').addEventListener('click', function () { renderWeaponGrid(); showPanel('loadout'); });
   document.getElementById('btn-settings').addEventListener('click', function () { showPanel('settings'); });
   document.getElementById('btn-loadout-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
-  document.getElementById('btn-settings-back').addEventListener('click', function () { updateMenuConfig(); showPanel('menu'); });
+  document.getElementById('btn-settings-back').addEventListener('click', function () {
+    updateMenuConfig();
+    // 游戏暂停中从暂停面板进入设置时，返回回到暂停面板而非主菜单
+    if (state.status === 'playing' && state.paused) {
+      hidePanels();
+      if (gamePanel) gamePanel.classList.add('active');
+    } else {
+      showPanel('menu');
+    }
+  });
 
   // ===== P21-B5：分享得星币（每日前 3 次有效，每次 +10） =====
   var btnGameOverBack = document.getElementById('btn-gameover-back');
@@ -6302,6 +6335,15 @@
         showToast('🎉 已解锁全部武器');
         updateMenuConfig();
         showPanel('menu');
+      } else if (code === '开启倍速') {
+        // P24：兑换码「开启倍速」→ 游戏中显示倍速按钮（1x/2x/4x 循环）
+        var pp3 = getProfile();
+        pp3.speedUnlock = true;
+        saveProfile(pp3);
+        var sb2 = document.getElementById('speed-btn');
+        if (sb2 && state.status === 'playing') sb2.style.display = 'block';
+        showToast('⏩ 倍速功能已开启（1x / 2x / 4x）');
+        updateMenuConfig();
       } else {
         showToast('❌ 兑换码无效');
       }
@@ -6625,8 +6667,9 @@
 
   function showInGameBtn(visible) {
     if (inGameBtn) inGameBtn.style.display = visible ? 'block' : 'none';
+    // 倍速按钮：需兑换码「开启倍速」解锁后才在游戏中显示
     var sb = document.getElementById('speed-btn');
-    if (sb) sb.style.display = visible ? 'block' : 'none';
+    if (sb) sb.style.display = (visible && getProfile().speedUnlock) ? 'block' : 'none';
     if (!visible) hideGamePanel();
   }
 
@@ -6750,6 +6793,14 @@
     btnGameResume.addEventListener('click', function () {
       hideGamePanel();
       audio.powerup();
+    });
+  }
+  var btnGameSettings = document.getElementById('btn-game-settings');
+  if (btnGameSettings) {
+    btnGameSettings.addEventListener('click', function () {
+      // 暂停面板 → 打开初始界面设置（音乐/音量/Boss形象/成长/皮肤/兑换码→高级调节）
+      if (gamePanel) gamePanel.classList.remove('active');
+      showPanel('settings');
     });
   }
   var btnGameMenu = document.getElementById('btn-game-menu');
