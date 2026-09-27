@@ -1308,7 +1308,18 @@
       { id: 'plague', name: '瘟疫巨兽', desc: '剧毒雾瘴', palette: ['#7dff6d', '#3ecf4a'], patternBias: 'spread', ability: 'toxinzone' },
       { id: 'graviton', name: '引力核心', desc: '引力牵引', palette: ['#b3b3ff', '#6f6fff'], patternBias: 'vortex', ability: 'gravpull' },
       { id: 'swarmqueen', name: '蜂巢母体', desc: '召唤蜂群', palette: ['#ffd166', '#ff9f43'], patternBias: 'aimed', ability: 'swarm' },
-      { id: 'titan', name: '泰坦巨神', desc: '蓄力重炮', palette: ['#c0c8d8', '#8a94a8'], patternBias: 'aimed', ability: 'titanblast' }
+      { id: 'titan', name: '泰坦巨神', desc: '蓄力重炮', palette: ['#c0c8d8', '#8a94a8'], patternBias: 'aimed', ability: 'titanblast' },
+      // P22-㉑：十种新 Boss 形态（独立造型 + 专属能力，接入同框架）
+      { id: 'mechqueen', name: '机械女王', desc: '召唤机械兵蜂群', palette: ['#aab8c8', '#4ee0ff'], patternBias: 'aimed', ability: 'swarm' },
+      { id: 'lavatitan', name: '熔岩巨像', desc: '岩浆喷发陨石雨', palette: ['#ff8a3d', '#d93a00'], patternBias: 'barrage', ability: 'eruption' },
+      { id: 'plasmawraith', name: '等离子幽灵', desc: '相位突进穿墙弹', palette: ['#b26bff', '#f0f0ff'], patternBias: 'spiral', ability: 'phase' },
+      { id: 'shadowhunter', name: '暗影猎手', desc: '瞬移残影十字斩', palette: ['#1c1c2a', '#ff5a5a'], patternBias: 'aimed', ability: 'blink' },
+      { id: 'magcore', name: '电磁核心', desc: '磁暴环电磁链', palette: ['#8a94a8', '#4e8bff'], patternBias: 'ring', ability: 'thunderstrike' },
+      { id: 'biolair', name: '生物母巢', desc: '孵化弹腐蚀液', palette: ['#9b3a5a', '#ff8ab0'], patternBias: 'spread', ability: 'summon' },
+      { id: 'chronos', name: '时空守卫', desc: '时间减速场', palette: ['#d8c8a0', '#ffffff'], patternBias: 'spiral', ability: 'timeslow' },
+      { id: 'sporetree', name: '孢子古树', desc: '毒雾领域藤蔓', palette: ['#2f9e44', '#7dff6d'], patternBias: 'spread', ability: 'toxinzone' },
+      { id: 'starwyrm', name: '星穹龙', desc: '星尘龙息横扫', palette: ['#1e3a8a', '#ffd166'], patternBias: 'laser', ability: 'lasersweep' },
+      { id: 'datalord', name: '数据之主', desc: '代码雨数据墙', palette: ['#0a0a12', '#4ee0ff'], patternBias: 'vortex', ability: 'eruption' }
     ],
     bossAbilityInterval: 5,    // P17：Boss 专属能力触发周期（秒）
     bossAbilityFirstDelay: 2.5, // P17：进场后首次能力延迟
@@ -3748,6 +3759,29 @@
     } else if (ab === 'titanblast') {
       // 泰坦：一发巨型重炮弹
       EB(aim, cfg.bossBulletSpeed * 0.75, 40, { titan: 1 });
+    } else if (ab === 'phase') {
+      // P22-㉑：等离子幽灵——相位突进（瞬移玩家上方 + 环绕弹）
+      if (state.player) {
+        state.boss.x = clamp(pcx - state.boss.width / 2, 0, cfg.width - state.boss.width);
+        state.boss.y = clamp(pcy - state.boss.height * 1.6, 20, cfg.height * 0.5);
+        state.boss._phaseFx = state.time;
+      }
+      for (var pn = 0; pn < 10; pn++) {
+        EB(pn / 10 * Math.PI * 2, cfg.bossBulletSpeed * 0.55, 12, {});
+      }
+    } else if (ab === 'blink') {
+      // P22-㉑：暗影猎手——瞬移残影 + 十字斩影弹
+      if (state.player) {
+        state.boss.x = clamp(Math.random() * (cfg.width - state.boss.width), 0, cfg.width - state.boss.width);
+        state.boss.y = clamp(30 + Math.random() * (cfg.height * 0.45), 20, cfg.height * 0.5);
+        state.boss._blinkFx = state.time;
+      }
+      for (var bn = 0; bn < 4; bn++) {
+        EB(aim + bn * Math.PI / 2, cfg.bossBulletSpeed, 14, { shadow: 1 });
+      }
+    } else if (ab === 'timeslow') {
+      // P22-㉑：时空守卫——时间减速场（全场敌弹减速 30%，3 秒）
+      state.boss._timeSlowUntil = state.time + 3;
     }
   }
 
@@ -4261,6 +4295,8 @@
     if (dmgType === 'devour') resist = 0;
     damage = Math.max(1, Math.round(damage * (1 - resist)));
     boss.hp -= damage;
+    // P22-㉒：受击闪烁标记（drawBoss 消费 _hitFx 做顿帧抖动）
+    boss._hitFx = state.time;
     // P5：武器伤害统计（右侧伤害面板数据源）
     if (srcWeapon && damage > 0) {
       state.weaponDamage[srcWeapon] = (state.weaponDamage[srcWeapon] || 0) + damage;
@@ -5030,8 +5066,10 @@
     // 移动敌机子弹
     for (var ebj = state.enemyBullets.length - 1; ebj >= 0; ebj--) {
       var eb = state.enemyBullets[ebj];
-      eb.x += eb.vx * dt;
-      eb.y += eb.vy * dt;
+      // P22-㉑：时空守卫——时间减速场（全场敌弹减速 30%）
+      var _tsMul = (state.boss && state.boss._timeSlowUntil > state.time) ? 0.7 : 1;
+      eb.x += eb.vx * dt * _tsMul;
+      eb.y += eb.vy * dt * _tsMul;
       // P22-⑭：场效——能量墙（左右边界反弹敌弹 1 次）/ 加速带（下 1/3 横向气流加速）
       if (state.fieldEffect === 'energywall') {
         if ((eb.x < 0 || eb.x + (eb.width || 6) > cfg.width) && !eb._wallBounced) {
@@ -7165,7 +7203,7 @@
     if (ach[aid]) return { done: 1, total: 1 };
     // 未解锁时根据当前局内/全局状态显示进度
     switch (aid) {
-      case 'boss_theme_all': return { done: codexCountByPrefix('bosstheme:'), total: 4 };
+      case 'boss_theme_all': return { done: codexCountByPrefix('bosstheme:'), total: 20 };
       case 'codex_half': return { done: codexCountByPrefix(''), total: CODEX.length };
       case 'kill1000': return { done: (loadStats().killTotal || 0), total: 1000 };
       case 'signin7': return { done: (loadSignin().days || 0), total: 7 };
@@ -7725,7 +7763,18 @@
     { id: 'bosstheme:plague', icon: '☠️', name: '瘟疫巨兽', cat: 'Boss主题', desc: '墨绿毒泡形态，扩散弹幕；专属能力：地面毒圈（持续掉血）。' },
     { id: 'bosstheme:graviton', icon: '🌀', name: '引力核心', cat: 'Boss主题', desc: '紫黑轨道核心形态，涡旋弹幕；专属能力：引力牵引玩家。' },
     { id: 'bosstheme:swarmqueen', icon: '🐝', name: '蜂巢母体', cat: 'Boss主题', desc: '鎏金蜂巢形态，瞄准连发；专属能力：召唤快速蜂群。' },
-    { id: 'bosstheme:titan', icon: '🛡️', name: '泰坦巨神', cat: 'Boss主题', desc: '银灰巨盾形态，重型炮弹；专属能力：巨型重炮弹。' }
+    { id: 'bosstheme:titan', icon: '🛡️', name: '泰坦巨神', cat: 'Boss主题', desc: '银灰巨盾形态，重型炮弹；专属能力：巨型重炮弹。' },
+    // P22-㉑：十种新 Boss 形态图鉴（遇到才解锁）
+    { id: 'bosstheme:mechqueen', icon: '🕷️', name: '机械女王', cat: 'Boss主题', desc: '银灰蜘蛛母体形态，八足金属肢；专属能力：召唤机械兵蜂群。' },
+    { id: 'bosstheme:lavatitan', icon: '🌋', name: '熔岩巨像', cat: 'Boss主题', desc: '橙红熔岩巨人形态，胸口熔岩核心；专属能力：岩浆喷发陨石雨。' },
+    { id: 'bosstheme:plasmawraith', icon: '👻', name: '等离子幽灵', cat: 'Boss主题', desc: '紫蓝流光能量体形态；专属能力：相位突进穿墙弹。' },
+    { id: 'bosstheme:shadowhunter', icon: '🗡️', name: '暗影猎手', cat: 'Boss主题', desc: '黑铠双翼刺客形态，镰刀利爪；专属能力：瞬移残影十字斩。' },
+    { id: 'bosstheme:magcore', icon: '🧲', name: '电磁核心', cat: 'Boss主题', desc: '双层金属环磁暴形态，电蓝球核；专属能力：磁暴环电磁链。' },
+    { id: 'bosstheme:biolair', icon: '🕸️', name: '生物母巢', cat: 'Boss主题', desc: '克苏鲁血肉巢形态，触手孵化；专属能力：孵化弹腐蚀液。' },
+    { id: 'bosstheme:chronos', icon: '⏳', name: '时空守卫', cat: 'Boss主题', desc: '机械钟表立方形态，指针旋转；专属能力：时间减速场。' },
+    { id: 'bosstheme:sporetree', icon: '🌳', name: '孢子古树', cat: 'Boss主题', desc: '藤蔓巨树形态，孢子囊脉动；专属能力：毒雾领域藤蔓。' },
+    { id: 'bosstheme:starwyrm', icon: '🐉', name: '星穹龙', cat: 'Boss主题', desc: '太空巨龙形态，尾拖星尘；专属能力：星尘龙息横扫。' },
+    { id: 'bosstheme:datalord', icon: '🖥️', name: '数据之主', cat: 'Boss主题', desc: '赛博像素矩阵形态，故障闪烁；专属能力：代码雨数据墙。' }
   ];
   var CODEX_IDS = {};
   CODEX.forEach(function (c) { CODEX_IDS[c.id] = c; });
@@ -8838,6 +8887,8 @@
 
   function drawPlayer(x, y, w, h) {
     var flashing = GameCore.isInvincible(state) && Math.floor(state.time * 10) % 2 === 0;
+    // P22-㉓：武器飞机专属动态——悬浮微摆（上下呼吸漂浮，局部坐标偏移零状态污染）
+    y += Math.sin(state.time * 2.2 + (state.player ? state.player.x : 0) * 0.01) * 2.2;
     // P5：吞噬者武器——玩家化身为球形，头顶/中心显示自身血量
     if (state.weapon === 'devour') {
       var hcx = x + w / 2;
@@ -10286,6 +10337,148 @@
       for (var qi2 = 0; qi2 < 3; qi2++) {
         ctx.beginPath(); ctx.arc(Math.cos(qi2 / 3 * Math.PI * 2 - Math.PI / 2) * w * 0.1, Math.sin(qi2 / 3 * Math.PI * 2 - Math.PI / 2) * h * 0.1, w * 0.035, 0, Math.PI * 2); ctx.fill();
       }
+    } else if (theme === 'mechqueen') {
+      // P22-㉑：机械女王——蜘蛛母体（八足 + 腹部能量巢）
+      for (var mqi = 0; mqi < 8; mqi++) {
+        var mqa = mqi / 8 * Math.PI * 2 + Math.PI / 8;
+        var mqLen = (mqi % 2 === 0) ? w * 0.44 : w * 0.34;
+        ctx.strokeStyle = c2; ctx.lineWidth = w * 0.028;
+        ctx.beginPath(); ctx.moveTo(Math.cos(mqa) * w * 0.2, Math.sin(mqa) * h * 0.2);
+        ctx.lineTo(Math.cos(mqa) * mqLen, Math.sin(mqa) * mqLen * 0.92 + Math.sin(t * 3 + mqi) * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = c1; ctx.beginPath(); ctx.ellipse(0, 0, w * 0.3, h * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = c2;
+      for (var mqe = 0; mqe < 3; mqe++) {
+        var mqex = -w * 0.12 + mqe * w * 0.12;
+        var mqer = w * 0.05 + Math.abs(Math.sin(t * 2 + mqe)) * 0.015;
+        ctx.beginPath(); ctx.arc(mqex, h * 0.06, mqer, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#ff4b6b'; ctx.beginPath(); ctx.arc(0, -h * 0.06, w * 0.04, 0, Math.PI * 2); ctx.fill();
+    } else if (theme === 'lavatitan') {
+      // P22-㉑：熔岩巨像——岩石巨人 + 胸口熔岩核心
+      ctx.beginPath();
+      ctx.moveTo(0, -h * 0.44); ctx.lineTo(w * 0.3, -h * 0.32); ctx.lineTo(w * 0.34, h * 0.24); ctx.lineTo(w * 0.16, h * 0.44); ctx.lineTo(-w * 0.16, h * 0.44);
+      ctx.lineTo(-w * 0.34, h * 0.24); ctx.lineTo(-w * 0.3, -h * 0.32); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#4a2a12'; ctx.fillRect(-w * 0.4, -h * 0.1, w * 0.12, h * 0.5); ctx.fillRect(w * 0.28, -h * 0.1, w * 0.12, h * 0.5);
+      var lv = 0.75 + Math.abs(Math.sin(t * 2)) * 0.25;
+      ctx.fillStyle = 'rgba(255,120,40,' + lv + ')'; ctx.beginPath(); ctx.arc(0, h * 0.02, w * 0.11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(0, h * 0.02, w * 0.05, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1c0f05'; ctx.beginPath(); ctx.arc(-w * 0.08, -h * 0.2, w * 0.03, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(w * 0.08, -h * 0.2, w * 0.03, 0, Math.PI * 2); ctx.fill();
+    } else if (theme === 'plasmawraith') {
+      // P22-㉑：等离子幽灵——半透明能量体 + 三颗环绕能量球
+      ctx.globalAlpha = 0.72 + Math.abs(Math.sin(t * 2.2)) * 0.2;
+      ctx.beginPath(); ctx.arc(0, 0, w * 0.26, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = c2; ctx.lineWidth = 3;
+      for (var pwi = 0; pwi < 3; pwi++) {
+        var pwa = t * 2.4 + pwi / 3 * Math.PI * 2;
+        var pwr = w * 0.16 + Math.sin(t * 1.6 + pwi) * 0.04;
+        ctx.beginPath(); ctx.arc(Math.cos(pwa) * w * 0.24, Math.sin(pwa) * h * 0.24, pwr * 0.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(Math.cos(pwa) * w * 0.24, Math.sin(pwa) * h * 0.24, pwr * 0.5, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, w * 0.06, 0, Math.PI * 2); ctx.fill();
+    } else if (theme === 'shadowhunter') {
+      // P22-㉑：暗影猎手——双翼刺客 + 镰刀利爪
+      ctx.fillStyle = '#0d0d18';
+      ctx.beginPath();
+      ctx.moveTo(0, -h * 0.44); ctx.lineTo(w * 0.4, -h * 0.1); ctx.lineTo(w * 0.14, -h * 0.02); ctx.lineTo(w * 0.4, h * 0.26); ctx.lineTo(w * 0.12, h * 0.18);
+      ctx.lineTo(-w * 0.12, h * 0.18); ctx.lineTo(-w * 0.4, h * 0.26); ctx.lineTo(-w * 0.14, -h * 0.02); ctx.lineTo(-w * 0.4, -h * 0.1); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = c2; ctx.lineWidth = 2;
+      var sw = Math.sin(t * 4) * 0.12;
+      ctx.beginPath(); ctx.moveTo(-w * 0.14, -h * 0.02); ctx.quadraticCurveTo(-w * 0.3, h * 0.06 + sw, -w * 0.2, h * 0.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(w * 0.14, -h * 0.02); ctx.quadraticCurveTo(w * 0.3, h * 0.06 + sw, w * 0.2, h * 0.2); ctx.stroke();
+      ctx.fillStyle = '#ff5a5a'; ctx.beginPath(); ctx.arc(0, -h * 0.18, w * 0.04, 0, Math.PI * 2); ctx.fill();
+    } else if (theme === 'magcore') {
+      // P22-㉑：电磁核心——双层金属环 + 电蓝球核 + 电弧
+      ctx.fillStyle = '#0a0a12'; ctx.beginPath(); ctx.arc(0, 0, w * 0.26, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = c2; ctx.lineWidth = w * 0.035;
+      ctx.save(); ctx.rotate(t * 1.2);
+      ctx.beginPath(); ctx.ellipse(0, 0, w * 0.32, h * 0.18, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath(); ctx.ellipse(0, 0, w * 0.28, h * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      var mc = 0.6 + Math.abs(Math.sin(t * 3)) * 0.4;
+      ctx.fillStyle = 'rgba(78,139,255,' + mc + ')'; ctx.beginPath(); ctx.arc(0, 0, w * 0.12, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(150,200,255,0.8)'; ctx.lineWidth = 1.5;
+      for (var mcc = 0; mcc < 3; mcc++) {
+        var mcx = Math.cos(t * 5 + mcc * 2.1) * w * 0.18;
+        ctx.beginPath(); ctx.moveTo(mcx, -h * 0.14); ctx.lineTo(mcx + 6, h * 0.1); ctx.stroke();
+      }
+    } else if (theme === 'biolair') {
+      // P22-㉑：生物母巢——血肉孵化巢 + 触手
+      for (var bti = 0; bti < 3; bti++) {
+        ctx.strokeStyle = c1; ctx.lineWidth = w * 0.03;
+        ctx.beginPath(); ctx.moveTo(Math.cos(bti / 3 * Math.PI * 2) * w * 0.14, Math.sin(bti / 3 * Math.PI * 2) * h * 0.14);
+        ctx.quadraticCurveTo(Math.cos(bti / 3 * Math.PI * 2 + 0.4) * w * 0.42, Math.sin(bti / 3 * Math.PI * 2 + 0.4) * h * 0.42, Math.cos(bti / 3 * Math.PI * 2 + 0.2) * w * 0.46 + Math.sin(t * 2 + bti) * 4, Math.sin(bti / 3 * Math.PI * 2 + 0.2) * h * 0.46);
+        ctx.stroke();
+      }
+      ctx.fillStyle = c1; ctx.beginPath(); ctx.ellipse(0, 0, w * 0.24, h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff9ab0';
+      for (var ble = 0; ble < 3; ble++) {
+        var blr = w * 0.05 + Math.abs(Math.sin(t * 1.8 + ble)) * 0.02;
+        ctx.beginPath(); ctx.arc(-w * 0.09 + ble * w * 0.09, h * 0.04, blr, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#3a0f1c'; ctx.beginPath(); ctx.arc(0, -h * 0.04, w * 0.05, 0, Math.PI * 2); ctx.fill();
+    } else if (theme === 'chronos') {
+      // P22-㉑：时空守卫——机械钟表立方 + 指针旋转
+      ctx.save(); ctx.rotate(t * 0.35);
+      ctx.fillStyle = '#1a1408'; ctx.fillRect(-w * 0.2, -h * 0.2, w * 0.4, h * 0.4);
+      ctx.restore();
+      ctx.strokeStyle = c1; ctx.lineWidth = 2; ctx.strokeRect(-w * 0.2, -h * 0.2, w * 0.4, h * 0.4);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(t * 2.2) * w * 0.14, Math.sin(t * 2.2) * h * 0.14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(t * 0.8) * w * 0.1, Math.sin(t * 0.8) * h * 0.1); ctx.stroke();
+      ctx.fillStyle = '#d8c8a0'; ctx.beginPath(); ctx.arc(0, 0, w * 0.035, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = c2; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0, 0, w * 0.27, 0, Math.PI * 2); ctx.stroke();
+    } else if (theme === 'sporetree') {
+      // P22-㉑：孢子古树——藤蔓植物巨树 + 孢子囊
+      ctx.strokeStyle = '#3a5a2a'; ctx.lineWidth = w * 0.05;
+      ctx.beginPath(); ctx.moveTo(0, h * 0.42); ctx.lineTo(0, -h * 0.2); ctx.stroke();
+      ctx.strokeStyle = c2; ctx.lineWidth = 2;
+      for (var sti2 = 0; sti2 < 3; sti2++) {
+        ctx.beginPath(); ctx.moveTo(0, -h * 0.1);
+        ctx.quadraticCurveTo(Math.cos(sti2 / 3 * Math.PI * 2 + t * 0.5) * w * 0.24, -h * 0.18 + Math.sin(t + sti2) * 3, Math.cos(sti2 / 3 * Math.PI * 2) * w * 0.3, h * 0.3);
+        ctx.stroke();
+      }
+      var stg = 0.7 + Math.abs(Math.sin(t * 1.6)) * 0.3;
+      ctx.fillStyle = 'rgba(125,255,109,' + stg + ')';
+      for (var spc = 0; spc < 3; spc++) {
+        ctx.beginPath(); ctx.arc(-w * 0.08 + spc * w * 0.08, -h * 0.26, w * 0.04 + Math.abs(Math.sin(t * 2 + spc)) * 0.012, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (theme === 'starwyrm') {
+      // P22-㉑：星穹龙——太空巨龙（双翼 + 尾星尘）
+      ctx.fillStyle = c1;
+      ctx.beginPath(); ctx.moveTo(0, -h * 0.42); ctx.lineTo(w * 0.34, -h * 0.2); ctx.lineTo(w * 0.5, -h * 0.02); ctx.lineTo(w * 0.24, -h * 0.06); ctx.lineTo(w * 0.2, h * 0.16);
+      ctx.lineTo(0, h * 0.06); ctx.lineTo(-w * 0.2, h * 0.16); ctx.lineTo(-w * 0.24, -h * 0.06); ctx.lineTo(-w * 0.5, -h * 0.02); ctx.lineTo(-w * 0.34, -h * 0.2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -h * 0.2, w * 0.035, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(0, h * 0.04, w * 0.06, 0, Math.PI * 2); ctx.fill();
+      // 尾星尘粒子
+      ctx.fillStyle = 'rgba(255,209,102,0.7)';
+      for (var sw2 = 0; sw2 < 6; sw2++) {
+        var swa = t * 2 + sw2 * 1.05;
+        ctx.beginPath(); ctx.arc(Math.sin(swa) * w * 0.2, h * 0.3 + (sw2 % 3) * 0.06 * h, w * 0.015, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (theme === 'datalord') {
+      // P22-㉑：数据之主——赛博像素矩阵核心（故障闪烁）
+      var pix = w * 0.07;
+      ctx.fillStyle = '#0a0a12'; ctx.fillRect(-w * 0.24, -h * 0.24, w * 0.48, h * 0.48);
+      for (var dlx = 0; dlx < 6; dlx++) {
+        for (var dly = 0; dly < 6; dly++) {
+          if ((dlx + dly) % 2 === 0) {
+            var flick = Math.sin(t * 6 + dlx * 2 + dly) > 0 ? 0.9 : 0.35;
+            ctx.fillStyle = 'rgba(78,224,255,' + flick + ')';
+            ctx.fillRect(-w * 0.24 + dlx * pix + 1, -h * 0.24 + dly * pix + 1, pix - 2, pix - 2);
+          }
+        }
+      }
+      ctx.strokeStyle = c2; ctx.lineWidth = 2; ctx.strokeRect(-w * 0.24, -h * 0.24, w * 0.48, h * 0.48);
+      ctx.fillStyle = '#7df0ff'; ctx.font = (w * 0.05) + 'px monospace';
+      ctx.fillText('0101', -w * 0.14, -h * 0.05);
+      ctx.fillText('1100', -w * 0.06, h * 0.12);
     } else {
       // titan：银灰巨盾
       ctx.beginPath();
@@ -10335,6 +10528,18 @@
     var cx = x + w / 2;
     var boxX = x + w * 0.03, boxY = y + h * 0.03, boxW = w * 0.94, boxH = h * 0.94;
     ctx.save();
+    // P22-㉒：Boss 动态——通用漂浮（上下微浮 + 左右摆动）与呼吸缩放（受击时抖动/狂暴阶段加剧）
+    var _bob = Math.sin(state.time * 1.6 + (boss.id || 0)) * h * 0.012;
+    var _sway = Math.sin(state.time * 0.9 + (boss.id || 0)) * w * 0.02;
+    var _breathe = 1 + Math.sin(state.time * 2.4) * 0.02;
+    var _shake = 0;
+    if (boss.hp < boss.maxHp * 0.7 && boss.hp > boss.maxHp * 0.4) _shake = 1.2;       // 转阶段1轻微抖动
+    if (boss.hp <= boss.maxHp * 0.4) _shake = 2.4;                                     // 转阶段2剧烈抖动
+    if (boss._hitFx && state.time - boss._hitFx < 0.15) _shake += 3.5;                 // 受击顿帧
+    var _bobX = Math.random() * _shake, _bobY = Math.random() * _shake;
+    ctx.translate(cx + _sway + _bobX, boxY + boxH / 2 + _bob + _bobY);
+    ctx.scale(_breathe, _breathe);
+    ctx.translate(-cx, -(boxY + boxH / 2));
     // 红色外发光
     ctx.shadowColor = '#ff3b6b';
     ctx.shadowBlur = 18;
