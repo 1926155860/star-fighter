@@ -2064,6 +2064,11 @@
     if ((state.dailyFx || {}).splitChance > 1) n += 1;
     var cx = parent.x + parent.width / 2;
     var cy = parent.y + parent.height / 2;
+    // P25f：分裂位置在屏幕界外时，子球直接随机出现在屏幕内位置（不再生成界外卡死）
+    if (cx < 0 || cx > cfg.width || cy < 0 || cy > cfg.height) {
+      cx = cfg.width * (0.12 + Math.random() * 0.76);
+      cy = cfg.height * (0.12 + Math.random() * 0.60);
+    }
     var space = Math.max(0, cfg.maxEnemies - state.enemies.length);
     var make = Math.min(n, space);
     var overflow = n - make; // 无法生成的溢出分裂 → 转弹幕
@@ -7026,7 +7031,7 @@
   function renderRankList() {
     var list = document.getElementById('rank-list');
     if (!list) return;
-    // 同武器榜内同名玩家只取最高分，再按分数降序取前 10；P8：本周 = 近 7 天记录；P22-⑤：本月 = 当月记录
+    // 同武器榜内同名玩家只取最高分，再按分数降序；P25f：显示全部玩家排名（列表可滚动，不再只取前 10）
     var weekCut = Date.now() - 7 * 24 * 3600 * 1000;
     var monthCut = new Date(seasonKey() + '-01').getTime();
     var all = mergeRank(loadScores(), rankWeaponFilter);
@@ -7039,7 +7044,7 @@
     } else if (rankPeriodFilter === 'month') {
       all = all.filter(function (s) { return s.ts && s.ts >= monthCut; });
     }
-    var arr = all.slice(0, 10);
+    var arr = all; // 显示全部玩家排名（按分数降序）
     var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
