@@ -6868,6 +6868,11 @@
   // ==================== 分数排行榜（云端共享） ====================
 
   var RANK_KEY = 'sf_scores';
+  // P25l：TapTap 本地模式开关——构建 TapTap 版时由构建脚本在文件头注入 window.__LOCAL_RANK_MODE__ = true；
+  // 本地模式下排行榜与云存档全部走 localStorage，不发起任何网络请求（满足 TapTap「不联网」免版号上架条件）。
+  // 网页版（GitHub Pages / index-single.html）不注入，保持云端排行榜不变。
+  var LOCAL_RANK_MODE = (typeof window !== 'undefined' && window.__LOCAL_RANK_MODE__ === true);
+
   var NAME_KEY = 'sf_name';
   // 云端共享记分板（npoint 免费 JSON 存储；basket 内容为数组 [{name,score,level,time,weapon}]）
   // 注意：必须用 text/plain 提交（不带 Content-Type），否则 npoint 对浏览器 preflight 返回 500
@@ -6939,8 +6944,10 @@
     } catch (e) {}
   }
 
-  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（text/plain 避免 preflight；失败降级本地，不影响游戏） */
+  /** 上传成绩：先拉取云端榜单合并（避免覆盖他人成绩），再全量写回云端（text/plain 避免 preflight；失败降级本地，不影响游戏）。
+      P25l：TapTap 本地模式不联网，直接跳过云端上传（成绩已由 addScoreEntry 写入 localStorage） */
   function pushRankToCloud() {
+    if (LOCAL_RANK_MODE) return; // P25l：本地模式
     if (typeof fetch !== 'function') return;
     if (cloudDown) return;
     cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
@@ -6963,6 +6970,7 @@
 
   /** 拉取云端榜单并合并到本地（所有玩家成绩共享），成功后刷新当前面板 */
   function syncRankFromCloud() {
+    if (LOCAL_RANK_MODE) return; // P25l：本地模式（排行榜仅显示本机成绩）
     if (typeof fetch !== 'function') return;
     if (cloudDown) return;
     cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
@@ -7891,6 +7899,7 @@
   // ==================== P13-12：云存档（成长 / 天赋 / 图鉴 / 成就 / 星币） ====================
 
   function pushProfileToCloud() {
+    if (LOCAL_RANK_MODE) return; // P25l：本地模式（存档仅存本机）
     if (typeof fetch !== 'function') return;
     var payload = {
       key: 'profile',
@@ -7972,6 +7981,7 @@
   }
 
   function syncProfileFromCloud() {
+    if (LOCAL_RANK_MODE) return; // P25l：本地模式
     if (typeof fetch !== 'function') return;
     if (cloudDown) return;
     cloudFetch(CLOUD_RANK_URL, { cache: 'no-store' })
