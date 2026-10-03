@@ -41,7 +41,7 @@
     body.menu-mode canvas {
       background: transparent;  /* 主菜单露出机库背景图 */
     }
-    #wrap { position: relative; max-width: 100vw; max-height: 100vh; overflow: hidden; }
+    #wrap { position: relative; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     h1 {
       display: none;  /* 图片自带标题，隐藏页面标题避免重复 */
     }
@@ -52,12 +52,11 @@
       cursor: crosshair;
       display: block;
       box-shadow: 0 0 40px rgba(78, 224, 255, 0.18);
-      /* 手机屏幕自适应：保持 480x640 逻辑分辨率，按屏幕缩放显示（横竖屏均完整适配） */
+      /* P25k：尺寸由 resizeCanvas 按屏幕比例铺满全屏（逻辑分辨率竖屏 480 宽 / 横屏 640 高） */
       width: auto;
       height: auto;
       max-width: 100vw;
       max-height: 100vh;
-      aspect-ratio: 480 / 640;
     }
 
     /* ===== 科技风面板（P8：毛玻璃增强） ===== */
@@ -585,7 +584,8 @@
     /* ===== 游戏内设置（手机无键盘时使用） ===== */
     #speed-btn {
       position: absolute;
-      top: 66px;
+      top: auto;
+      bottom: 14px;
       left: 12px;
       z-index: 25;
       padding: 6px 12px;
@@ -706,15 +706,15 @@
   <div id="wrap">
     <canvas id="game" width="480" height="640"></canvas>
 
-    <!-- 游戏 HUD（游戏进行时显示） -->
-    <div id="hud" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;box-sizing:border-box;padding:8px 12px;">
-      <div id="hud-score" style="position:absolute;top:8px;left:92px;font-size:15px;font-weight:700;color:#fff;text-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
-      <div id="hud-daily-time" style="display:none;position:absolute;top:30px;left:92px;font-size:13px;font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
-      <div id="hud-wave" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:15px;font-weight:600;color:#7df0ff;text-shadow:0 0 8px rgba(78,224,255,0.8);letter-spacing:2px;white-space:nowrap;"></div>
-      <div id="hud-rank" style="position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,209,102,0.8);letter-spacing:2px;white-space:nowrap;"></div>
-      <div id="hud-combo" style="position:absolute;top:8px;right:12px;font-size:14px;font-weight:600;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.8);"></div>
-      <div id="hud-weapon-lv" style="position:absolute;top:30px;left:92px;font-size:12px;color:#9fc9ff;text-shadow:0 0 6px rgba(78,224,255,0.6);"></div>
-      <div id="hud-hearts" style="position:absolute;top:28px;right:12px;font-size:15px;color:#ff5a7a;text-shadow:0 0 6px rgba(255,90,122,0.8);letter-spacing:2px;"></div>
+    <!-- 游戏 HUD（游戏进行时显示）P25k：三行布局防重叠——行1 得分+连击两端对齐，行2 波次居中，行3 武器+段位+血量；safe-area 避让手机状态栏/刘海 -->
+    <div id="hud" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;box-sizing:border-box;padding:max(6px, env(safe-area-inset-top)) 12px 0;">
+      <div id="hud-score" style="position:absolute;top:6px;left:66px;font-size:clamp(12px,3vmin,15px);font-weight:700;color:#fff;text-shadow:0 0 8px rgba(0,0,0,0.8);white-space:nowrap;"></div>
+      <div id="hud-daily-time" style="display:none;position:absolute;top:34px;left:66px;font-size:clamp(11px,2.6vmin,13px);font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,190,60,0.8);white-space:nowrap;"></div>
+      <div id="hud-combo" style="position:absolute;top:6px;right:10px;font-size:clamp(12px,3vmin,14px);font-weight:600;color:#ffd27d;text-shadow:0 0 8px rgba(255,190,60,0.8);white-space:nowrap;"></div>
+      <div id="hud-wave" style="position:absolute;top:34px;left:50%;transform:translateX(-50%);font-size:clamp(13px,3.4vmin,16px);font-weight:600;color:#7df0ff;text-shadow:0 0 8px rgba(78,224,255,0.8);letter-spacing:1px;white-space:nowrap;"></div>
+      <div id="hud-weapon-lv" style="position:absolute;top:62px;left:66px;font-size:clamp(11px,2.6vmin,13px);color:#9fc9ff;text-shadow:0 0 6px rgba(78,224,255,0.6);white-space:nowrap;"></div>
+      <div id="hud-rank" style="position:absolute;top:62px;left:50%;transform:translateX(-50%);font-size:clamp(11px,2.6vmin,13px);font-weight:700;color:#ffd166;text-shadow:0 0 8px rgba(255,209,102,0.8);letter-spacing:1px;white-space:nowrap;"></div>
+      <div id="hud-hearts" style="position:absolute;top:60px;right:10px;font-size:clamp(12px,3vmin,15px);color:#ff5a7a;text-shadow:0 0 6px rgba(255,90,122,0.8);letter-spacing:1px;white-space:nowrap;"></div>
       <div id="weapon-switch" style="position:absolute;right:12px;bottom:14px;text-align:center;pointer-events:auto;">
         <div id="hud-weapon-cur" style="font-size:12px;color:#9be8ff;text-shadow:0 0 6px rgba(78,224,255,0.6);margin-bottom:4px;"></div>
         <button type="button" id="btn-swap" style="padding:7px 16px;font-size:13px;font-weight:700;color:#7df0ff;background:rgba(8,20,45,0.82);border:1px solid #4ee0ff;border-radius:8px;box-shadow:0 0 12px rgba(78,224,255,0.35);cursor:pointer;display:none;">⇄ 切换武器</button>
@@ -5596,8 +5596,11 @@
 
   var canvas = document.getElementById('game');
   var ctx = canvas.getContext('2d');
-  var W = canvas.width;
-  var H = canvas.height;
+  // P25k：画布逻辑分辨率随屏幕自适应（竖屏 480 宽、横屏 640 高），W/H 由 resizeCanvas 更新
+  var W = 480;
+  var H = 640;
+  var canvasDpr = 1;
+  var hudSafeTop = 8; // 顶部 HUD 安全区偏移（逻辑像素，避开手机状态栏/刘海）
 
   // BOSS 图片（用户提供的素材：Boss 以该图片展示；可在设置中粘贴自定义图片更换）
   var bossImg = new Image();
@@ -6504,17 +6507,36 @@
       }
     } catch (e) {}
   })();
-  // P18：画布按屏幕等比放大（contain），消除宽屏下"画面居中+按钮贴边"的错位感
-  // 游戏内按钮（⚙/倍速/水晶）已移入 #wrap 内 absolute 定位，天然跟随画布，无需 JS 同步
-  function fitCanvas() {
-    var pad = 4; // 边框 2px*2
-    var scale = Math.min((window.innerWidth - pad) / W, (window.innerHeight - pad) / H);
-    if (scale < 0.2) scale = 0.2;
-    canvas.style.width = Math.round(W * scale) + 'px';
-    canvas.style.height = Math.round(H * scale) + 'px';
+  // P25k：画布自适应——逻辑分辨率跟随屏幕比例（竖屏 480 宽 / 横屏 640 高），DPR 高清化，CSS 铺满全屏
+  // 游戏世界（game-core cfg.width/height）在 startGame 时同步传入，敌人/子弹/玩家边界自动适配新高度
+  function resizeCanvas() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    canvasDpr = Math.min(window.devicePixelRatio || 1, 2); // DPR 上限 2 防低端机过热
+    if (vh > vw) {
+      // 竖屏：逻辑宽固定 480，高随屏幕比例（上限 1700，超长屏仍保持比例）
+      W = 480;
+      H = Math.max(640, Math.round(480 * vh / vw));
+      if (H > 1700) H = 1700;
+    } else {
+      // 横屏/桌面：逻辑高固定 640，宽随屏幕比例（上限 1700）
+      H = 640;
+      W = Math.max(480, Math.round(640 * vw / vh));
+      if (W > 1700) W = 1700;
+    }
+    canvas.width = Math.round(W * canvasDpr);
+    canvas.height = Math.round(H * canvasDpr);
+    ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+    // CSS 铺满全屏（保留 2px 边框 → 各扣 4px）
+    canvas.style.width = Math.max(0, vw - 4) + 'px';
+    canvas.style.height = Math.max(0, vh - 4) + 'px';
+    // 顶部 HUD 安全区（逻辑像素）：手机按屏宽比例估算刘海/状态栏高度，桌面近似 0
+    var safeCss = /Mobi|Android|iPhone|iPad|HarmonyOS/i.test(navigator.userAgent) ? 40 : 6;
+    hudSafeTop = Math.round(safeCss * W / Math.max(vw, 1));
+    try { placeMenuButtons(); } catch (e) { /* 菜单未初始化时忽略 */ }
   }
-  fitCanvas();
-  window.addEventListener('resize', fitCanvas);
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', function () { setTimeout(resizeCanvas, 120); });
   // P13-12：进入主菜单时拉取云存档（成长/天赋/图鉴/成就/星币），延迟避免首帧争抢
   setTimeout(syncProfileFromCloud, 1200);
 
@@ -6653,6 +6675,7 @@
       settings.secondaryWeapon = null;
     }
     state = GameCore.createGame({
+      width: W, height: H, // P25k：游戏世界边界 = 画布逻辑分辨率（竖屏铺满自适应）
       initialWeapon: settings.weapon,
       initialShip: settings.ship,
       initialMultishot: Math.min(5, settings.multishot + (p.upgrades.multishot || 0)),
@@ -6721,7 +6744,7 @@
     showPanel('menu');
     updateMenuConfig();
     updateMenuStars();
-    state = GameCore.createGame();
+    state = GameCore.createGame({ width: W, height: H }); // P25k：回菜单重置同步画布尺寸
   }
 
   /** 章节模式通关结算：额外奖励分 + 章节星币奖励 + 记录通关并自动选择下一关（通关第五章解锁无尽） */
@@ -8228,6 +8251,7 @@
     dailyMode = mode || 'normal';
     resetTracking();
     var opts = {
+      width: W, height: H, // P25k：每日模式同样自适应画布尺寸
       initialWeapon: cfg.weapon,
       initialShip: cfg.ship,
       initialMultishot: cfg.multishot,
@@ -8856,7 +8880,7 @@
   // 背景缓存：按主题 key 烘焙整张（渐变+星云），每帧只 drawImage
   var bgCache = {};
   function getBgCanvas(th) {
-    var k = th.key || (th.top + '|' + th.mid + '|' + th.bot);
+    var k = (th.key || (th.top + '|' + th.mid + '|' + th.bot)) + '@' + W + 'x' + H; // P25k：缓存键含分辨率，resize 后自动重建
     if (bgCache[k]) return bgCache[k];
     var c = document.createElement('canvas');
     c.width = W;
@@ -11006,7 +11030,7 @@
       ctx.textAlign = 'right';
       ctx.font = '11px "Bahnschrift","Consolas","SF Mono",monospace';
       ctx.fillStyle = '#ff5a7a';
-      ctx.fillText('🌟 超武 ×' + state.fusions.length, W - 10, 52);
+      ctx.fillText('🌟 超武 ×' + state.fusions.length, W - 10, hudSafeTop + 56);
     }
     // 道具状态（左下角竖排——精致胶囊：半透明底 + 道具色描边 + 图标发光）
     var bx = 8, by = H - 22;
@@ -11073,7 +11097,7 @@
     var lineH = 19;
     var pad = 8;
     var headH = 24;
-    var top = 78; // 避开顶部 DOM HUD
+    var top = hudSafeTop + 88; // 避开顶部 DOM HUD（3 行 + 手机安全区）
     ctx.save();
     // 渐变底 + 发光描边
     var bgGrad = ctx.createLinearGradient(0, top, 0, top + headH + pad * 2 + keys.length * lineH);
@@ -12602,6 +12626,13 @@
     }
   });
 
+  /** P25k：HUD 数值缩写——大数字压缩宽度，避免窄屏文字重叠 */
+  function fmtHudNum(n) {
+    if (n >= 100000) return (n / 10000).toFixed(0) + 'w';
+    if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+    return String(n);
+  }
+
   var _hudLastUpdate = 0;
   function updateHud() {
     if (state.status !== 'playing') return;
@@ -12612,7 +12643,7 @@
     var scoreEl = document.getElementById('hud-score');
     if (scoreEl) {
       var prevScoreText = scoreEl.textContent;
-      scoreEl.textContent = '得分 ' + state.score;
+      scoreEl.textContent = '得分 ' + fmtHudNum(state.score); // P25k：大数缩写
       // P8：得分跳动动画（数值变化时触发）
       if (prevScoreText !== scoreEl.textContent && state.score > 0) {
         scoreEl.classList.remove('score-pop');
@@ -12637,7 +12668,7 @@
       } else if (state.waveState === 'break') {
         waveEl.textContent = '休 息 ' + Math.max(0, state.waveBreakTimer).toFixed(1) + 's';
       } else {
-        waveEl.textContent = (state.wave % state.config.waveBossEvery === 0) ? '第 ' + state.wave + ' 波 · BOSS' : '第 ' + state.wave + ' 波';
+        waveEl.textContent = (state.wave % state.config.waveBossEvery === 0) ? '第' + state.wave + '波·BOSS' : '第' + state.wave + '波'; // P25k：去空格缩窄防重叠
       }
       // P22-⑫：多周目显示 R2/R3…；P22-⑭：波次场效名显示
       if ((state.round || 1) > 1) waveEl.textContent += ' · R' + state.round;
@@ -12670,7 +12701,7 @@
     var comboEl = document.getElementById('hud-combo');
     if (comboEl) {
       if (state.combo >= 2) {
-        comboEl.textContent = '连击 ×' + state.combo + ' · ' + GameCore.getComboMultiplier(state).toFixed(2) + 'x';
+        comboEl.textContent = '🔥 ×' + state.combo + ' · ' + GameCore.getComboMultiplier(state).toFixed(1) + 'x'; // P25k：缩写防重叠
       } else {
         comboEl.textContent = '';
       }
