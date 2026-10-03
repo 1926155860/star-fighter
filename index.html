@@ -2129,8 +2129,11 @@
     return Math.max(1, count);
   }
 
-  /** P8：开火冷却（专精「射速」分支每级 -12%，下限 0.2s；遗物攻速叠乘） */
+  /** P8：开火冷却（专精「射速」分支每级 -12%，下限 0.2s；遗物攻速叠乘）
+   *  P25h：攻速上限 = 初始攻速的 2 倍——最终冷却不低于「初始冷却的一半」 */
   function getFireCooldown(state) {
+    var cfg0 = getWeaponConfig(state);
+    var base = cfg0.cooldown * state.fireSpeedFactor; // 初始冷却（含玩家初始攻速设置 1.0~0.1）
     var rapid = getMastery(state, state.weapon).rapid || 0;
     var factor = Math.max(0.2, 1 - rapid * 0.12);
     // P11：被动「攻速」每级 -12%、「冷却缩减」每级 -8%（叠乘，下限 0.1）
@@ -2141,7 +2144,9 @@
     // P13-1：光子加速——攻速 +15%/级
     var photon = getSkillLevel(state, 'photon');
     var photonFactor = photon > 0 ? (1 - photon * 0.15) : 1;
-    return getWeaponConfig(state).cooldown * state.fireSpeedFactor * factor * getRelicFxs(state).fireSpeed * rogueFactor * gunFactor * Math.max(0.1, photonFactor);
+    var cd = base * factor * getRelicFxs(state).fireSpeed * rogueFactor * gunFactor * Math.max(0.1, photonFactor);
+    // P25h：攻速上限锁定为初始攻速的 2 倍（冷却下限 = 初始冷却 × 0.5），所有强化叠加不可突破
+    return Math.max(base * 0.5, cd);
   }
 
   /** 激光当前 DPS（含伤害加成与武器升级；P8 专精：加长 +20%/级、穿透 +25%/级；P11：被动伤害 + 超武矩阵） */
