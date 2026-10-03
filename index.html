@@ -6879,7 +6879,8 @@
   }
 
   function saveScores(arr) {
-    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr.slice(0, 40))); } catch (err) {}
+    // P25h：不再截断前 40——本地缓存全部玩家成绩（云端全量共享），排行榜才能看到所有排名
+    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr)); } catch (err) {}
   }
 
   /** 合并并去重：同武器榜内同名玩家只取最高分，按分数降序；filter 为 'all' 或武器 id */
@@ -7036,6 +7037,7 @@
   function renderRankList() {
     var list = document.getElementById('rank-list');
     if (!list) return;
+    var me = getPlayerName(); // P25h：提前声明（好友榜 filter 使用，var 提升导致原位置为 undefined）
     // 同武器榜内同名玩家只取最高分，再按分数降序；P25f：显示全部玩家排名（列表可滚动，不再只取前 10）
     var weekCut = Date.now() - 7 * 24 * 3600 * 1000;
     var monthCut = new Date(seasonKey() + '-01').getTime();
@@ -7050,7 +7052,6 @@
       all = all.filter(function (s) { return s.ts && s.ts >= monthCut; });
     }
     var arr = all; // 显示全部玩家排名（按分数降序）
-    var me = getPlayerName();
     list.innerHTML = '';
     if (arr.length === 0) {
       list.innerHTML = '<div style="text-align:center;color:#8aa0c8;font-size:14px;padding:28px 0;">' + (rankPeriodFilter === 'week' ? '本周暂无记录，快来抢占榜首！' : (rankPeriodFilter === 'month' ? '本月暂无记录，赛季奖励等你拿！' : (rankPeriodFilter === 'friend' ? '暂无好友战绩，分享链接邀请好友一起玩吧！' : '暂无记录，快去创造你的战绩吧！'))) + '</div>';
