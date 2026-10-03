@@ -1338,8 +1338,8 @@
     waveBossEvery: 3,        // 每 N 波出现一次 Boss 波
 
     // P3：敌人抗性（物理/魔法，随波次逐渐获得）
-    enemyResistPerWave: 0.02, // 每波 +2% 抗性
-    enemyResistMax: 0.6,      // 抗性上限 60%
+    enemyResistPerWave: 0.03, // 每波 +3% 抗性（P25j：原 2% 上调）
+    enemyResistMax: 0.9,      // 抗性上限 90%（P25j：原 60% 上调）
     tankHpFactor: 5,          // 坦克型：5 倍血量
     assassinTeleportTime: 2,  // 刺客型：2 秒未击杀瞬移到玩家旁
     chargerChargeInterval: 2.5, // 冲撞型：冲撞周期
@@ -1895,7 +1895,7 @@
     if (enemy.special === 'armored' && dmgType === 'phys') r += 0.5;
     // Boss 加成 e：在场其他敌人获得 50% 抗性（物/魔各）
     if (state.boss && hasBossBuff(state, 'resistBuff50')) r += 0.5;
-    return Math.min(0.9, r);
+    return Math.min(cfg.enemyResistMax, r);
   }
 
   /** P3：判断 Boss 是否拥有指定加成 */
